@@ -1,2 +1,2 @@
-# otel2pv
-OTel to Protocol Verifier conversion and sequencing
+# CDS-OTel-To-PV
+Repository for conversion of Open Telemetry to Protocol Verifier events at runtime
