@@ -1,0 +1,25 @@
+name: ci-tests
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+    branches:
+      'main'
+  push:
+    branches:
+      main
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go 1.23
+        uses: actions/setup-go@v5
+        with:
+            go-version: 1.23
+
+      - name: Run Tests
+        run: go test -v ./...
