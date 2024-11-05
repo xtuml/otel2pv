@@ -1,0 +1,48 @@
+@startuml
+namespace JSONExtractor {
+    left to right direction
+    interface Listener {
+        +error Setup()
+        +error Serve()
+    }
+    struct ProducerResponse {
+        -any data
+        -error error
+        +any, error GetData()
+    }
+    struct ProducersResponse {
+        -map<string, ProducerResponse> producerResponseMap
+        +ProducerResponse Get(string)
+    }
+    interface ProducerInstance {
+        +ProducerResponse Send(any)
+    }
+    interface Producer {
+        +ProducerInstance GetInstance()
+    }
+    struct Producers {
+        -map<string, Producer> producerMap
+        +ProducersResponse Send(any)
+    }
+    struct KafkaListener {
+        -Producers producers
+        -KafkaConsumerCofig kafkaConsumerConfig
+        +error Setup()
+        +error Serve()
+    }
+    struct KafkaProducer {
+        -KafkaProducerConfig kafkaProducerConfig
+        +ProducerInstance GetInstance()
+        +ProducerResponse Send(any)
+    }
+    struct KafkaConsumerCofig
+    struct KafkaProducerConfig
+}
+JSONExtractor.Producer <|-- JSONExtractor.KafkaProducer
+JSONExtractor.ProducerInstance <|-- JSONExtractor.KafkaProducer
+JSONExtractor.Listener <|-- JSONExtractor.KafkaListener
+JSONExtractor.ProducerResponse *-- JSONExtractor.ProducersResponse
+JSONExtractor.KafkaConsumerCofig *-- JSONExtractor.KafkaListener
+JSONExtractor.KafkaProducerConfig *-- JSONExtractor.KafkaProducer
+JSONExtractor.Producers *-- JSONExtractor.KafkaListener
+@enduml
