@@ -1,6 +1,6 @@
 @startuml
 namespace JSONExtractor {
-    left to right direction
+    ' left to right direction
     interface Listener {
         +error Setup()
         +error Serve()
@@ -45,4 +45,7 @@ JSONExtractor.ProducerResponse *-- JSONExtractor.ProducersResponse
 JSONExtractor.KafkaConsumerCofig *-- JSONExtractor.KafkaListener
 JSONExtractor.KafkaProducerConfig *-- JSONExtractor.KafkaProducer
 JSONExtractor.Producers *-- JSONExtractor.KafkaListener
+JSONExtractor.Producer *-- JSONExtractor.Producers
+JSONExtractor.ProducerResponse *-- JSONExtractor.ProducerInstance
+JSONExtractor.ProducerInstance *-- JSONExtractor.Producer
 @enduml
