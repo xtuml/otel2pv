@@ -1,4 +1,14 @@
 @startuml
+namespace JSONExtractor {
+    struct JQTransformer {
+        -string jqQuery
+        -Code jqProgram
+        -ChanReceiver receiver
+        +error AddReceiver(Receiver)
+        +Receiver GetReceiver()
+        +error Serve()
+    }
+}
 namespace Server {
     interface CompletionHandler {
         +error Complete(any, error)
@@ -81,16 +91,6 @@ namespace Server {
     struct ProducerConfig
     struct ConsumerConfig
 }
-namespace JSONExtractor {
-    struct JQTransformer {
-        -string jqQuery
-        -Code jqProgram
-        -ChanReceiver receiver
-        +error AddReceiver(Receiver)
-        +Receiver GetReceiver()
-        +error Serve()
-    }
-}
 Server.CompletionHandler *-- Server.AppData
 Server.CompletionHandler <|-- Server.KafkaConsumerCompletionHandler
 Server.AppData *-- Server.Receiver
@@ -105,21 +105,21 @@ Server.Pushable <|-- Server.PipeServer
 Server.Pullable <|-- Server.PipeServer
 Server.Server <|-- Server.PipeServer
 
-Server.ProducerResponse *-- Server.Producer
+Server.ProducerResponse *-right- Server.Producer
 Server.Producer <|-- Server.KafkaProducer
 Server.Consumer <|-- Server.KafkaConsumer
-Server.Producer *-- Server.ProducerServer
+Server.Producer *-up- Server.ProducerServer
 Server.SinkServer <|-- Server.ProducerServer
 Server.ChanReceiver *-- Server.ProducerServer
-Server.SourceServer <|-- Server.ConsumerServer
+Server.SourceServer <|-left- Server.ConsumerServer
 Server.Consumer *-- Server.ConsumerServer
-Server.SourceServer <|-- Server.Consumer
+Server.SourceServer <|-down- Server.Consumer
 
 Server.KafkaConsumerCofig *-up- Server.KafkaConsumer
 Server.KafkaProducerConfig *-up- Server.KafkaProducer
 
-Server.PipeServer <|-up- JSONExtractor.JQTransformer
-Server.ChanReceiver *-up- JSONExtractor.JQTransformer
+Server.PipeServer <|-- JSONExtractor.JQTransformer
+Server.ChanReceiver *-- JSONExtractor.JQTransformer
 
 Server.ProducerConfig *-up- Server.KafkaProducerConfig
 Server.ConsumerConfig *-up- Server.KafkaConsumerCofig
