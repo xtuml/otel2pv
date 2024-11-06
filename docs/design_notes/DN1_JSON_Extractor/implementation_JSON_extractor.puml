@@ -1,0 +1,46 @@
+@startuml
+    partition JSON Extractor {
+        split
+        -[hidden]->
+        package main {
+            group main() {
+                :get config from file;
+                :Get producer server using config;
+                :Get consumer server using config;
+                :Get JQTransformer using config;
+                :Start App;
+                detach
+            }
+            group getConfigFromFile(pathToConfig) Config {
+                :Read config from file;
+                :Separate config into producerConfig,\nconsumerConfig, jqTransformerConfig;
+                :Return config;
+                detach
+            }
+        }
+        split again
+        -[hidden]->
+        package JqTransformer {
+            group getJQTransformer(JqTransformerConfig) JQTransformer {
+                :Create JQTransformer using config;
+                :Return JQTransformer;
+                detach
+            }
+            group Serve(JQTransformer) error {
+                :Create go routines to pull from receive channel;
+                :Within go routines transform data using JQTransformer;
+                :Within go routines push transformed data using ChanReceiver instance;
+                detach
+            }
+            group GetReceiver(JQTransformer) Receiver {
+                :Return Receiver;
+                detach
+            }
+            group AddReceiver(JQTransformer, Receiver) error {
+                :Add Receiver to JQTransformer;
+                detach
+            }
+        }
+        end split
+    }
+@enduml
