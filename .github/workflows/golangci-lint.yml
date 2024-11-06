@@ -15,24 +15,52 @@ permissions:
   contents: read
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Identify Go Modules
+        id: set-matrix
+        run: |
+          modules=$(find . -type f -name 'go.mod' -exec dirname {} \;)
+          modules_array=()
+          for module in $modules; do
+            modules_array+=("\"${module#./}\"")
+          done
+          if [ ${#modules_array[@]} -eq 0 ]; then
+            echo "matrix={\"directory\":[]}" >> $GITHUB_OUTPUT
+          else
+            matrix_json=$(printf '%s\n' "${modules_array[@]}" | jq -R -s -c 'split("\n")[:-1]')
+            echo "matrix={\"directory\":$matrix_json}" >> $GITHUB_OUTPUT
+          fi
+
   golangci:
     name: Lint
+    needs: setup
     runs-on: ubuntu-latest
     strategy:
-      matrix:
-        package-dir: []  # List your package directories here
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version: stable
+
       - name: Download golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           # Fetches the golangci-lint binary without running it
           args: --help
           version: v1.60
+
       - name: Run golangci-lint
         run: |
-          cd ${{ matrix.package-dir }}
+          cd ${{ matrix.directory }}
           golangci-lint run --fix
