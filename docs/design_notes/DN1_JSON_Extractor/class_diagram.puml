@@ -3,12 +3,19 @@ namespace Server {
     interface CompletionHandler {
         +error Complete(any, error)
     }
+    struct KafkaConsumerCompletionHandler {
+        +error Complete(any, error)
+    }
     struct AppData {
         -any data
         +CompletionHandler completionHandler
         +any GetData()
     }
     interface Receiver {
+        +error Receive(AppData)
+    }
+    struct ChanReceiver {
+        -chan AppData dataChan
         +error Receive(AppData)
     }
     interface Server {
@@ -29,7 +36,7 @@ namespace Server {
         +error Serve()
     }
     interface PipeServer {
-        +error AddReceiver(*Receiver)
+        +error AddReceiver(Receiver)
         +Receiver GetReceiver()
         +error Serve()
     }
@@ -58,12 +65,13 @@ namespace Server {
         +error Start()
         +ProducerResponse Send(any)
     }
-    struct ProducersServer {
+    struct ProducerServer {
         -map[string]Producer producerMap
+        -ChanReceiver receiver
         +Receiver GetReceiver()
         +error Serve()
     }
-    struct ConsumersServer {
+    struct ConsumerServer {
         -map[string]Consumer consumersMap
         +error AddReceiver(Receiver)
         +error Serve()
@@ -77,15 +85,18 @@ namespace JSONExtractor {
     struct JQTransformer {
         -string jqQuery
         -Code jqProgram
+        -ChanReceiver receiver
         +error AddReceiver(Receiver)
         +Receiver GetReceiver()
         +error Serve()
     }
 }
 Server.CompletionHandler *-- Server.AppData
+Server.CompletionHandler <|-- Server.KafkaConsumerCompletionHandler
 Server.AppData *-- Server.Receiver
 Server.Receiver *-- Server.Pullable
 Server.Receiver *-- Server.Pushable
+Server.Receiver <|-- Server.ChanReceiver
 Server.Server <|-- Server.SourceServer
 Server.Pullable <|-- Server.SourceServer
 Server.Server <|-- Server.SinkServer
@@ -97,16 +108,18 @@ Server.Server <|-- Server.PipeServer
 Server.ProducerResponse *-- Server.Producer
 Server.Producer <|-- Server.KafkaProducer
 Server.Consumer <|-- Server.KafkaConsumer
-Server.Producer *-- Server.ProducersServer
-Server.SinkServer <|-- Server.ProducersServer
-Server.SourceServer <|-- Server.ConsumersServer
-Server.Consumer *-- Server.ConsumersServer
+Server.Producer *-- Server.ProducerServer
+Server.SinkServer <|-- Server.ProducerServer
+Server.ChanReceiver *-- Server.ProducerServer
+Server.SourceServer <|-- Server.ConsumerServer
+Server.Consumer *-- Server.ConsumerServer
 Server.SourceServer <|-- Server.Consumer
 
 Server.KafkaConsumerCofig *-up- Server.KafkaConsumer
 Server.KafkaProducerConfig *-up- Server.KafkaProducer
 
 Server.PipeServer <|-up- JSONExtractor.JQTransformer
+Server.ChanReceiver *-up- JSONExtractor.JQTransformer
 
 Server.ProducerConfig *-up- Server.KafkaProducerConfig
 Server.ConsumerConfig *-up- Server.KafkaConsumerCofig
