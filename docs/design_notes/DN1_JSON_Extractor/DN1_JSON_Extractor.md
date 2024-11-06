@@ -57,3 +57,5 @@ The message transaction will be split into:
 The class diagram for the JSON Extractor is as follows:
 
 ![Class Diagram](./class_diagram.svg)
+
+### Implmentation

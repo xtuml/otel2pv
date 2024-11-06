@@ -1,18 +1,42 @@
 @startuml
-namespace JSONExtractor {
-    ' left to right direction
-    interface Listener {
+namespace Server {
+    interface CompletionHandler {
+        +error Complete(any, error)
+    }
+    struct AppData {
+        -any data
+        +CompletionHandler completionHandler
+        +any GetData()
+    }
+    interface Server {
+        +error Setup()
+        +error Serve()
+    }
+    interface Pullable {
+        +AppData, error Pull()
+    }
+    interface Pushable {
+        +error Push(AppData)
+    }
+    interface SourceServer {
+        +AppData, error Pull()
+        +error Setup()
+        +error Serve()
+    }
+    interface SinkServer {
+        +error Push(AppData)
+        +error Setup()
+        +error Serve()
+    }
+    interface PipeServer {
+        +AppData, error Pull()
+        +error Push(AppData)
         +error Setup()
         +error Serve()
     }
     struct ProducerResponse {
-        -any data
         -error error
-        +any, error GetData()
-    }
-    struct ProducersResponse {
-        -map<string, ProducerResponse> producerResponseMap
-        +ProducerResponse Get(string)
+        +error GetError()
     }
     interface ProducerInstance {
         +ProducerResponse Send(any)
@@ -20,32 +44,73 @@ namespace JSONExtractor {
     interface Producer {
         +ProducerInstance GetInstance()
     }
-    struct Producers {
-        -map<string, Producer> producerMap
-        +ProducersResponse Send(any)
-    }
-    struct KafkaListener {
-        -Producers producers
+    struct KafkaConsumer {
         -KafkaConsumerCofig kafkaConsumerConfig
         +error Setup()
         +error Serve()
+        +AppData, error Pull()
     }
     struct KafkaProducer {
         -KafkaProducerConfig kafkaProducerConfig
+        +error Setup()
+        +error Serve()
         +ProducerInstance GetInstance()
         +ProducerResponse Send(any)
     }
+    struct ProducersServer {
+        -map[string]Producer producerMap
+        -ProducersConfig producersConfig
+        +error Setup()
+        +error Serve()
+        +error Push(AppData)
+    }
+    struct ConsumersServer {
+        -map[string]SourceServer consumersMap
+        -ConsumersConfig consumersConfig
+        +error Setup()
+        +error Serve()
+        +AppData, error Pull()
+    }
     struct KafkaConsumerCofig
     struct KafkaProducerConfig
+    struct ProducersConfig
+    struct ConsumersConfig
 }
-JSONExtractor.Producer <|-- JSONExtractor.KafkaProducer
-JSONExtractor.ProducerInstance <|-- JSONExtractor.KafkaProducer
-JSONExtractor.Listener <|-- JSONExtractor.KafkaListener
-JSONExtractor.ProducerResponse *-- JSONExtractor.ProducersResponse
-JSONExtractor.KafkaConsumerCofig *-- JSONExtractor.KafkaListener
-JSONExtractor.KafkaProducerConfig *-- JSONExtractor.KafkaProducer
-JSONExtractor.Producers *-- JSONExtractor.KafkaListener
-JSONExtractor.Producer *-- JSONExtractor.Producers
-JSONExtractor.ProducerResponse *-- JSONExtractor.ProducerInstance
-JSONExtractor.ProducerInstance *-- JSONExtractor.Producer
+namespace JSONExtractor {
+    struct JQTransformer {
+        -string jqQuery
+        -*Code jqProgram
+        +AppData, error Pull()
+        +error Push(AppData)
+        +error Setup()
+        +error Serve()
+    }
+}
+Server.CompletionHandler *-- Server.AppData
+Server.AppData *-- Server.Pullable
+Server.AppData *-- Server.Pushable
+Server.Server <|-- Server.SourceServer
+Server.Pullable <|-- Server.SourceServer
+Server.Server <|-- Server.SinkServer
+Server.Pushable <|-- Server.SinkServer
+Server.Pushable <|-- Server.PipeServer
+Server.Pullable <|-- Server.PipeServer
+Server.Server <|-- Server.PipeServer
+
+Server.ProducerResponse *-- Server.ProducerInstance
+Server.ProducerInstance *-- Server.Producer
+Server.Producer <|-- Server.KafkaProducer
+Server.ProducerInstance <|-- Server.KafkaProducer
+Server.SourceServer <|-- Server.KafkaConsumer
+Server.Producer *-- Server.ProducersServer
+Server.SinkServer <|-- Server.ProducersServer
+Server.SourceServer <|-- Server.ConsumersServer
+Server.SourceServer *-- Server.ConsumersServer
+
+Server.KafkaConsumerCofig *-up- Server.KafkaConsumer
+Server.KafkaProducerConfig *-up- Server.KafkaProducer
+Server.ProducersConfig *-up- Server.ProducersServer
+Server.ConsumersConfig *-up- Server.ConsumersServer
+
+Server.PipeServer <|-up- JSONExtractor.JQTransformer
 @enduml
