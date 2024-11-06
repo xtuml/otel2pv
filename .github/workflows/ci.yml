@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 5
     strategy:
       matrix:
-        app-dir: []  # List your application directories here
+        package-dir: []  # List your package directories here
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
 
       - name: Run tests
         run: |
-          cd ${{ matrix.app-dir }}
+          cd ${{ matrix.package-dir }}
           gofmt -s -w .
           go vet ./...
           go mod tidy
