@@ -1,20 +1,23 @@
 name: ci-tests
+
 on:
   pull_request:
     types:
       - opened
       - synchronize
     branches:
-      'main'
+      - main
   push:
     branches:
-      main
+      - main
 
 jobs:
   run-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 5
-
+    strategy:
+      matrix:
+        app-dir: []  # List your application directories here
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,10 +25,13 @@ jobs:
       - name: Set up Go 1.23
         uses: actions/setup-go@v5
         with:
-            go-version: 1.23
+          go-version: 1.23
 
-      - name: Format, build and test app1
-        run: 	cd app1 && gofmt -s -w . && go vet ./... && go mod tidy && go build -o /dev/null ./... && go test -v ./...
-
-      - name: Format, build and test app2
-        run: 	cd app2 && gofmt -s -w . && go vet ./... && go mod tidy && go build -o /dev/null ./... && go test -v ./...
+      - name: Run tests
+        run: |
+          cd ${{ matrix.app-dir }}
+          gofmt -s -w .
+          go vet ./...
+          go mod tidy
+          go build -o /dev/null ./...
+          go test -v ./...
