@@ -42,6 +42,7 @@ jobs:
     name: Lint
     needs: setup
     runs-on: ubuntu-latest
+    if: ${{ needs.setup.outputs.matrix.directory != '[]' &&  needs.setup.outputs.matrix.directory != ''}}
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
