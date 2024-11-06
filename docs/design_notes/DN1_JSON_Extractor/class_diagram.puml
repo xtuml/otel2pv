@@ -49,13 +49,11 @@ namespace Server {
         +error Serve()
     }
     struct KafkaConsumer {
-        -KafkaConsumerCofig kafkaConsumerConfig
         +error AddReceiver(Receiver)
         +error Setup(KafkaConsumerCofig)
         +error Serve()
     }
     struct KafkaProducer {
-        -KafkaProducerConfig kafkaProducerConfig
         +error Setup(KafkaProducerConfig)
         +error Start()
         +ProducerResponse Send(any)
