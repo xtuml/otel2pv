@@ -59,3 +59,17 @@ The class diagram for the JSON Extractor is as follows:
 ![Class Diagram](./class_diagram.svg)
 
 ### Implmentation
+The implementation falls into two main parts:
+
+- Server - a Server library will be created that will provide the functionality for receiving, and sending messages and provide the interface to build the conversion functionality
+- JSON Extractor app - an application will be created that will use the Server library to provide the server runnning functionality and will also contain the conversion functionality
+
+Below is the proposed implementation for the full JSON Extractor application. This builds upon the class diagram above and provides a view of how the different interfaces and structs are combined.
+
+The server library implmentation overview is shown below:
+
+![Server Library](./implementation_server.svg)
+
+The JSON Extractor app implmentation overview is shown below:
+
+![JSON Extractor App](./implementation_JSON_extractor.svg)
