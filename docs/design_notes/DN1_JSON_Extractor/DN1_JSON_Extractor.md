@@ -43,6 +43,22 @@ The configuration will be a JSON file detailing:
     - `<destination type>` - The type of destination that the extracted data will be sent to. This will be used to determine the destination implementation that will be used
     - `<destination name>` - The name of the destination that the extracted data will be sent to. This will be used to grab the relevant data from the extracted data
     - `<configuration for destination type>` - The configuration for the destination type. This will be used to configure the destination implementation
+- the consumer locations that data will be pulled from. The configuration will be in the following format:
+
+    ```json
+    {
+        "consumers": [
+            {
+                "type": "<consumer type>",
+                "name": "<consumer name>",
+                "config": <configuration for consumer type>
+            }
+        ]
+    }
+    ```
+    - `<consumer type>` - The type of consumer that the data will be pulled from. This will be used to determine the consumer implementation that will be used
+    - `<consumer name>` - The name of the consumer that the data will be pulled from. This will be used to grab the relevant data from the extracted data
+    - `<configuration for consumer type>` - The configuration for the consumer type. This will be used to configure the consumer implementation
   
 ### Conversion functionality
 The conversion functionality will be implemented using the library https://pkg.go.dev/github.com/itchyny/gojq. The jq string will be compiled. For each JSON object that is received, the jq will be executed and the extracted data will be stored in a JSON object. The extracted data will be sent onto the transcation handler.
