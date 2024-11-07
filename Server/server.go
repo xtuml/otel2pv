@@ -7,6 +7,13 @@ type Server interface {
 	Serve() error
 }
 
+// Pushable is an interface that represents a component capable
+// of exposing a Receiver for data handling.
+// GetReceiver returns the Receiver instance for handling incoming
+// data, or an error if it fails.
+type Pushable interface {
+	GetReceiver() (Receiver, error)
+}
 
 // Pullable is an interface that can
 // send data to and added receiver. It has an AddReceiver

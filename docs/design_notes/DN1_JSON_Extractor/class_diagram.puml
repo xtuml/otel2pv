@@ -35,7 +35,7 @@ namespace Server {
         +error AddReceiver(*Receiver)
     }
     interface Pushable {
-        +Receiver GetReceiver()
+        +(Receiver error) GetReceiver()
     }
     interface SourceServer {
         +error AddReceiver(Receiver)
