@@ -69,14 +69,6 @@ The message transaction will be split into:
 - **Consumption** - It is proposed that the consumption of messages will be implmented using a Kafka Consumer subscribed to a topic. Once data has been processed and sent to the destination, the application will commit the offset of the message.
 - **Production** - It is proposed that the production of messages will be implemented using a Kafka Producer that will send the converted data to topic/s defined in the configuration.
 
-### Class Diagram
-The class diagram for the JSON Extractor is as follows - this is split into two parts for clarity: 
-
-- Server - Server library that will provide the functionality for receiving, and sending messages and provide the interface to build the conversion functionality
-- JSON Extractor app - Application that will use the Server library to provide the server runnning functionality and will also contain the conversion functionality
-
-![Class Diagram](./class_diagram.svg)
-
 ### Architecture Overview
 The task falls into two main parts:
 
