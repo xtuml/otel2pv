@@ -53,3 +53,32 @@ func TestCompletionHandler(t *testing.T) {
 		}
 	})
 }
+
+func TestAppData(t *testing.T) {
+	t.Run("GetData", func(t *testing.T) {
+		testData := "test data"
+		appData := &AppData{data: testData, handler: &MockCompletionHandler{}}
+
+		data := appData.GetData()
+
+		if data != testData {
+			t.Errorf("Expected data to be '%v', got '%v'", testData, data)
+		}
+	})
+	t.Run("Complete", func(t *testing.T) {
+		mockHandler := &MockCompletionHandler{}
+		appData := &AppData{data: "test data", handler: mockHandler}
+
+		err := appData.handler.Complete(appData.data, nil)
+
+		if err != nil {
+			t.Errorf("Expected no error from Complete, got %v", err)
+		}
+		if mockHandler.DataReceived != appData.data {
+			t.Errorf("Expected DataReceived to be '%v', got '%v'", appData.data, mockHandler.DataReceived)
+		}
+		if mockHandler.ErrorReceived != nil {
+			t.Errorf("Expected ErrorReceived to be nil, got %v", mockHandler.ErrorReceived)
+		}
+	})
+}

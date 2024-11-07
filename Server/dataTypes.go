@@ -6,3 +6,14 @@ package Server
 type CompletionHandler interface {
 	Complete(data any, err error) error
 }
+
+// AppData is a struct that holds data and a CompletionHandler for a task.
+type AppData struct {
+	data    any
+	handler CompletionHandler
+}
+
+// GetData returns the data stored in the AppData struct.
+func (a *AppData) GetData() any {
+	return a.data
+}
