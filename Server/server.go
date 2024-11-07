@@ -6,3 +6,11 @@ package Server
 type Server interface {
 	Serve() error
 }
+
+
+// Pullable is an interface that can
+// send data to and added receiver. It has an AddReceiver
+// method that will add a receiver to the server
+type Pullable interface {
+	AddReceiver(receiver Receiver) error
+}
