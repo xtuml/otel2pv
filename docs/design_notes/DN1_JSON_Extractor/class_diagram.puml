@@ -19,7 +19,7 @@ namespace Server {
     struct AppData {
         -any data
         +CompletionHandler completionHandler
-        +any GetData()
+        +any SendTo()
     }
     interface Receiver {
         +error Receive(AppData)

@@ -17,3 +17,10 @@ type AppData struct {
 func (a *AppData) GetData() any {
 	return a.data
 }
+
+// Receiver is an interface for receiving data from a source.
+// The SendTo method is called to send data to the destination through the Receiver.
+// Returns an error if the sending fails.
+type Receiver interface {
+	SendTo(data AppData) error
+}

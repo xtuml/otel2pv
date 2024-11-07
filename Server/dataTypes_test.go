@@ -35,6 +35,11 @@ func TestCompletionHandler(t *testing.T) {
 		if handler.ErrorReceived != nil {
 			t.Errorf("Expected ErrorReceived to be nil, got %v", handler.ErrorReceived)
 		}
+		// Type assertion to check if handler implements CompletionHandler
+		_, ok := interface{}(handler).(CompletionHandler)
+		if !ok {
+			t.Errorf("Expected handler to implement CompletionHandler interface")
+		}
 	})
 	t.Run("Error", func(t *testing.T) {
 		handler := &MockCompletionHandler{}
@@ -50,6 +55,11 @@ func TestCompletionHandler(t *testing.T) {
 		}
 		if handler.ErrorReceived != testError {
 			t.Errorf("Expected error '%v', got '%v'", testError, handler.ErrorReceived)
+		}
+		// Type assertion to check if handler implements CompletionHandler
+		_, ok := interface{}(handler).(CompletionHandler)
+		if !ok {
+			t.Errorf("Expected handler to implement CompletionHandler interface")
 		}
 	})
 }
@@ -79,6 +89,72 @@ func TestAppData(t *testing.T) {
 		}
 		if mockHandler.ErrorReceived != nil {
 			t.Errorf("Expected ErrorReceived to be nil, got %v", mockHandler.ErrorReceived)
+		}
+		// Type assertion to check if handler implements CompletionHandler
+		_, ok := interface{}(appData.handler).(CompletionHandler)
+		if !ok {
+			t.Errorf("Expected handler to implement CompletionHandler interface")
+		}
+	})
+}
+
+type MockReceiver struct {
+	DataReceived any
+}
+
+func (t *MockReceiver) SendTo(receiver AppData) error {
+	t.DataReceived = receiver.GetData()
+	return nil
+}
+
+// ErrorReceiver is a Receiver implementation that always calls Complete on the handler
+type ErrorReceiver struct{}
+
+func (r *ErrorReceiver) SendTo(data AppData) error {
+	return data.handler.Complete(data.GetData(), nil)
+}
+
+// ErrHandler is a test CompletionHandler that always returns an error
+type ErrHandler struct{}
+
+func (e *ErrHandler) Complete(data any, err error) error {
+	return errors.New("completion handler failed")
+}
+
+func TestReceiver(t *testing.T) {
+	t.Run("SendTo", func(t *testing.T) {
+		mockReceiver := &MockReceiver{}
+		testData := "test data"
+		appData := &AppData{data: testData, handler: &MockCompletionHandler{}}
+
+		err := mockReceiver.SendTo(*appData)
+
+		if err != nil {
+			t.Errorf("Expected no error from Receive, got %v", err)
+		}
+		if mockReceiver.DataReceived != testData {
+			t.Errorf("Expected DataReceived to be '%v', got '%v'", testData, mockReceiver.DataReceived)
+		}
+		// Type assertion to check if mockReceiver implements Receiver
+		_, ok := interface{}(mockReceiver).(Receiver)
+		if !ok {
+			t.Errorf("Expected mockReceiver to implement Receiver interface")
+		}
+	})
+	t.Run("SendToError", func(t *testing.T) {
+		errorReceiver := &ErrorReceiver{}
+		testData := "test data"
+		appData := &AppData{data: testData, handler: &ErrHandler{}}
+
+		err := errorReceiver.SendTo(*appData)
+
+		if err == nil || err.Error() != "completion handler failed" {
+			t.Errorf("Expected error 'completion handler failed', got %v", err)
+		}
+		// Type assertion to check if errorReceiver implements Receiver
+		_, ok := interface{}(errorReceiver).(Receiver)
+		if !ok {
+			t.Errorf("Expected errorReceiver to implement Receiver interface")
 		}
 	})
 }
