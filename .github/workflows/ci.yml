@@ -39,7 +39,7 @@ jobs:
   run-matrix:
     needs: setup
     runs-on: ubuntu-latest
-    if: ${{ needs.setup.outputs.matrix.directory != '[]' &&  needs.setup.outputs.matrix.directory != ''}}
+    if: ${{ needs.setup.outputs.matrix != '[]' &&  needs.setup.outputs.matrix != ''}}
     strategy:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
