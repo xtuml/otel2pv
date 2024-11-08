@@ -88,8 +88,8 @@ namespace Server {
     }
     struct KafkaConsumerCofig
     struct KafkaProducerConfig
-    struct ProducerConfig
-    struct ConsumerConfig
+    interface ProducerConfig
+    interface ConsumerConfig
 }
 Server.CompletionHandler *-- Server.AppData
 Server.CompletionHandler <|-left- Server.KafkaConsumerCompletionHandler
@@ -121,6 +121,9 @@ Server.KafkaProducerConfig *-up- Server.KafkaProducer
 Server.PipeServer <|-- JSONExtractor.JQTransformer
 Server.Receiver *-- JSONExtractor.JQTransformer
 
-Server.ProducerConfig *-up- Server.KafkaProducerConfig
-Server.ConsumerConfig *-up- Server.KafkaConsumerCofig
+Server.ProducerConfig <|-up- Server.KafkaProducerConfig
+Server.ConsumerConfig <|-up- Server.KafkaConsumerCofig
+
+Server.ConsumerConfig *-- Server.Consumer
+Server.ProducerConfig *-- Server.Producer
 @enduml
