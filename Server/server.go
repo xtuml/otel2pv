@@ -21,3 +21,12 @@ type Pushable interface {
 type Pullable interface {
 	AddReceiver(receiver Receiver) error
 }
+
+// SourceServer is an interface that combines the Server and Pullable interfaces.
+// It has a Serve method that will start the server and return an error if this fails,
+// and an AddReceiver method that will add a receiver to the server and
+// return an error if it fails.
+type SourceServer interface {
+	Pullable
+	Server
+}

@@ -174,3 +174,86 @@ func TestPullable(t *testing.T) {
 		}
 	})
 }
+
+// MockSourceServer is a mock implementation of the SourceServer interface
+type MockSourceServer struct {
+	isError  bool
+	Receiver Receiver
+}
+
+func (s *MockSourceServer) AddReceiver(receiver Receiver) error {
+	if s.isError {
+		return errors.New("test error")
+	}
+	s.Receiver = receiver
+	return nil
+}
+
+func (s *MockSourceServer) Serve() error {
+	if s.isError {
+		return errors.New("test error")
+	}
+	return nil
+}
+
+func TestSourceServer(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		sourceServer := MockSourceServer{
+			isError: false,
+		}
+		mockReceiver := MockReceiverForPullable{}
+		err := sourceServer.AddReceiver(&mockReceiver)
+
+		_, ok := interface{}(&sourceServer).(SourceServer)
+		if !ok {
+			t.Errorf("Expected sourceServer to implement SourceServer interface")
+		}
+
+		_, pullableOk := interface{}(&sourceServer).(Pullable)
+		if !pullableOk {
+			t.Errorf("Expected sourceServer to implement Pullable interface")
+		}
+
+		_, receiverOk := interface{}(&mockReceiver).(Receiver)
+		if !receiverOk {
+			t.Errorf("Expected mockReceiver to implement Receiver interface")
+		}
+
+		if err != nil {
+			t.Errorf("Expected no error from AddReceiver, got %v", err)
+		}
+		if sourceServer.Receiver != &mockReceiver {
+			t.Errorf("Expected receiver to be set, got %v", sourceServer.Receiver)
+		}
+		appData := AppData{
+			data:    "test data",
+			handler: &MockCompletionHandlerForPullable{},
+		}
+		_ = sourceServer.Receiver.SendTo(appData)
+		if mockReceiver.AddedData != appData {
+			t.Errorf("Expected data to be sent to receiver, got %v", mockReceiver.AddedData)
+		}
+
+		err = sourceServer.Serve()
+		if err != nil {
+			t.Errorf("Expected no error from Serve, got %v", err)
+		}
+	})
+	t.Run("Error", func(t *testing.T) {
+		sourceServer := MockSourceServer{
+			isError: true,
+		}
+
+		err := sourceServer.AddReceiver(&MockReceiverForPullable{})
+
+		if err == nil {
+			t.Errorf("Expected error from AddReceiver, got '%v'", err)
+		}
+
+		err = sourceServer.Serve()
+
+		if err == nil {
+			t.Errorf("Expected error from Serve, got '%v'", err)
+		}
+	})
+}
