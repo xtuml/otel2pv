@@ -5,7 +5,7 @@ namespace JSONExtractor {
         -Code jqProgram
         -Receiver receiver
         +error AddReceiver(Receiver)
-        +Receiver GetReceiver()
+        +(Receiver error) GetReceiver()
         +error Serve()
     }
 }
@@ -50,15 +50,10 @@ namespace Server {
         +(Receiver error) GetReceiver()
         +error Serve()
     }
-    struct ProducerResponse {
-        -error error
-        +error GetError()
-    }
     interface Producer {
-        +ProducerInstance GetInstance()
         +error Setup(ProducerConfig)
         +error Start()
-        +ProducerResponse Send(any)
+        +error Send(any)
     }
     interface Consumer {
         +error AddReceiver(Receiver)
@@ -73,7 +68,7 @@ namespace Server {
     struct KafkaProducer {
         +error Setup(KafkaProducerConfig)
         +error Start()
-        +ProducerResponse Send(any)
+        +error Send(any)
     }
     struct ProducerServer {
         -map[string]Producer producerMap
@@ -105,7 +100,6 @@ Server.Pushable <|-- Server.PipeServer
 Server.Pullable <|-- Server.PipeServer
 Server.Server <|-- Server.PipeServer
 
-Server.ProducerResponse *-right- Server.Producer
 Server.Producer <|-- Server.KafkaProducer
 Server.Consumer <|-- Server.KafkaConsumer
 Server.Producer *-up- Server.ProducerServer
