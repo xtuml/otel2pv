@@ -31,6 +31,14 @@ type SourceServer interface {
 	Server
 }
 
+// SinkServer is an interface that combines the Server and Pushable interfaces.
+// It has a Serve method that will start the server and return an error if this fails,
+// and a GetReceiver method that will return the Receiver instance for handling incoming
+// data, or an error if it fails.
+type SinkServer interface {
+	Pushable
+	Server
+}
 
 // PipeServer is an interface that combines the Server, Pullable and Pushable
 // interfaces.

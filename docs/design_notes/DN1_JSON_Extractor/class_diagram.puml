@@ -42,12 +42,12 @@ namespace Server {
         +error Serve()
     }
     interface SinkServer {
-        +Receiver GetReceiver()
+        +(Receiver error) GetReceiver()
         +error Serve()
     }
     interface PipeServer {
         +error AddReceiver(Receiver)
-        +Receiver GetReceiver()
+        +(Receiver error) GetReceiver()
         +error Serve()
     }
     struct ProducerResponse {

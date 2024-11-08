@@ -258,6 +258,84 @@ func TestSourceServer(t *testing.T) {
 	})
 }
 
+// MockSinkServer is a mock implementation of the SinkServer interface
+type MockSinkServer struct {
+	isError  bool
+	Receiver Receiver
+}
+
+func (s *MockSinkServer) GetReceiver() (Receiver, error) {
+	if s.isError {
+		return nil, errors.New("test error")
+	}
+	return s.Receiver, nil
+}
+
+func (s *MockSinkServer) Serve() error {
+	if s.isError {
+		return errors.New("test error")
+	}
+	return nil
+}
+
+func TestSinkServer(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		sinkServer := MockSinkServer{
+			isError: false,
+		}
+		mockReceiver := MockReceiverForPullable{}
+		sinkServer.Receiver = &mockReceiver
+
+		_, ok := interface{}(&sinkServer).(SinkServer)
+		if !ok {
+			t.Errorf("Expected sinkServer to implement SinkServer interface")
+		}
+
+		_, pushableOk := interface{}(&sinkServer).(Pushable)
+		if !pushableOk {
+			t.Errorf("Expected sinkServer to implement Pushable interface")
+		}
+
+		_, receiverOk := interface{}(&mockReceiver).(Receiver)
+		if !receiverOk {
+			t.Errorf("Expected mockReceiver to implement Receiver interface")
+		}
+
+		receiver, err := sinkServer.GetReceiver()
+
+		if receiver == nil {
+			t.Errorf("Expected receiver to be non-nil")
+		}
+		if err != nil {
+			t.Errorf("Expected no error from GetReceiver, got %v", err)
+		}
+		if sinkServer.Receiver != &mockReceiver {
+			t.Errorf("Expected receiver to be set, got %v", sinkServer.Receiver)
+		}
+
+		err = sinkServer.Serve()
+		if err != nil {
+			t.Errorf("Expected no error from Serve, got %v", err)
+		}
+	})
+	t.Run("Error", func(t *testing.T) {
+		sinkServer := MockSinkServer{
+			isError: true,
+		}
+
+		_, err := sinkServer.GetReceiver()
+
+		if err == nil {
+			t.Errorf("Expected error from GetReceiver, got '%v'", err)
+		}
+
+		err = sinkServer.Serve()
+
+		if err == nil {
+			t.Errorf("Expected error from Serve, got '%v)", err)
+		}
+	})
+}
 
 // MockPipeServer is a mock implementation of the PipeServer interface
 type MockPipeServer struct {
