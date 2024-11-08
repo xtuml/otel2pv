@@ -30,3 +30,16 @@ type SourceServer interface {
 	Pullable
 	Server
 }
+
+
+// PipeServer is an interface that combines the Server, Pullable and Pushable
+// interfaces.
+// It has a Serve method that will start the server and return an error if this fails,
+// an AddReceiver method that will add a receiver to the server and return an error if it fails,
+// and a GetReceiver method that will return the Receiver instance for handling incoming data,
+// or an error if it fails.
+type PipeServer interface {
+	Pullable
+	Pushable
+	Server
+}

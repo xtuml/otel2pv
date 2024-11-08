@@ -257,3 +257,105 @@ func TestSourceServer(t *testing.T) {
 		}
 	})
 }
+
+
+// MockPipeServer is a mock implementation of the PipeServer interface
+type MockPipeServer struct {
+	isAddError  bool
+	isServeError bool
+	MyReceiver Receiver
+	TheirReceiver Receiver
+}
+
+func (s *MockPipeServer) AddReceiver(receiver Receiver) error {
+	if s.isAddError {
+		return errors.New("test error")
+	}
+	s.TheirReceiver = receiver
+	return nil
+}
+
+func (s *MockPipeServer) GetReceiver() (Receiver, error) {
+	if s.MyReceiver == nil {
+		return nil, errors.New("test error")
+	}
+	return s.MyReceiver, nil
+}
+
+func (s *MockPipeServer) Serve() error {
+	if s.isServeError {
+		return errors.New("test error")
+	}
+	return nil
+}
+
+func TestPipeServer(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		pipeServer := MockPipeServer{
+			isAddError:  false,
+			isServeError: false,
+			MyReceiver:  &MockReceiverForPullable{},
+		}
+		mockReceiver := MockReceiverForPullable{}
+		err := pipeServer.AddReceiver(&mockReceiver)
+
+		_, ok := interface{}(&pipeServer).(PipeServer)
+		if !ok {
+			t.Errorf("Expected pipeServer to implement PipeServer interface")
+		}
+
+		_, pullableOk := interface{}(&pipeServer).(Pullable)
+		if !pullableOk {
+			t.Errorf("Expected pipeServer to implement Pullable interface")
+		}
+
+		_, pushableOk := interface{}(&pipeServer).(Pushable)
+		if !pushableOk {
+			t.Errorf("Expected pipeServer to implement Pushable interface")
+		}
+
+		if err != nil {
+			t.Errorf("Expected no error from AddReceiver, got %v", err)
+		}
+		if pipeServer.TheirReceiver != &mockReceiver {
+			t.Errorf("Expected receiver to be set, got %v", pipeServer.TheirReceiver)
+		}
+
+		err = pipeServer.Serve()
+		if err != nil {
+			t.Errorf("Expected no error from Serve, got %v", err)
+		}
+
+		receiver, err := pipeServer.GetReceiver()
+		if receiver == nil {
+			t.Errorf("Expected receiver to be non-nil")
+		}
+		if err != nil {
+			t.Errorf("Expected no error from GetReceiver, got %v", err)
+		}
+		if pipeServer.MyReceiver != receiver {
+			t.Errorf("Expected receiver to be set, got %v", pipeServer.MyReceiver)
+		}
+	})
+	t.Run("Error", func(t *testing.T) {
+		pipeServer := MockPipeServer{
+			isAddError:  true,
+			isServeError: true,
+		}
+
+		err := pipeServer.AddReceiver(&MockReceiverForPullable{})
+		if err == nil {
+			t.Errorf("Expected error from AddReceiver, got '%v'", err)
+		}
+
+		err = pipeServer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got '%v'", err)
+		}
+
+		_, err = pipeServer.GetReceiver()
+		if err == nil {
+			t.Errorf("Expected error from GetReceiver, got '%v'", err)
+		}
+	})
+}
