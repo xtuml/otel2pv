@@ -3,9 +3,9 @@ namespace JSONExtractor {
     struct JQTransformer {
         -string jqQuery
         -Code jqProgram
-        -Receiver receiver
         +error AddReceiver(Receiver)
         +(Receiver error) GetReceiver()
+        +error HandleIncomingData(AppData)
         +error Serve()
     }
 }
@@ -19,23 +19,26 @@ namespace Server {
     struct AppData {
         -any data
         +CompletionHandler completionHandler
-        +any SendTo()
+        +any GetData()
     }
     interface Receiver {
-        +error Receive(AppData)
+        +error SendTo(AppData)
+        +(<-chan AppData, error) GetOutChan()
     }
     struct ChanReceiver {
         -chan AppData dataChan
-        +error Receive(AppData)
+        +error SendTo(AppData)
+        +(<-chan AppData, error) GetOutChan()
     }
     interface Server {
         +error Serve()
     }
     interface Pullable {
-        +error AddReceiver(*Receiver)
+        +error AddReceiver(Receiver)
     }
     interface Pushable {
         +(Receiver error) GetReceiver()
+        +error HandleIncomingData(AppData)
     }
     interface SourceServer {
         +error AddReceiver(Receiver)
@@ -43,17 +46,20 @@ namespace Server {
     }
     interface SinkServer {
         +(Receiver error) GetReceiver()
+        +error HandleIncomingData(AppData)
         +error Serve()
     }
     interface PipeServer {
         +error AddReceiver(Receiver)
         +(Receiver error) GetReceiver()
+        +error HandleIncomingData(AppData)
         +error Serve()
     }
     interface Producer {
         +error Setup(ProducerConfig)
-        +error Start()
-        +error Send(any)
+        +(Receiver error) GetReceiver()
+        +error HandleIncomingData(AppData)
+        +error Serve()
     }
     interface Consumer {
         +error AddReceiver(Receiver)
@@ -67,13 +73,14 @@ namespace Server {
     }
     struct KafkaProducer {
         +error Setup(KafkaProducerConfig)
-        +error Start()
-        +error Send(any)
+        +(Receiver error) GetReceiver()
+        +error HandleIncomingData(AppData)
+        +error Serve()
     }
     struct ProducerServer {
         -map[string]Producer producerMap
-        -Receiver receiver
-        +Receiver GetReceiver()
+        +(Receiver error) GetReceiver()
+        +error HandleIncomingData(AppData)
         +error Serve()
     }
     struct ConsumerServer {
@@ -81,10 +88,18 @@ namespace Server {
         +error AddReceiver(Receiver)
         +error Serve()
     }
-    struct KafkaConsumerCofig
-    struct KafkaProducerConfig
-    interface ProducerConfig
-    interface ConsumerConfig
+    struct KafkaConsumerCofig {
+        +error IngestConfig(any)
+    }
+    struct KafkaProducerConfig {
+        +error IngestConfig(any)
+    }
+    interface ProducerConfig {
+        +error IngestConfig(any)
+    }
+    interface ConsumerConfig {
+        +error IngestConfig(any)
+    }
 }
 Server.CompletionHandler *-- Server.AppData
 Server.CompletionHandler <|-left- Server.KafkaConsumerCompletionHandler
@@ -100,12 +115,12 @@ Server.Pushable <|-- Server.PipeServer
 Server.Pullable <|-- Server.PipeServer
 Server.Server <|-- Server.PipeServer
 
+Server.SinkServer <|-down- Server.Producer
 Server.Producer <|-- Server.KafkaProducer
 Server.Consumer <|-- Server.KafkaConsumer
-Server.Producer *-up- Server.ProducerServer
-Server.SinkServer <|-- Server.ProducerServer
-Server.Receiver *-- Server.ProducerServer
-Server.SourceServer <|-left- Server.ConsumerServer
+Server.Producer *-- Server.ProducerServer
+Server.SinkServer <|-left- Server.ProducerServer
+Server.SourceServer <|-- Server.ConsumerServer
 Server.Consumer *-- Server.ConsumerServer
 Server.SourceServer <|-down- Server.Consumer
 
@@ -113,7 +128,6 @@ Server.KafkaConsumerCofig *-up- Server.KafkaConsumer
 Server.KafkaProducerConfig *-up- Server.KafkaProducer
 
 Server.PipeServer <|-- JSONExtractor.JQTransformer
-Server.Receiver *-- JSONExtractor.JQTransformer
 
 Server.ProducerConfig <|-up- Server.KafkaProducerConfig
 Server.ConsumerConfig <|-up- Server.KafkaConsumerCofig
