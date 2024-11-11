@@ -125,6 +125,26 @@ The following is an overview of the server implementation:
 
 ![Server Library](./implementation_server.svg)
 
+##### RunServers
+```go
+// Run Server will setup and run all the servers and 
+// will pass the data from the source server to the pipe server
+// and then to the sink server
+func RunServers(
+    sourceServer SourceServer,
+    pipeServer PipeServer,
+    sinkServer SinkServer,
+) error
+
+// HandlePushableDataReceipt will handle the data in the
+// Recevier instance and call the HandleIncomingData method
+go HandlePushableDataReceipt(pushable Pushable) error
+
+
+```
+The call graph for the RunServers function is as follows:
+![RunServers Call Graph](./RunServers_callgraph.svg)
+
 #### JSON Extractor App
 
 The following is an overview of the JSON Extractor app implementation:

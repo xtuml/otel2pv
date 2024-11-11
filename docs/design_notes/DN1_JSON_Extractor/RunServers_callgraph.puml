@@ -1,0 +1,12 @@
+@startuml
+digraph G {
+    rankdir=LR
+    node [style=rounded];
+    RunServers -> "PipeServer.\nGetRecevier";
+    RunServers -> "SinkServer.\nGetRecevier";
+    RunServers -> "SourceServer.\nAddRecevier";
+    RunServers -> "PipeServer.\nAddRecevier";
+    RunServers -> "HandlePushableDataReceipt";
+    "HandlePushableDataReceipt" -> "Pushable.\nHandleIncomingData";
+}
+@enduml

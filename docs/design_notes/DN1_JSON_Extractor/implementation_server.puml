@@ -4,81 +4,41 @@
         -[hidden]->
         package Server {
             group RunServer(SourceServer, PipeServer, SinkServer) error {
-                :Setup SourceServer;
-                :Setup PipeServer;
-                :Setup SinkServer;
-                :Add Receiver to SourceServer;
-                :Add Receiver to PipeServer;
-                :Serve SinkServer;
-                :Serve PipeServer;
-                :Serve SourceServer;
+                :Add Receiver to SourceServer from PipeServer;
+                :Add Receiver to PipeServer from SinkServer;
+                :Call Serve SinkServer;
+                :Call Serve PipeServer;
+                :Call Serve SourceServer;
+                :Call HandleIncomingData on SinkServer;
+                :Call HandleIncomingData on PipeServer;
                 detach
             }
-            group getProducerServer(ProducerConfig) ProducerServer {
-                :Create Producers and Producers map using config;
-                :Create ProducerServer using Producers map;
-                :Return ProducerServer;
-                detach
-            }
-            group getConsumerServer(ConsumerConfig) ConsumerServer {
-                :Create Consumers and Consumers map using config;
-                :Create ConsumerServer using Consumers map;
-                :Return ConsumerServer;
-                detach
-            }
-            group Receive(ChanReceiver, AppData) error {
-                :Send data to channel;
+            group HandlePushableDataReceipt(Pushable) error {
+                :Call GetReceiver on Pushable;
+                :Call GetOutChan on Receiver;
+                repeat
+                    :Receive data from channel;
+                    :Call HandleIncomingData of Pushable with AppData;
+                repeat while (while data is available in channel)
+                :Return nil;
                 detach
             }
         }
         split again
         -[hidden]->
         package Producer {
-            group Serve(ProducerServer) error {
-                :Create go routines to pull from receive channel;
-                :Within go routines send data to the Producers by\nextracting fields from data that relate to a producer;
-                detach
-            }
-            group GetReceiver(ProducerServer) Receiver {
-                :Return Receiver;
-                detach
-            }
-            group Setup(KafkaProducer, KafkaProducerConfig) error {
-                :Setup KafkaProducer using config;
-                :Instantiate kafka producer from imported package;
-                detach
-            }
-            group Start(KafkaProducer) error {
-                :Start kafka producer;
-                detach
-            }
-            group Send(KafkaProducer, any) ProducerResponse {
-                :Send data to kafka producer;
-                :Return ProducerResponse once send is acknowledged;
+            group getProducerServer(ProducerConfig) (ProducerServer, error) {
+                :Create Producers and Producers map using config;
+                :Create ProducerServer using Producers map;
+                :Return ProducerServer;
                 detach
             }
         }
         package Consumer {
-            group Serve(ConsumerServer) error {
-                :Create go routines to get data from consumers;
-                :Within go routines send data to Receiver;
-                detach
-            }
-            group Setup(KafkaConsumer, KafkaConsumerConfig) error {
-                :Setup KafkaConsumer using config;
-                :Instantiate kafka consumer from imported package;
-                detach
-            }
-            group Serve(KafkaConsumer) error {
-                :Start kafka consumer instance;
-                detach
-            }
-            group AddReceiver(KafkaConsumer, Receiver) error {
-                :Add Receiver to KafkaConsumer;
-                detach
-            }
-            group Complete(KafkaConsumerCompletionHandler, any, error) error {
-                :Update the kafka consumer instance with the offset for the data;
+            group getConsumerServer(ConsumerConfig) (ConsumerServer, error) {
+                :Create Consumers and Consumers map using config;
+                :Create ConsumerServer using Consumers map;
+                :Return ConsumerServer;
                 detach
             }
         }
