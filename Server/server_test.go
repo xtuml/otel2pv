@@ -128,6 +128,10 @@ func (r *MockReceiverForPullable) SendTo(data AppData) error {
 	return nil
 }
 
+func (r *MockReceiverForPullable) GetOutChan() (<-chan AppData, error) {
+	return nil, nil
+}
+
 // MockCompletionHandlerForPullable is a mock implementation of the CompletionHandler struct
 type MockCompletionHandlerForPullable struct{}
 
@@ -339,9 +343,9 @@ func TestSinkServer(t *testing.T) {
 
 // MockPipeServer is a mock implementation of the PipeServer interface
 type MockPipeServer struct {
-	isAddError  bool
-	isServeError bool
-	MyReceiver Receiver
+	isAddError    bool
+	isServeError  bool
+	MyReceiver    Receiver
 	TheirReceiver Receiver
 }
 
@@ -370,9 +374,9 @@ func (s *MockPipeServer) Serve() error {
 func TestPipeServer(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		pipeServer := MockPipeServer{
-			isAddError:  false,
+			isAddError:   false,
 			isServeError: false,
-			MyReceiver:  &MockReceiverForPullable{},
+			MyReceiver:   &MockReceiverForPullable{},
 		}
 		mockReceiver := MockReceiverForPullable{}
 		err := pipeServer.AddReceiver(&mockReceiver)
@@ -417,7 +421,7 @@ func TestPipeServer(t *testing.T) {
 	})
 	t.Run("Error", func(t *testing.T) {
 		pipeServer := MockPipeServer{
-			isAddError:  true,
+			isAddError:   true,
 			isServeError: true,
 		}
 

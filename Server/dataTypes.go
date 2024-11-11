@@ -21,6 +21,8 @@ func (a *AppData) GetData() any {
 // Receiver is an interface for receiving data from a source.
 // The SendTo method is called to send data to the destination through the Receiver.
 // Returns an error if the sending fails.
+// GetOutChan method returns the channel, or an error if it fails
 type Receiver interface {
 	SendTo(data AppData) error
+	GetOutChan() (<-chan AppData, error)
 }

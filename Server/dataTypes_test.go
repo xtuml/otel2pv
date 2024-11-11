@@ -99,26 +99,25 @@ func TestAppData(t *testing.T) {
 }
 
 type MockReceiver struct {
-	DataReceived any
+	isGetOutChanError bool
+	isSendToError     bool
+	channel           chan AppData
+	DataReceived      any
 }
 
 func (t *MockReceiver) SendTo(receiver AppData) error {
+	if t.isSendToError {
+		return errors.New("completion handler failed")
+	}
 	t.DataReceived = receiver.GetData()
 	return nil
 }
 
-// ErrorReceiver is a Receiver implementation that always calls Complete on the handler
-type ErrorReceiver struct{}
-
-func (r *ErrorReceiver) SendTo(data AppData) error {
-	return data.handler.Complete(data.GetData(), nil)
-}
-
-// ErrHandler is a test CompletionHandler that always returns an error
-type ErrHandler struct{}
-
-func (e *ErrHandler) Complete(data any, err error) error {
-	return errors.New("completion handler failed")
+func (t *MockReceiver) GetOutChan() (<-chan AppData, error) {
+	if t.isGetOutChanError {
+		return nil, errors.New("error getting channel")
+	}
+	return t.channel, nil
 }
 
 func TestReceiver(t *testing.T) {
@@ -142,19 +141,51 @@ func TestReceiver(t *testing.T) {
 		}
 	})
 	t.Run("SendToError", func(t *testing.T) {
-		errorReceiver := &ErrorReceiver{}
+		mockReceiver := &MockReceiver{
+			isSendToError:     true,
+			isGetOutChanError: false,
+		}
 		testData := "test data"
-		appData := &AppData{data: testData, handler: &ErrHandler{}}
+		appData := &AppData{data: testData, handler: &MockCompletionHandler{}}
 
-		err := errorReceiver.SendTo(*appData)
+		err := mockReceiver.SendTo(*appData)
 
 		if err == nil || err.Error() != "completion handler failed" {
 			t.Errorf("Expected error 'completion handler failed', got %v", err)
 		}
 		// Type assertion to check if errorReceiver implements Receiver
-		_, ok := interface{}(errorReceiver).(Receiver)
+		_, ok := interface{}(mockReceiver).(Receiver)
 		if !ok {
 			t.Errorf("Expected errorReceiver to implement Receiver interface")
+		}
+	})
+	t.Run("GetOutChan", func(t *testing.T) {
+		mockReceiver := &MockReceiver{channel: make(chan AppData)}
+
+		channel, err := mockReceiver.GetOutChan()
+
+		if err != nil {
+			t.Errorf("Expected no error from GetOutChan, got %v", err)
+		}
+		if channel == nil {
+			t.Errorf("Expected channel to be non-nil")
+		}
+
+		_, ok := interface{}(mockReceiver).(Receiver)
+		if !ok {
+			t.Errorf("Expected mockReceiver to implement Receiver interface")
+		}
+	})
+	t.Run("GetOutChanError", func(t *testing.T) {
+		mockReceiver := &MockReceiver{isGetOutChanError: true}
+
+		channel, err := mockReceiver.GetOutChan()
+
+		if err == nil || err.Error() != "error getting channel" {
+			t.Errorf("Expected error 'error getting channel', got %v", err)
+		}
+		if channel != nil {
+			t.Errorf("Expected channel to be nil")
 		}
 	})
 }
