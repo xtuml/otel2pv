@@ -72,4 +72,20 @@ func TestJQTransformer(t *testing.T) {
 			t.Errorf("Expected receiver to be %v, got %v", &inReceiver, receiver)
 		}
 	})
+	t.Run("AddReceiver", func(t *testing.T) {
+		jqTransformer := JQTransformer{jqProgram: jqProgram}
+		// Test when outReceiver is nil
+		err := jqTransformer.AddReceiver(&outReceiver)
+		if err != nil {
+			t.Errorf("Expected no error from AddReceiver, got %v", err)
+		}
+		if jqTransformer.outReceiver != &outReceiver {
+			t.Errorf("Expected outReceiver to be %v, got %v", &outReceiver, jqTransformer.outReceiver)
+		}
+		// Test when outReceiver is set
+		err = jqTransformer.AddReceiver(&outReceiver)
+		if err == nil {
+			t.Errorf("Expected error from AddReceiver, got nil")
+		}
+	})
 }

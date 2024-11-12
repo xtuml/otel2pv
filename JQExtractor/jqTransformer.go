@@ -21,8 +21,19 @@ type JQTransformer struct {
 
 func (jqt *JQTransformer) GetReceiver() (Server.Receiver, error) {
 	// GetReceiver is a method that returns the receiver that will be used to receive data
+	// It returns an error if the in receiver is not set
 	if jqt.inReceiver == nil {
 		return nil, errors.New("receiver not set")
 	}
 	return jqt.inReceiver, nil
+}
+
+func (jqt *JQTransformer) AddReceiver(receiver Server.Receiver) error {
+	// AddReceiver is a method that sets the receiver that will be used to receive data
+	// It returns an error if the out receiver is already set
+	if jqt.outReceiver != nil {
+		return errors.New("receiver already set")
+	}
+	jqt.outReceiver = receiver
+	return nil
 }
