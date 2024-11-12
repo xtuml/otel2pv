@@ -482,3 +482,141 @@ func TestPipeServer(t *testing.T) {
 		}
 	})
 }
+
+// Mock structures
+// MockReceiverForPushableDataReceipt is a struct that provides a mock implementation of the Receiver interface
+type MockReceiverForPushableDataReceipt struct {
+	outChan chan AppData
+	isError bool
+}
+
+func (mr *MockReceiverForPushableDataReceipt) SendTo(data AppData) error {
+	return nil
+}
+
+func (mr *MockReceiverForPushableDataReceipt) GetOutChan() (<-chan AppData, error) {
+	if mr.isError {
+		return nil, errors.New("error getting channel")
+	}
+	return mr.outChan, nil
+}
+
+// MockPushableForPushableDataReceipt is a struct that provides a mock implementation of the Pushable interface
+type MockPushableForPushableDataReceipt struct {
+	isReceiverError       bool
+	isHandleIncomingError bool
+	receiver              Receiver
+	incomingData          []AppData
+}
+
+func (p *MockPushableForPushableDataReceipt) GetReceiver() (Receiver, error) {
+	if p.isReceiverError {
+		return nil, errors.New("error getting receiver")
+	}
+	return p.receiver, nil
+}
+
+func (p *MockPushableForPushableDataReceipt) HandleIncomingData(data AppData) error {
+	if p.isHandleIncomingError {
+		return errors.New("error handling incoming data")
+	}
+	p.incomingData = append(p.incomingData, data)
+	return nil
+}
+
+func TestHandlePushableDataReceipt(t *testing.T) {
+	tests := []struct {
+		name                 string
+		receiverError        bool
+		handleIncomingError  bool
+		expectedError        error
+		numberChannels       int
+		expectedIncomingData []AppData
+	}{
+		{
+			name:                "Successful data handling with single item",
+			receiverError:       false,
+			handleIncomingError: false,
+			expectedError:       nil,
+			expectedIncomingData: []AppData{
+				{data: "test data 1"},
+			},
+		},
+		{
+			name:                "Successful data handling with multiple items",
+			receiverError:       false,
+			handleIncomingError: false,
+			expectedError:       nil,
+			expectedIncomingData: []AppData{
+				{data: "test data 1"},
+				{data: "test data 2"},
+			},
+		},
+		{
+			name:                 "Error retrieving receiver",
+			receiverError:        true,
+			handleIncomingError:  false,
+			expectedError:        errors.New("error getting receiver"),
+			expectedIncomingData: []AppData{},
+		},
+		{
+			name:                "Error handling incoming data",
+			receiverError:       false,
+			handleIncomingError: true,
+			expectedError:       errors.New("error handling incoming data"),
+			expectedIncomingData: []AppData{
+				{data: "test data 1"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockReceiver := &MockReceiverForPushableDataReceipt{
+				outChan: make(chan AppData, len(tt.expectedIncomingData)),
+				isError: tt.receiverError,
+			}
+			if !tt.receiverError {
+				for _, data := range tt.expectedIncomingData {
+					mockReceiver.outChan <- data
+				}
+				close(mockReceiver.outChan)
+			}
+
+			mockPushable := &MockPushableForPushableDataReceipt{
+				isReceiverError:       tt.receiverError,
+				isHandleIncomingError: tt.handleIncomingError,
+				receiver:              mockReceiver,
+			}
+
+			err := HandlePushableDataReceipt(mockPushable)
+
+			// Verify the returned error matches the expected error
+			if err != nil && tt.expectedError == nil || err == nil && tt.expectedError != nil {
+				t.Fatalf("expected error: %v, got: %v", tt.expectedError, err)
+			}
+			if err != nil && tt.expectedError != nil && err.Error() != tt.expectedError.Error() {
+				t.Fatalf("expected error message: %v, got: %v", tt.expectedError.Error(), err.Error())
+			}
+
+			// Early error return will prevent the incoming data from being processed,
+			// causing mismatch between the expected and actual incoming data
+			if tt.handleIncomingError {
+				if len(mockPushable.incomingData) != 0 {
+					t.Fatalf("expected no incoming data to be handled, but got %d", len(mockPushable.incomingData))
+				}
+				return
+			}
+			// Check that the processed data matches the expected data
+			if len(mockPushable.incomingData) != len(tt.expectedIncomingData) {
+				t.Fatalf("expected %d incoming data items to be handled, but got %d", len(tt.expectedIncomingData), len(mockPushable.incomingData))
+			}
+
+			for i, expectedData := range tt.expectedIncomingData {
+				if mockPushable.incomingData[i] != expectedData {
+					t.Fatalf("expected incoming data at index %d to be %v, but got %v", i, expectedData, mockPushable.incomingData[i])
+				}
+			}
+		})
+	}
+}

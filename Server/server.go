@@ -54,3 +54,23 @@ type PipeServer interface {
 	Pushable
 	Server
 }
+
+// HandlePushableDataReceipt will handle the data in the
+// Recevier instance and call the HandleIncomingData method
+func HandlePushableDataReceipt(p Pushable) error {
+	receiver, err := p.GetReceiver()
+	if err != nil {
+		return err
+	}
+	outChan, err := receiver.GetOutChan()
+	if err != nil {
+		return err
+	}
+	for data := range outChan {
+		err := p.HandleIncomingData(data)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
