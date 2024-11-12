@@ -11,8 +11,11 @@ type Server interface {
 // of exposing a Receiver for data handling.
 // GetReceiver returns the Receiver instance for handling incoming
 // data, or an error if it fails.
+// HandleIncomingData is a method that will handle incoming data
+// and return an error if it fails.
 type Pushable interface {
 	GetReceiver() (Receiver, error)
+	HandleIncomingData(data AppData) error
 }
 
 // Pullable is an interface that can

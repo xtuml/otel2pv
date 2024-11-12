@@ -48,8 +48,10 @@ func TestServer(t *testing.T) {
 
 // MockPushable is a mock implementation of the Pushable interface
 type MockPushable struct {
-	isError  bool
-	receiver Receiver
+	isError               bool
+	isHandleIncomingError bool
+	incomingData          AppData
+	receiver              Receiver
 }
 
 func (p *MockPushable) GetReceiver() (Receiver, error) {
@@ -57,6 +59,14 @@ func (p *MockPushable) GetReceiver() (Receiver, error) {
 		return nil, errors.New("test error")
 	}
 	return p.receiver, nil
+}
+
+func (p *MockPushable) HandleIncomingData(data AppData) error {
+	if p.isHandleIncomingError {
+		return errors.New("test error")
+	}
+	p.incomingData = data
+	return nil
 }
 
 func TestPushable(t *testing.T) {
@@ -82,11 +92,24 @@ func TestPushable(t *testing.T) {
 		if !ok {
 			t.Errorf("Expected pushable's receiver to implement Receiver interface")
 		}
+
+		appData := AppData{
+			data:    "test data",
+			handler: &MockCompletionHandler{},
+		}
+		err = pushable.HandleIncomingData(appData)
+		if err != nil {
+			t.Errorf("Expected no error from HandleIncomingData, got %v", err)
+		}
+		if pushable.incomingData != appData {
+			t.Errorf("Expected incoming data to be set, got %v", pushable.incomingData)
+		}
 	})
 	t.Run("Error", func(t *testing.T) {
 		pushable := &MockPushable{
-			isError:  true,
-			receiver: nil,
+			isError:               true,
+			isHandleIncomingError: true,
+			receiver:              nil,
 		}
 
 		receiver, err := pushable.GetReceiver()
@@ -100,6 +123,16 @@ func TestPushable(t *testing.T) {
 		_, pushableOk := interface{}(pushable).(Pushable)
 		if !pushableOk {
 			t.Errorf("Expected pushable to implement Pushable interface")
+		}
+
+		appData := AppData{
+			data:    "test data",
+			handler: &MockCompletionHandler{},
+		}
+
+		err = pushable.HandleIncomingData(appData)
+		if err == nil {
+			t.Errorf("Expected error from HandleIncomingData, got '%v'", err)
 		}
 	})
 }
@@ -282,6 +315,10 @@ func (s *MockSinkServer) Serve() error {
 	return nil
 }
 
+func (s *MockSinkServer) HandleIncomingData(data AppData) error {
+	return nil
+}
+
 func TestSinkServer(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		sinkServer := MockSinkServer{
@@ -368,6 +405,10 @@ func (s *MockPipeServer) Serve() error {
 	if s.isServeError {
 		return errors.New("test error")
 	}
+	return nil
+}
+
+func (s *MockPipeServer) HandleIncomingData(data AppData) error {
 	return nil
 }
 
