@@ -1,6 +1,8 @@
 package jqextractor
 
 import (
+	"errors"
+
 	"github.com/itchyny/gojq"
 
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
@@ -15,4 +17,12 @@ type JQTransformer struct {
 	jqProgram   *gojq.Code
 	inReceiver  Server.Receiver
 	outReceiver Server.Receiver
+}
+
+func (jqt *JQTransformer) GetReceiver() (Server.Receiver, error) {
+	// GetReceiver is a method that returns the receiver that will be used to receive data
+	if jqt.inReceiver == nil {
+		return nil, errors.New("receiver not set")
+	}
+	return jqt.inReceiver, nil
 }
