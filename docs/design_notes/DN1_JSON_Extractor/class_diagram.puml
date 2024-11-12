@@ -1,8 +1,7 @@
 @startuml
 namespace JSONExtractor {
     struct JQTransformer {
-        -string jqQuery
-        -Code jqProgram
+        -gojq.Code jqProgram
         -Receiver inReceiver
         -Receiver outReceiver
         +error AddReceiver(Receiver)
