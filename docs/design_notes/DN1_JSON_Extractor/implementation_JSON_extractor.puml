@@ -21,23 +21,27 @@
         split again
         -[hidden]->
         package JqTransformer {
-            group getJQTransformer(JqTransformerConfig) JQTransformer {
+            group getJQTransformer(JqTransformerConfig) (JQTransformer, error) {
                 :Create JQTransformer using config;
                 :Return JQTransformer;
                 detach
             }
             group Serve(JQTransformer) error {
-                :Create go routines to pull from receive channel;
-                :Within go routines transform data using JQTransformer;
-                :Within go routines push transformed data using ChanReceiver instance;
+                :empty go routine that cancels on a context;
                 detach
             }
-            group GetReceiver(JQTransformer) Receiver {
+            group GetReceiver(JQTransformer) (Receiver, error) {
                 :Return Receiver;
                 detach
             }
             group AddReceiver(JQTransformer, Receiver) error {
                 :Add Receiver to JQTransformer;
+                detach
+            }
+            group HandleIncomingData(JQTransformer, AppData) error {
+                :Extract JSON data from AppData using compiled jqProgram;
+                :Create AppData with extracted data and CompletionHandler;
+                :Send AppData to added Receiver;
                 detach
             }
         }

@@ -1,0 +1,13 @@
+@startuml
+digraph G {
+    rankdir=LR
+    node [style=rounded];
+    JQTransformer [style=rounded, shape=box];
+    JQTransformer -> "JQTransformer.\nAddReceiver";
+    JQTransformer -> "JQTransformer.\nGetReceiver";
+    JQTransformer -> "JQTransformer.\nHandleIncomingData";
+    JQTransformer -> "JQTransformer.\nServe";
+    "JQTransformer.\nHandleIncomingData" -> "Receiver.\nSendTo";
+    "JQTransformer.\nHandleIncomingData" -> "Code.\nRun";
+}
+@enduml

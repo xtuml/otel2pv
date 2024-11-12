@@ -150,3 +150,23 @@ The call graph for the RunServers function is as follows:
 The following is an overview of the JSON Extractor app implementation:
 
 ![JSON Extractor App](./implementation_JSON_extractor.svg)
+
+##### JQTransformer(struct methods)
+```go
+
+// Return the struct Receiver instance and error
+func (jqTransformer *JQTransformer) GetReceiver() (Receiver, error)
+
+// Add a receiver to the JQTransformer from a Pushable
+func (jqTransformer *JQTransformer) AddReceiver(Receiver) error
+
+// Serve will start the server and handle the incoming data
+func (jqTransformer *JQTransformer) Serve() error
+
+// HandleIncomingData will handle the incoming data and
+// extract the data using the jq string
+func (jqTransformer *JQTransformer) HandleIncomingData(data AppData) error
+```
+The call graph for the JQTransformer struct methods is as follows:
+![JQTransformer Call Graph](./JQTransformer_callgraph.svg)
+

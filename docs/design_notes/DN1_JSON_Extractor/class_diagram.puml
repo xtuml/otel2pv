@@ -3,6 +3,8 @@ namespace JSONExtractor {
     struct JQTransformer {
         -string jqQuery
         -Code jqProgram
+        -Receiver inReceiver
+        -Receiver outReceiver
         +error AddReceiver(Receiver)
         +(Receiver error) GetReceiver()
         +error HandleIncomingData(AppData)
@@ -128,6 +130,7 @@ Server.KafkaConsumerCofig *-up- Server.KafkaConsumer
 Server.KafkaProducerConfig *-up- Server.KafkaProducer
 
 Server.PipeServer <|-- JSONExtractor.JQTransformer
+Server.Receiver *-- JSONExtractor.JQTransformer
 
 Server.ProducerConfig <|-up- Server.KafkaProducerConfig
 Server.ConsumerConfig <|-up- Server.KafkaConsumerCofig
