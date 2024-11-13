@@ -130,7 +130,7 @@ func TestJQTransformer(t *testing.T) {
 	})
 	t.Run("HandleIncomingData", func(t *testing.T) {
 		jqTransformer := JQTransformer{
-			jqProgram:   jqProgram,
+			jqProgram: jqProgram,
 		}
 		// Test when jqProgram is nil
 		err := jqTransformer.HandleIncomingData(&Server.AppData{})
@@ -164,8 +164,33 @@ func TestJQTransformer(t *testing.T) {
 			t.Errorf("Expected handler to be %v, got %v", completionHandler, dataHandler)
 		}
 
-
 		close(inChan)
 		close(outChan)
+	})
+	t.Run("Serve", func(t *testing.T) {
+		jqTransformer := JQTransformer{}
+		// Test when inReceiver is nil
+		err := jqTransformer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		// Test when outReceiver is nil
+		jqTransformer.inReceiver = &inReceiver
+		err = jqTransformer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		// Test when jqProgram is nil
+		jqTransformer.outReceiver = &outReceiver
+		err = jqTransformer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got %v", err)
+		}
+		// Test when all fields are set
+		jqTransformer.jqProgram = jqProgram
+		err = jqTransformer.Serve()
+		if err != nil {
+			t.Errorf("Expected no error from Serve, got %v", err)
+		}
 	})
 }

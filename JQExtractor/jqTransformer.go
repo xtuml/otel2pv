@@ -87,3 +87,18 @@ func (jqt *JQTransformer) HandleIncomingData(data *Server.AppData) error {
 	}
 	return nil
 }
+
+func (jqt *JQTransformer) Serve() error {
+	// Serve is a method that will start the JQTransformer
+	// It will return an error if the in receiver is not set
+	if jqt.inReceiver == nil {
+		return errors.New("in receiver not set")
+	}
+	if jqt.outReceiver == nil {
+		return errors.New("out receiver not set")
+	}
+	if jqt.jqProgram == nil {
+		return errors.New("jq program not set")
+	}
+	return nil
+}

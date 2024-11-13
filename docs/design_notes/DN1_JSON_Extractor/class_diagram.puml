@@ -6,7 +6,7 @@ namespace JSONExtractor {
         -Receiver outReceiver
         +error AddReceiver(Receiver)
         +(Receiver error) GetReceiver()
-        +error HandleIncomingData(AppData)
+        +error HandleIncomingData(*AppData)
         +error Serve()
     }
 }
@@ -21,15 +21,16 @@ namespace Server {
         -any data
         +CompletionHandler completionHandler
         +any GetData()
+        +CompletionHandler GetCompletionHandler()
     }
     interface Receiver {
-        +error SendTo(AppData)
-        +(<-chan AppData, error) GetOutChan()
+        +error SendTo(*AppData)
+        +(<-chan *AppData, error) GetOutChan()
     }
     struct ChanReceiver {
-        -chan AppData dataChan
-        +error SendTo(AppData)
-        +(<-chan AppData, error) GetOutChan()
+        -chan *AppData dataChan
+        +error SendTo(*AppData)
+        +(<-chan *AppData, error) GetOutChan()
     }
     interface Server {
         +error Serve()
@@ -39,7 +40,7 @@ namespace Server {
     }
     interface Pushable {
         +(Receiver error) GetReceiver()
-        +error HandleIncomingData(AppData)
+        +error HandleIncomingData(*AppData)
     }
     interface SourceServer {
         +error AddReceiver(Receiver)
@@ -47,19 +48,19 @@ namespace Server {
     }
     interface SinkServer {
         +(Receiver error) GetReceiver()
-        +error HandleIncomingData(AppData)
+        +error HandleIncomingData(*AppData)
         +error Serve()
     }
     interface PipeServer {
         +error AddReceiver(Receiver)
         +(Receiver error) GetReceiver()
-        +error HandleIncomingData(AppData)
+        +error HandleIncomingData(*AppData)
         +error Serve()
     }
     interface Producer {
         +error Setup(ProducerConfig)
         +(Receiver error) GetReceiver()
-        +error HandleIncomingData(AppData)
+        +error HandleIncomingData(*AppData)
         +error Serve()
     }
     interface Consumer {
@@ -75,13 +76,13 @@ namespace Server {
     struct KafkaProducer {
         +error Setup(KafkaProducerConfig)
         +(Receiver error) GetReceiver()
-        +error HandleIncomingData(AppData)
+        +error HandleIncomingData(*AppData)
         +error Serve()
     }
     struct ProducerServer {
         -map[string]Producer producerMap
         +(Receiver error) GetReceiver()
-        +error HandleIncomingData(AppData)
+        +error HandleIncomingData(*AppData)
         +error Serve()
     }
     struct ConsumerServer {
