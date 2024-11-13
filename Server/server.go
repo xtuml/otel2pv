@@ -15,7 +15,7 @@ type Server interface {
 // and return an error if it fails.
 type Pushable interface {
 	GetReceiver() (Receiver, error)
-	HandleIncomingData(data AppData) error
+	HandleIncomingData(data *AppData) error
 }
 
 // Pullable is an interface that can

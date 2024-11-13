@@ -8,22 +8,62 @@ import (
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
 )
 
-type MockReceiver struct {
-	// MockReceiver is a struct that provides a mock implementation of the Receiver interface
-	mychan chan Server.AppData
+func TestGetDataFromJQIterator(t *testing.T) {
+	t.Run("getDataFromJQIterator", func(t *testing.T) {
+		// Test when there is no data
+		iter := gojq.NewIter()
+		data, err := getDataFromJQIterator(&iter)
+		if data != nil {
+			t.Errorf("Expected data to be nil, got %v", data)
+		}
+		if err == nil {
+			t.Errorf("Expected error from getDataFromJQIterator, got nil")
+		}
+		// Test when there is data
+		iter = gojq.NewIter(1)
+		data, err = getDataFromJQIterator(&iter)
+		if data != 1 {
+			t.Errorf("Expected data to be 1, got %v", data)
+		}
+		if err != nil {
+			t.Errorf("Expected no error from getDataFromJQIterator, got %v", err)
+		}
+		// Test when there is more than one data
+		iter = gojq.NewIter(1, 2)
+		data, err = getDataFromJQIterator(&iter)
+		if data != nil {
+			t.Errorf("Expected data to be nil, got %v", data)
+		}
+		if err == nil {
+			t.Errorf("Expected error from getDataFromJQIterator, got nil")
+		}
+	})
 }
 
-func (mr *MockReceiver) SendTo(data Server.AppData) error {
+type MockReceiver struct {
+	// MockReceiver is a struct that provides a mock implementation of the Receiver interface
+	mychan chan *Server.AppData
+}
+
+func (mr *MockReceiver) SendTo(data *Server.AppData) error {
 	mr.mychan <- data
 	return nil
 }
 
-func (mr *MockReceiver) GetOutChan() (<-chan Server.AppData, error) {
+func (mr *MockReceiver) GetOutChan() (<-chan *Server.AppData, error) {
 	return mr.mychan, nil
 }
 
+type MockCompletionHandler struct {
+	// MockCompletionHandler is a struct that provides a mock implementation of the CompletionHandler interface
+}
+
+func (mch *MockCompletionHandler) Complete(data interface{}, err error) error {
+	return nil
+}
+
 func TestJQTransformer(t *testing.T) {
-	jqQuery, err := gojq.Parse(".")
+	jqQuery, err := gojq.Parse(".key")
 	if err != nil {
 		t.Errorf("Error parsing JQ program: %v", err)
 	}
@@ -31,8 +71,8 @@ func TestJQTransformer(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error compiling JQ program: %v", err)
 	}
-	inChan := make(chan Server.AppData)
-	outChan := make(chan Server.AppData)
+	inChan := make(chan *Server.AppData, 1)
+	outChan := make(chan *Server.AppData, 1)
 	inReceiver := MockReceiver{
 		mychan: inChan,
 	}
@@ -87,5 +127,45 @@ func TestJQTransformer(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error from AddReceiver, got nil")
 		}
+	})
+	t.Run("HandleIncomingData", func(t *testing.T) {
+		jqTransformer := JQTransformer{
+			jqProgram:   jqProgram,
+		}
+		// Test when jqProgram is nil
+		err := jqTransformer.HandleIncomingData(&Server.AppData{})
+		if err == nil {
+			t.Errorf("Expected error from HandleIncomingData, got nil")
+		}
+		// Test when outReceiver is nil
+		jqTransformer.jqProgram = jqProgram
+		err = jqTransformer.HandleIncomingData(&Server.AppData{})
+		if err == nil {
+			t.Errorf("Expected error from HandleIncomingData, got nil")
+		}
+		// Test when jqProgram and outReceiver are set
+		jqTransformer.outReceiver = &outReceiver
+		completionHandler := &MockCompletionHandler{}
+		appData := Server.NewAppData(map[string]interface{}{"key": 1}, completionHandler)
+		err = jqTransformer.HandleIncomingData(appData)
+		if err != nil {
+			t.Errorf("Expected no error from HandleIncomingData, got %v", err)
+		}
+		data := <-outChan
+		if data.GetData() != 1 {
+			t.Errorf("Expected data to be 1, got %v", data.GetData())
+		}
+		dataHandler, err := data.GetHandler()
+		if err != nil {
+			t.Errorf("Expected no error from GetHandler, got %v", err)
+		}
+
+		if dataHandler != completionHandler {
+			t.Errorf("Expected handler to be %v, got %v", completionHandler, dataHandler)
+		}
+
+
+		close(inChan)
+		close(outChan)
 	})
 }

@@ -96,16 +96,51 @@ func TestAppData(t *testing.T) {
 			t.Errorf("Expected handler to implement CompletionHandler interface")
 		}
 	})
+	t.Run("GetHandler", func(t *testing.T) {
+		testHandler := &MockCompletionHandler{}
+		appData := &AppData{}
+
+		_, err := appData.GetHandler()
+
+		if err == nil{
+			t.Errorf("Expected error from GetHandler, got %v", err)
+		}
+
+		appData.handler = testHandler
+
+		handler, err := appData.GetHandler()
+
+		if err != nil {
+			t.Errorf("Expected no error from GetHandler, got %v", err)
+		}
+
+		if handler != testHandler {
+			t.Errorf("Expected handler to be '%v', got '%v'", testHandler, handler)
+		}
+	})
+	t.Run("NewAppData", func(t *testing.T) {
+		testData := "test data"
+		testHandler := &MockCompletionHandler{}
+
+		appData := NewAppData(testData, testHandler)
+
+		if appData.data != testData {
+			t.Errorf("Expected data to be '%v', got '%v'", testData, appData.data)
+		}
+		if appData.handler != testHandler {
+			t.Errorf("Expected handler to be '%v', got '%v'", testHandler, appData.handler)
+		}
+	})
 }
 
 type MockReceiver struct {
 	isGetOutChanError bool
 	isSendToError     bool
-	channel           chan AppData
+	channel           chan *AppData
 	DataReceived      any
 }
 
-func (t *MockReceiver) SendTo(receiver AppData) error {
+func (t *MockReceiver) SendTo(receiver *AppData) error {
 	if t.isSendToError {
 		return errors.New("completion handler failed")
 	}
@@ -113,7 +148,7 @@ func (t *MockReceiver) SendTo(receiver AppData) error {
 	return nil
 }
 
-func (t *MockReceiver) GetOutChan() (<-chan AppData, error) {
+func (t *MockReceiver) GetOutChan() (<-chan *AppData, error) {
 	if t.isGetOutChanError {
 		return nil, errors.New("error getting channel")
 	}
@@ -123,10 +158,10 @@ func (t *MockReceiver) GetOutChan() (<-chan AppData, error) {
 func TestReceiver(t *testing.T) {
 	t.Run("SendTo", func(t *testing.T) {
 		mockReceiver := &MockReceiver{}
-		testData := "test data"
+		testData := &MockReceiver{}
 		appData := &AppData{data: testData, handler: &MockCompletionHandler{}}
 
-		err := mockReceiver.SendTo(*appData)
+		err := mockReceiver.SendTo(appData)
 
 		if err != nil {
 			t.Errorf("Expected no error from Receive, got %v", err)
@@ -148,7 +183,7 @@ func TestReceiver(t *testing.T) {
 		testData := "test data"
 		appData := &AppData{data: testData, handler: &MockCompletionHandler{}}
 
-		err := mockReceiver.SendTo(*appData)
+		err := mockReceiver.SendTo(appData)
 
 		if err == nil || err.Error() != "completion handler failed" {
 			t.Errorf("Expected error 'completion handler failed', got %v", err)
@@ -160,7 +195,7 @@ func TestReceiver(t *testing.T) {
 		}
 	})
 	t.Run("GetOutChan", func(t *testing.T) {
-		mockReceiver := &MockReceiver{channel: make(chan AppData)}
+		mockReceiver := &MockReceiver{channel: make(chan *AppData)}
 
 		channel, err := mockReceiver.GetOutChan()
 

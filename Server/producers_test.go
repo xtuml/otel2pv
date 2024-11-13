@@ -54,7 +54,7 @@ type MockProducer struct {
 	isHandleIncomingDataError bool
 	isServeError              bool
 	Receiver                  Receiver
-	AppData                   AppData
+	AppData                   *AppData
 }
 
 func (p *MockProducer) Setup(ProducerConfig) error {
@@ -69,7 +69,7 @@ func (p *MockProducer) GetReceiver() (Receiver, error) {
 	}
 	return p.Receiver, nil
 }
-func (p *MockProducer) HandleIncomingData(data AppData) error {
+func (p *MockProducer) HandleIncomingData(data *AppData) error {
 	if p.isHandleIncomingDataError {
 		return errors.New("test error")
 	}
@@ -115,7 +115,7 @@ func TestProducer(t *testing.T) {
 			t.Errorf("Expected receiver to be equal to producer.Receiver")
 		}
 
-		appData := AppData{
+		appData := &AppData{
 			data:    "test data",
 			handler: &MockCompletionHandler{},
 		}
@@ -153,7 +153,7 @@ func TestProducer(t *testing.T) {
 			t.Errorf("Expected receiver to be nil")
 		}
 
-		err = producer.HandleIncomingData(AppData{})
+		err = producer.HandleIncomingData(&AppData{})
 		if err == nil {
 			t.Errorf("Expected error from Send, got '%v'", err)
 		}

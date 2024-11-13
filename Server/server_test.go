@@ -50,7 +50,7 @@ func TestServer(t *testing.T) {
 type MockPushable struct {
 	isError               bool
 	isHandleIncomingError bool
-	incomingData          AppData
+	incomingData          *AppData
 	receiver              Receiver
 }
 
@@ -61,7 +61,7 @@ func (p *MockPushable) GetReceiver() (Receiver, error) {
 	return p.receiver, nil
 }
 
-func (p *MockPushable) HandleIncomingData(data AppData) error {
+func (p *MockPushable) HandleIncomingData(data *AppData) error {
 	if p.isHandleIncomingError {
 		return errors.New("test error")
 	}
@@ -93,7 +93,7 @@ func TestPushable(t *testing.T) {
 			t.Errorf("Expected pushable's receiver to implement Receiver interface")
 		}
 
-		appData := AppData{
+		appData := &AppData{
 			data:    "test data",
 			handler: &MockCompletionHandler{},
 		}
@@ -130,7 +130,7 @@ func TestPushable(t *testing.T) {
 			handler: &MockCompletionHandler{},
 		}
 
-		err = pushable.HandleIncomingData(appData)
+		err = pushable.HandleIncomingData(&appData)
 		if err == nil {
 			t.Errorf("Expected error from HandleIncomingData, got '%v'", err)
 		}
@@ -153,15 +153,15 @@ func (p *MockPullable) AddReceiver(receiver Receiver) error {
 
 // MockReceiver is a mock implementation of the Receiver struct
 type MockReceiverForPullable struct {
-	AddedData AppData
+	AddedData *AppData
 }
 
-func (r *MockReceiverForPullable) SendTo(data AppData) error {
+func (r *MockReceiverForPullable) SendTo(data *AppData) error {
 	r.AddedData = data
 	return nil
 }
 
-func (r *MockReceiverForPullable) GetOutChan() (<-chan AppData, error) {
+func (r *MockReceiverForPullable) GetOutChan() (<-chan *AppData, error) {
 	return nil, nil
 }
 
@@ -189,7 +189,7 @@ func TestPullable(t *testing.T) {
 		if pullable.Receiver != &mockReceiver {
 			t.Errorf("Expected receiver to be set, got %v", pullable.Receiver)
 		}
-		appData := AppData{
+		appData := &AppData{
 			data:    "test data",
 			handler: &MockCompletionHandlerForPullable{},
 		}
@@ -262,7 +262,7 @@ func TestSourceServer(t *testing.T) {
 		if sourceServer.Receiver != &mockReceiver {
 			t.Errorf("Expected receiver to be set, got %v", sourceServer.Receiver)
 		}
-		appData := AppData{
+		appData := &AppData{
 			data:    "test data",
 			handler: &MockCompletionHandlerForPullable{},
 		}
@@ -315,7 +315,7 @@ func (s *MockSinkServer) Serve() error {
 	return nil
 }
 
-func (s *MockSinkServer) HandleIncomingData(data AppData) error {
+func (s *MockSinkServer) HandleIncomingData(data *AppData) error {
 	return nil
 }
 
@@ -408,7 +408,7 @@ func (s *MockPipeServer) Serve() error {
 	return nil
 }
 
-func (s *MockPipeServer) HandleIncomingData(data AppData) error {
+func (s *MockPipeServer) HandleIncomingData(data *AppData) error {
 	return nil
 }
 
@@ -486,15 +486,15 @@ func TestPipeServer(t *testing.T) {
 // Mock structures
 // MockReceiverForPushableDataReceipt is a struct that provides a mock implementation of the Receiver interface
 type MockReceiverForPushableDataReceipt struct {
-	outChan chan AppData
+	outChan chan *AppData
 	isError bool
 }
 
-func (mr *MockReceiverForPushableDataReceipt) SendTo(data AppData) error {
+func (mr *MockReceiverForPushableDataReceipt) SendTo(data *AppData) error {
 	return nil
 }
 
-func (mr *MockReceiverForPushableDataReceipt) GetOutChan() (<-chan AppData, error) {
+func (mr *MockReceiverForPushableDataReceipt) GetOutChan() (<-chan *AppData, error) {
 	if mr.isError {
 		return nil, errors.New("error getting channel")
 	}
@@ -506,7 +506,7 @@ type MockPushableForPushableDataReceipt struct {
 	isReceiverError       bool
 	isHandleIncomingError bool
 	receiver              Receiver
-	incomingData          []AppData
+	incomingData          []*AppData
 }
 
 func (p *MockPushableForPushableDataReceipt) GetReceiver() (Receiver, error) {
@@ -516,7 +516,7 @@ func (p *MockPushableForPushableDataReceipt) GetReceiver() (Receiver, error) {
 	return p.receiver, nil
 }
 
-func (p *MockPushableForPushableDataReceipt) HandleIncomingData(data AppData) error {
+func (p *MockPushableForPushableDataReceipt) HandleIncomingData(data *AppData) error {
 	if p.isHandleIncomingError {
 		return errors.New("error handling incoming data")
 	}
@@ -531,14 +531,14 @@ func TestHandlePushableDataReceipt(t *testing.T) {
 		handleIncomingError  bool
 		expectedError        error
 		numberChannels       int
-		expectedIncomingData []AppData
+		expectedIncomingData []*AppData
 	}{
 		{
 			name:                "Successful data handling with single item",
 			receiverError:       false,
 			handleIncomingError: false,
 			expectedError:       nil,
-			expectedIncomingData: []AppData{
+			expectedIncomingData: []*AppData{
 				{data: "test data 1"},
 			},
 		},
@@ -547,7 +547,7 @@ func TestHandlePushableDataReceipt(t *testing.T) {
 			receiverError:       false,
 			handleIncomingError: false,
 			expectedError:       nil,
-			expectedIncomingData: []AppData{
+			expectedIncomingData: []*AppData{
 				{data: "test data 1"},
 				{data: "test data 2"},
 			},
@@ -557,14 +557,14 @@ func TestHandlePushableDataReceipt(t *testing.T) {
 			receiverError:        true,
 			handleIncomingError:  false,
 			expectedError:        errors.New("error getting receiver"),
-			expectedIncomingData: []AppData{},
+			expectedIncomingData: []*AppData{},
 		},
 		{
 			name:                "Error handling incoming data",
 			receiverError:       false,
 			handleIncomingError: true,
 			expectedError:       errors.New("error handling incoming data"),
-			expectedIncomingData: []AppData{
+			expectedIncomingData: []*AppData{
 				{data: "test data 1"},
 			},
 		},
@@ -573,7 +573,7 @@ func TestHandlePushableDataReceipt(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockReceiver := &MockReceiverForPushableDataReceipt{
-				outChan: make(chan AppData, len(tt.expectedIncomingData)),
+				outChan: make(chan *AppData, len(tt.expectedIncomingData)),
 				isError: tt.receiverError,
 			}
 			if !tt.receiverError {
