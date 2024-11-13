@@ -193,4 +193,12 @@ func TestJQTransformer(t *testing.T) {
 			t.Errorf("Expected no error from Serve, got %v", err)
 		}
 	})
+	t.Run("ImplementsPipeServer", func(t *testing.T) {
+		jqTransformer := JQTransformer{}
+		// Type assertion to check if JQTransformer implements PipeServer
+		_, ok := interface{}(&jqTransformer).(Server.PipeServer)
+		if !ok {
+			t.Errorf("Expected JQTransformer to implement PipeServer interface")
+		}
+	})
 }
