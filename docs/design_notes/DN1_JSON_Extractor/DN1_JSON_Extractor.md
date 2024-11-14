@@ -81,9 +81,9 @@ Below is the proposed architecture for the full JSON Extractor application that 
 
 The server architecture will be setup such that there are three main components that are linked together sending and receiving data:
 
-- **SourceServer** - This is where data "originates" from. The SourceServer will accept a Receiver instance that will be used to send data to the next component in the chain. The SourceServer will also have a method to start the server.
-- **PipeServer** - This is the middle component that will provide the Receiver instance to the SourceServer. The Pipe server can then pull data from a channel setup in the background of the Receiver instance. The Pipe server will accept a Receiver instance that will be used to send data to the next component in the chain. The PipeServer will also have a method to start the server.
-- **SinkServer** - This is the final component that will receive the data. The SinkServer will provide a Receiver instance to the PipeServer. The SinkServer will also have a method to start the server.
+- **SourceServer** - This is where data "originates" from. The SourceServer will send data to the next component in the chain. The SourceServer will also have a method to start the server.
+- **PipeServer** - This is the middle component that will receive data from the Source Server. The Pipe server can then be used to send data to the next component in the chain. The PipeServer will also have a method to start the server.
+- **SinkServer** - This is the final component that will receive the data from the PipeServer. The SinkServer will also have a method to start the server.
 
 ![Server Architecture](./serve_components.svg)
 
@@ -93,11 +93,11 @@ This provides the functionality to send data across the application.
 
 The JSON Extractor app will use the server library to provide the server running functionality and will also contain the conversion functionality. The JSON Extractor app will be setup such that there are three main components that are linked together sending and receiving data:
 
-- **ConsumerServer** - This is where data "originates" from and it will pull data down from a broker. The ConsumerServer will accept a Receiver instance that will be used to send data to the next component in the chain, the JQTransformer. The ConsumerServer will also have a method to start the server.
+- **ConsumerServer** - This is where data "originates" from and it will pull data down from a broker. The ConsumerServer will accept the JQTransformer instance (a Pushable) to send data to. The ConsumerServer will also have a method to start the server.
 
-- **JQTransformer** - This is the middle component that will provide the Receiver instance to the ConsumerServer. The JQTransformer will accept a Receiver instance that will be used to send data to the next component in the chain, the ProducerServer. The JQTransformer will pull data from the Receiver instance and use the compiled jq string to extract the data. The JQTransformer will then send the extracted data to the ProducerServer. The JQTransformer will also have a method to start the server.
+- **JQTransformer** - This is the middle component that will receive data from the ConsumerServer. The JQTransformer will accept the ProducerServer (a Pushable). The JQTransformer will use the compiled jq string to extract the data from the sent JSON. The JQTransformer will then send the extracted data to the ProducerServer. The JQTransformer will also have a method to start the server.
 
-- **ProducerServer** - This is the final component that will send on the data to the broker. The ProducerServer will provide a Receiver instance to the JQTransformer. The ProducerServer will also have a method to start the server.
+- **ProducerServer** - This is the final component that will send on the data to the broker. The ProducerServer will receive data from the JQTransformer. The ProducerServer will also have a method to start the server.
 
 ![JSON Extractor App](./JSON_Extractor_components.svg)
 
@@ -136,11 +136,6 @@ func RunServers(
     sinkServer SinkServer,
 ) error
 
-// HandlePushableDataReceipt will handle the data in the
-// Recevier instance and call the HandleIncomingData method
-go HandlePushableDataReceipt(pushable Pushable) error
-
-
 ```
 The call graph for the RunServers function is as follows:
 ![RunServers Call Graph](./RunServers_callgraph.svg)
@@ -154,18 +149,16 @@ The following is an overview of the JSON Extractor app implementation:
 ##### JQTransformer(struct methods)
 ```go
 
-// Return the struct Receiver instance and error
-func (jqTransformer *JQTransformer) GetReceiver() (Receiver, error)
-
-// Add a receiver to the JQTransformer from a Pushable
-func (jqTransformer *JQTransformer) AddReceiver(Receiver) error
+// Add a Pushable
+func (jqTransformer *JQTransformer) AddPushable(Receiver) error
 
 // Serve will start the server and handle the incoming data
 func (jqTransformer *JQTransformer) Serve() error
 
-// HandleIncomingData will handle the incoming data and
-// extract the data using the jq string
-func (jqTransformer *JQTransformer) HandleIncomingData(data AppData) error
+// SendTo will handle the incoming data and
+// extract the data using the jq string and send the data to the Pushable
+// that has been added. It will provide a WaitGroup that can be waited on and an error
+func (jqTransformer *JQTransformer) SendTo(data *AppData) (*sync.WaitGroup error)
 ```
 The call graph for the JQTransformer struct methods is as follows:
 ![JQTransformer Call Graph](./JQTransformer_callgraph.svg)

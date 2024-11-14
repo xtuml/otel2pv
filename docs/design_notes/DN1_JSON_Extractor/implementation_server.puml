@@ -4,23 +4,11 @@
         -[hidden]->
         package Server {
             group RunServer(SourceServer, PipeServer, SinkServer) error {
-                :Add Receiver to SourceServer from PipeServer;
-                :Add Receiver to PipeServer from SinkServer;
+                :Add PipeServer to SourceServer as Pushable;
+                :Add SinkServer to PipeServer as Pushable;
                 :Call Serve SinkServer;
                 :Call Serve PipeServer;
                 :Call Serve SourceServer;
-                :Call HandleIncomingData on SinkServer;
-                :Call HandleIncomingData on PipeServer;
-                detach
-            }
-            group HandlePushableDataReceipt(Pushable) error {
-                :Call GetReceiver on Pushable;
-                :Call GetOutChan on Receiver;
-                repeat
-                    :Receive data from channel;
-                    :Call HandleIncomingData of Pushable with AppData;
-                repeat while (while data is available in channel)
-                :Return nil;
                 detach
             }
         }

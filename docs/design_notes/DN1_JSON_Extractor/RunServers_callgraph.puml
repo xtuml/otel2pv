@@ -2,11 +2,10 @@
 digraph G {
     rankdir=LR
     node [style=rounded];
-    RunServers -> "PipeServer.\nGetRecevier";
-    RunServers -> "SinkServer.\nGetRecevier";
-    RunServers -> "SourceServer.\nAddRecevier";
-    RunServers -> "PipeServer.\nAddRecevier";
-    RunServers -> "HandlePushableDataReceipt";
-    "HandlePushableDataReceipt" -> "Pushable.\nHandleIncomingData";
+    RunServers -> "SourceServer.\nAddPushable";
+    RunServers -> "PipeServer.\nAddPushable";
+    RunServers -> "SinkServer.\nServe";
+    RunServers -> "PipeServer.\nServe";
+    RunServers -> "SourceServer.\nServe";
 }
 @enduml

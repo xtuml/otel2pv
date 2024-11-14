@@ -27,21 +27,19 @@
                 detach
             }
             group Serve(JQTransformer) error {
-                :empty go routine that cancels on a context;
+                :checks if everything is correctly set and finishes;
                 detach
             }
-            group GetReceiver(JQTransformer) (Receiver, error) {
-                :Return Receiver;
+            group AddPushable(*JQTransformer, Pushable) error {
+                :Add Pushable to JQTransformer instance;
                 detach
             }
-            group AddReceiver(JQTransformer, Receiver) error {
-                :Add Receiver to JQTransformer;
-                detach
-            }
-            group HandleIncomingData(JQTransformer, AppData) error {
+            group SendTo(*JQTransformer, AppData) (sync.WaitGroup error) {
                 :Extract JSON data from AppData using compiled jqProgram;
                 :Create AppData with extracted data and CompletionHandler;
-                :Send AppData to added Receiver;
+                :Send AppData to Pushable;
+                :Wait on wait group from sending data;
+                :Return wait group and error;
                 detach
             }
         }

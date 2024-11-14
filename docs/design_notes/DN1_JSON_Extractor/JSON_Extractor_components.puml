@@ -1,22 +1,16 @@
 @startuml
 left to right direction
-component ConsumerServer {
-    component JQTransformerReceiver
-}
+component ConsumerServer
 component JQTransformer {
-    component ProducerServerReceiver
+    component JQExtraction
 }
-interface "JQTransformer\nSend Channel" as JQTransformerChannel
-component ProducerServer {
-}
-interface "ProducerServer\nSend Channel" as ProducerServerChannel
+component ProducerServer
 interface "Consumption Location" as ConsumptionLocation
 interface "Production Location" as ProductionLocation
-JQTransformerReceiver -down- JQTransformerChannel : Push to\nchannel
-ProducerServerReceiver -down- ProducerServerChannel : Push to\nchannel
-JQTransformerChannel )-down- JQTransformer : Pull from\nchannel
-ProducerServerChannel )-down- ProducerServer : Pull from\nchannel
 
-ConsumerServer -left- ConsumptionLocation : Consume from\nbroker 
+ConsumerServer -down-> JQExtraction : Send data
+JQExtraction -down-> ProducerServer : Send data
+
+ConsumerServer -right- ConsumptionLocation : Consume from\nbroker 
 ProducerServer -right- ProductionLocation : Produce to\nbroker
 @enduml

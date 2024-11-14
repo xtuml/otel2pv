@@ -1,17 +1,11 @@
 @startuml
 left to right direction
 component SourceServer {
-    component PipeReceiver
 }
 component PipeServer {
-    component SinkReceiver
 }
-interface "Pipe Send Channel" as PipeChannel
 component SinkServer {
 }
-interface "Sink Send Channel" as SinkChannel
-PipeReceiver -down- PipeChannel : Push to channel
-SinkReceiver -down- SinkChannel : Push to channel
-PipeChannel )-down- PipeServer : Pull from channel
-SinkChannel )-down- SinkServer : Pull from channel
+SourceServer -down-> PipeServer : Send data
+PipeServer -down-> SinkServer : Send data
 @enduml
