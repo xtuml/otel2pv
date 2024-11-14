@@ -50,14 +50,14 @@ type MockConsumer struct {
 	isAddError   bool
 	isSetupError bool
 	isServeError bool
-	Receiver     Receiver
+	Pushable     Pushable
 }
 
-func (c *MockConsumer) AddReceiver(receiver Receiver) error {
+func (c *MockConsumer) AddPushable(pushable Pushable) error {
 	if c.isAddError {
 		return errors.New("test error")
 	}
-	c.Receiver = receiver
+	c.Pushable = pushable
 	return nil
 }
 
@@ -96,17 +96,14 @@ func TestConsumer(t *testing.T) {
 			t.Fatalf("Expected consumer to implement Consumer interface")
 		}
 
-		mockReceiver := &MockReceiver{}
-		err = consumer.AddReceiver(mockReceiver)
+		mockPushable := &MockPushable{}
+		err = consumer.AddPushable(mockPushable)
 		if err != nil {
-			t.Fatalf("Expected no error from AddReceiver, got %v", err)
-		}
-		if _, receiverOk := interface{}(mockReceiver).(Receiver); !receiverOk {
-			t.Fatalf("Expected receiver to implement Receiver interface")
+			t.Fatalf("Expected no error from AddPushable, got %v", err)
 		}
 
-		if consumer.Receiver != mockReceiver {
-			t.Fatalf("Expected AddReceiver to set the receiver")
+		if consumer.Pushable != mockPushable {
+			t.Fatalf("Expected AddPushable to set the Pushable")
 		}
 
 		err = consumer.Serve()
@@ -127,14 +124,10 @@ func TestConsumer(t *testing.T) {
 			t.Fatalf("Expected error from Setup, got nil")
 		}
 
-		mockReceiver := &MockReceiver{}
-		err = consumer.AddReceiver(mockReceiver)
+		mockPushable := &MockPushable{}
+		err = consumer.AddPushable(mockPushable)
 		if err == nil {
-			t.Fatalf("Expected error from AddReceiver, got nil")
-		}
-
-		if consumer.Receiver != nil {
-			t.Fatalf("Expected AddReceiver to not set the receiver")
+			t.Fatalf("Expected error from AddPushable, got nil")
 		}
 
 		err = consumer.Serve()

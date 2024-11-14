@@ -157,8 +157,8 @@ func (jqTransformer *JQTransformer) Serve() error
 
 // SendTo will handle the incoming data and
 // extract the data using the jq string and send the data to the Pushable
-// that has been added. It will provide a WaitGroup that can be waited on and an error
-func (jqTransformer *JQTransformer) SendTo(data *AppData) (*sync.WaitGroup error)
+// that has been added. It will provide an error if the method fails
+func (jqTransformer *JQTransformer) SendTo(data *AppData) error
 ```
 The call graph for the JQTransformer struct methods is as follows:
 ![JQTransformer Call Graph](./JQTransformer_callgraph.svg)

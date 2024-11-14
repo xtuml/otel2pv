@@ -4,7 +4,7 @@ namespace JSONExtractor {
         -gojq.Code jqProgram
         -Pushable pushable
         +error AddPushable(Pushable)
-        +(sync.WaitGroup error) SendTo(*AppData)
+        +error SendTo(*AppData)
         +error Serve()
     }
 }
@@ -25,24 +25,24 @@ namespace Server {
         +error AddPushable(Pushable)
     }
     interface Pushable {
-        +(sync.WaitGroup error) SendTo(*AppData)
+        +error SendTo(*AppData)
     }
     interface SourceServer {
         +error AddPushable(Pushable)
         +error Serve()
     }
     interface SinkServer {
-        +(sync.WaitGroup error) SendTo(*AppData)
+        +error SendTo(*AppData)
         +error Serve()
     }
     interface PipeServer {
         +error AddPushable(Pushable)
-        +(sync.WaitGroup error) SendTo(*AppData)
+        +error SendTo(*AppData)
         +error Serve()
     }
     interface Producer {
         +error Setup(ProducerConfig)
-        +(sync.WaitGroup error) SendTo(*AppData)
+        +error SendTo(*AppData)
         +error Serve()
     }
     interface Consumer {
@@ -52,7 +52,7 @@ namespace Server {
     }
     struct ProducerServer {
         -map[string]Producer producerMap
-        +(sync.WaitGroup error) SendTo(*AppData)
+        +error SendTo(*AppData)
         +error Serve()
     }
     struct ConsumerServer {

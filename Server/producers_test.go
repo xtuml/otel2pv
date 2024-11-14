@@ -50,10 +50,8 @@ func TestProducerConfig(t *testing.T) {
 // MockProducer is a mock implementation of the Producer interface
 type MockProducer struct {
 	isSetupError              bool
-	isReceiveError            bool
-	isHandleIncomingDataError bool
+	isSendToError bool
 	isServeError              bool
-	Receiver                  Receiver
 	AppData                   *AppData
 }
 
@@ -63,14 +61,8 @@ func (p *MockProducer) Setup(ProducerConfig) error {
 	}
 	return nil
 }
-func (p *MockProducer) GetReceiver() (Receiver, error) {
-	if p.isReceiveError {
-		return nil, errors.New("test error")
-	}
-	return p.Receiver, nil
-}
-func (p *MockProducer) HandleIncomingData(data *AppData) error {
-	if p.isHandleIncomingDataError {
+func (p *MockProducer) SendTo(data *AppData) error {
+	if p.isSendToError {
 		return errors.New("test error")
 	}
 	p.AppData = data
@@ -87,10 +79,8 @@ func TestProducer(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		producer := MockProducer{
 			isSetupError:              false,
-			isReceiveError:            false,
-			isHandleIncomingDataError: false,
+			isSendToError: false,
 			isServeError:              false,
-			Receiver:                  &MockReceiver{},
 		}
 
 		_, ok := interface{}(&producer).(Producer)
@@ -107,19 +97,11 @@ func TestProducer(t *testing.T) {
 			t.Errorf("Expected no error from Setup, got %v", err)
 		}
 
-		receiver, err := producer.GetReceiver()
-		if err != nil {
-			t.Errorf("Expected no error from Start, got %v", err)
-		}
-		if receiver != producer.Receiver {
-			t.Errorf("Expected receiver to be equal to producer.Receiver")
-		}
-
 		appData := &AppData{
 			data:    "test data",
 			handler: &MockCompletionHandler{},
 		}
-		err = producer.HandleIncomingData(appData)
+		err = producer.SendTo(appData)
 		if err != nil {
 			t.Errorf("Expected no error from Send, got %v", err)
 		}
@@ -135,8 +117,7 @@ func TestProducer(t *testing.T) {
 	t.Run("Error", func(t *testing.T) {
 		producer := MockProducer{
 			isSetupError:              true,
-			isReceiveError:            true,
-			isHandleIncomingDataError: true,
+			isSendToError: true,
 			isServeError:              true,
 		}
 
@@ -145,15 +126,7 @@ func TestProducer(t *testing.T) {
 			t.Errorf("Expected error from Setup, got '%v'", err)
 		}
 
-		receiver, err := producer.GetReceiver()
-		if err == nil {
-			t.Errorf("Expected error from Start, got '%v'", err)
-		}
-		if receiver != nil {
-			t.Errorf("Expected receiver to be nil")
-		}
-
-		err = producer.HandleIncomingData(&AppData{})
+		err = producer.SendTo(&AppData{})
 		if err == nil {
 			t.Errorf("Expected error from Send, got '%v'", err)
 		}

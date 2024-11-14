@@ -34,12 +34,11 @@
                 :Add Pushable to JQTransformer instance;
                 detach
             }
-            group SendTo(*JQTransformer, AppData) (sync.WaitGroup error) {
+            group SendTo(*JQTransformer, AppData) error {
                 :Extract JSON data from AppData using compiled jqProgram;
                 :Create AppData with extracted data and CompletionHandler;
                 :Send AppData to Pushable;
-                :Wait on wait group from sending data;
-                :Return wait group and error;
+                :Return error;
                 detach
             }
         }
