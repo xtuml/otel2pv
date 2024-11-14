@@ -165,12 +165,13 @@ func TestPullable(t *testing.T) {
 
 // MockSourceServer is a mock implementation of the SourceServer interface
 type MockSourceServer struct {
-	isError  bool
+	isAddError  bool
+	isServeError bool
 	Pushable Pushable
 }
 
 func (s *MockSourceServer) AddPushable(pushable Pushable) error {
-	if s.isError {
+	if s.isAddError {
 		return errors.New("test error")
 	}
 	s.Pushable = pushable
@@ -178,7 +179,7 @@ func (s *MockSourceServer) AddPushable(pushable Pushable) error {
 }
 
 func (s *MockSourceServer) Serve() error {
-	if s.isError {
+	if s.isServeError {
 		return errors.New("test error")
 	}
 	return nil
@@ -187,7 +188,8 @@ func (s *MockSourceServer) Serve() error {
 func TestSourceServer(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		sourceServer := MockSourceServer{
-			isError: false,
+			isAddError: false,
+			isServeError: false,
 		}
 		mockPushable := MockPushable{
 			isSendToError: false,
@@ -229,7 +231,8 @@ func TestSourceServer(t *testing.T) {
 	})
 	t.Run("Error", func(t *testing.T) {
 		sourceServer := MockSourceServer{
-			isError: true,
+			isAddError: true,
+			isServeError: true,
 		}
 
 		err := sourceServer.AddPushable(&MockPushable{})
@@ -398,6 +401,140 @@ func TestPipeServer(t *testing.T) {
 		err = pipeServer.Serve()
 		if err == nil {
 			t.Errorf("Expected error from Serve, got '%v'", err)
+		}
+	})
+}
+
+// Test for ServersRun
+func TestServersRun(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		mockSourceServer := MockSourceServer{
+			isAddError: false,
+		}
+		mockPipeServer := MockPipeServer{
+			isAddError:   false,
+			isServeError: false,
+		}
+		mockSinkServer := MockSinkServer{
+			isError: false,
+		}
+
+		err := ServersRun(&mockSourceServer, &mockPipeServer, &mockSinkServer)
+
+		if err != nil {
+			t.Errorf("Expected no error from ServersRun, got %v", err)
+		}
+	})
+	t.Run("ErrorSourceAddPushable", func(t *testing.T) {
+		mockSourceServer := MockSourceServer{
+			isAddError: true,
+		}
+		mockPipeServer := MockPipeServer{
+			isAddError:   false,
+			isServeError: false,
+		}
+		mockSinkServer := MockSinkServer{
+			isError: false,
+		}
+
+		err := ServersRun(&mockSourceServer, &mockPipeServer, &mockSinkServer)
+
+		if err == nil {
+			t.Errorf("Expected error from ServersRun, got nil")
+		}
+	})
+	t.Run("ErrorPipeAddPushable", func(t *testing.T) {
+		mockSourceServer := MockSourceServer{
+			isAddError: false,
+		}
+		mockPipeServer := MockPipeServer{
+			isAddError:   true,
+			isServeError: false,
+		}
+		mockSinkServer := MockSinkServer{
+			isError: false,
+		}
+
+		err := ServersRun(&mockSourceServer, &mockPipeServer, &mockSinkServer)
+
+		if err == nil {
+			t.Errorf("Expected error from ServersRun, got nil")
+		}
+	})
+	t.Run("ErrorPipeServe", func(t *testing.T) {
+		mockSourceServer := MockSourceServer{
+			isAddError: false,
+			isServeError: false,
+		}
+		mockPipeServer := MockPipeServer{
+			isAddError:   false,
+			isServeError: true,
+		}
+		mockSinkServer := MockSinkServer{
+			isError: false,
+		}
+
+		err := ServersRun(&mockSourceServer, &mockPipeServer, &mockSinkServer)
+
+		if err == nil {
+			t.Errorf("Expected error from ServersRun, got nil")
+		}
+	})
+	t.Run("ErrorSinkServe", func(t *testing.T) {
+		mockSourceServer := MockSourceServer{
+			isAddError: false,
+			isServeError: false,
+		}
+		mockPipeServer := MockPipeServer{
+			isAddError:   false,
+			isServeError: false,
+		}
+		mockSinkServer := MockSinkServer{
+			isError: true,
+		}
+
+		err := ServersRun(&mockSourceServer, &mockPipeServer, &mockSinkServer)
+
+		if err == nil {
+			t.Errorf("Expected error from ServersRun, got nil")
+		}
+	})
+	t.Run("ErrorSourceServe", func(t *testing.T) {
+		mockSourceServer := MockSourceServer{
+			isAddError: false,
+			isServeError: true,
+		}
+		mockPipeServer := MockPipeServer{
+			isAddError:   false,
+			isServeError: false,
+		}
+		mockSinkServer := MockSinkServer{
+			isError: false,
+		}
+
+		err := ServersRun(&mockSourceServer, &mockPipeServer, &mockSinkServer)
+
+		if err == nil {
+			t.Errorf("Expected error from ServersRun, got nil")
+		}
+	})
+	t.Run("ErrorServeAll", func(t *testing.T) {
+		mockSourceServer := MockSourceServer{
+			isAddError: false,
+			isServeError: true,
+		}
+		mockPipeServer := MockPipeServer{
+			isAddError:   false,
+			isServeError: true,
+		}
+		mockSinkServer := MockSinkServer{
+			isError: true,
+		}
+
+		err := ServersRun(&mockSourceServer, &mockPipeServer, &mockSinkServer)
+
+		if err == nil {
+			t.Errorf("Expected error from ServersRun, got nil")
 		}
 	})
 }
