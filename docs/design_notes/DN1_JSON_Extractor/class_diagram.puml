@@ -16,6 +16,7 @@ namespace Server {
         -sync.WaitGroup wg
         -any data
         -error error
+        -bool isComplete
         +error Complete(any, error)
     }
     struct AppData {
