@@ -58,7 +58,7 @@ namespace Server {
         +error Serve()
     }
     struct MapSinkServer {
-        -map[string]SinkServer producerMap
+        -map[string]SinkServer sinkServerMap
         +error SendTo(*AppData)
         +error Serve()
     }

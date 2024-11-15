@@ -89,3 +89,10 @@ func ServersRun(sourceServer SourceServer, pipeServer PipeServer, sinkServer Sin
 	}
 	return nil
 }
+
+// MapSinkServer is a struct that contains the required fields for the MapSinkServer
+// It has the following fields:
+// 1. sinkServerMap: map[string]SinkServer. A map that contains the SinkServers
+type MapSinkServer struct {
+	sinkServerMap map[string]SinkServer
+}

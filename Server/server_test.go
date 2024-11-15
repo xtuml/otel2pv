@@ -538,3 +538,17 @@ func TestServersRun(t *testing.T) {
 		}
 	})
 }
+
+// Test for MapSinkServer
+func TestMapSinkServer(t *testing.T) {
+	t.Run("Instantiation", func(t *testing.T) {
+		sinkServerMap := make(map[string]SinkServer)
+		sinkServerMap["test"] = &MockSinkServer{}
+		mapSinkServer := MapSinkServer{
+			sinkServerMap: sinkServerMap,
+		}
+		if mapSinkServer.sinkServerMap["test"] != sinkServerMap["test"] {
+			t.Errorf("Expected sinkServerMap[\"test\"] to be %v, got %v", sinkServerMap["test"], mapSinkServer.sinkServerMap["test"])
+		}
+	})
+}
