@@ -11,14 +11,56 @@
                 :Call Serve SourceServer;
                 detach
             }
+            group Serve(*MapSinkServer) error {
+                :checks if everything is correctly set and finishes;
+                :run all SinkServer serve methods in background;
+                :return error;
+                detach
+            }
+            group SendTo(*MapSinkServer, AppData) error {
+                :confirm AppData is a map;
+                :create WaitGroup;
+                repeat
+                    :Send portion of AppData to SinkServer identified by key;
+                    if (key not in sinkServerMap) then (error)
+                        :Call AppData\nCompletionHandler with error;
+                        :Return error;
+                    else (success)
+                        :Add 1 to WaitGroup;
+                        :Sent in WaitGroupCompletionHandler;
+                        :Call SendTo SinkServer;
+                        if (error) then (error)
+                            :Call AppData\nCompletionHandler with error;
+                            :Return error;
+                        endif
+                    endif
+                repeat while (For each key in AppData);
+                :Wait for all WaitGroup to finish;
+                repeat
+                    :check error in WaitGroupCompletionHandler;
+                    if (error) then (error)
+                        :Call AppData CompletionHandler with error;
+                        :Return error;
+                    endif
+                repeat while (For each WaitGroupCompletionHandler)
+                :Call AppData CompletionHandler with success;
+                :Return error;
+                detach
+            }
         }
         split again
         -[hidden]->
+        package DataTypes {
+            group Complete(*WaitGroupCompletionHandler, data, error) {
+                :add data and error to WaitGroupCompletionHandler;
+                :Call Done on WaitGroup;
+                detach
+            }
+        }
         package Producer {
-            group getProducerServer(ProducerConfig) (ProducerServer, error) {
-                :Create Producers and Producers map using config;
-                :Create ProducerServer using Producers map;
-                :Return ProducerServer;
+            group getProducerMap(ProducerConfig) (map[string]Producer, error) {
+                :Create Producers map using config;
+                :Return Producers map;
                 detach
             }
         }

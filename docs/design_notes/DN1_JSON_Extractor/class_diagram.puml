@@ -12,6 +12,12 @@ namespace Server {
     interface CompletionHandler {
         +error Complete(any, error)
     }
+    struct WaitGroupCompletionHandler {
+        -sync.WaitGroup wg
+        -any data
+        -error error
+        +error Complete(any, error)
+    }
     struct AppData {
         -any data
         +CompletionHandler completionHandler
@@ -50,8 +56,8 @@ namespace Server {
         +error Setup(ConsumerConfig)
         +error Serve()
     }
-    struct ProducerServer {
-        -map[string]Producer producerMap
+    struct MapSinkServer {
+        -map[string]SinkServer producerMap
         +error SendTo(*AppData)
         +error Serve()
     }
@@ -67,6 +73,7 @@ namespace Server {
         +error IngestConfig(any)
     }
 }
+Server.CompletionHandler <|-- Server.WaitGroupCompletionHandler
 Server.CompletionHandler *-- Server.AppData
 Server.AppData *-- Server.Pushable
 Server.Server <|-- Server.SourceServer
@@ -79,8 +86,8 @@ Server.Pullable <|-- Server.PipeServer
 Server.Server <|-- Server.PipeServer
 
 Server.SinkServer <|-- Server.Producer
-Server.Producer *-- Server.ProducerServer
-Server.SinkServer <|-- Server.ProducerServer
+Server.SinkServer *-left- Server.MapSinkServer
+Server.SinkServer <|-left- Server.MapSinkServer
 Server.SourceServer <|-- Server.ConsumerServer
 Server.Consumer *-- Server.ConsumerServer
 Server.SourceServer <|-- Server.Consumer

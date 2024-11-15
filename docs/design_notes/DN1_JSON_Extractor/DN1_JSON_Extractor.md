@@ -140,6 +140,28 @@ func RunServers(
 The call graph for the RunServers function is as follows:
 ![RunServers Call Graph](./RunServers_callgraph.svg)
 
+##### WaitGroupCompletionHandler(struct methods)
+```go
+// Complete will handle the WaitGroup completion
+// It will provide an error if the method fails
+func (waitGroupCompletionHandler *WaitGroupCompletionHandler) Complete(any, error) error
+```
+
+##### MapSinkServer(struct methods)
+```go
+// Serve will start the all the SinkServers
+// that have been added to the MapSinkServer
+// It will provide an error if the method fails
+func (mapSinkServer *MapSinkServer) Serve() error
+
+// SendTo will handle the incoming data and
+// send the data to the SinkServers that have been added
+// It will provide an error if the method fails
+func (mapSinkServer *MapSinkServer) SendTo(data *AppData) error
+```
+The call graph for the MapSinkServer struct methods is as follows:
+![MapSinkServer Call Graph](./MapSinkServer_callgraph.svg)
+
 #### JSON Extractor App
 
 The following is an overview of the JSON Extractor app implementation:
