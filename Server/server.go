@@ -96,3 +96,27 @@ func ServersRun(sourceServer SourceServer, pipeServer PipeServer, sinkServer Sin
 type MapSinkServer struct {
 	sinkServerMap map[string]SinkServer
 }
+
+// Serve is a method that will start the MapSinkServer
+// It will start all the SinkServers in the map and
+// return an error if any of them fail
+func (mss *MapSinkServer) Serve() error {
+	errChan := make(chan error)
+	counter := 0
+	for _, sinkServer := range mss.sinkServerMap {
+		go func(sinkServer SinkServer) {
+			errChan <- sinkServer.Serve()
+		}(sinkServer)
+	}
+	for err := range errChan {
+		if err != nil {
+			return err
+		}
+		counter++
+		if counter == len(mss.sinkServerMap) {
+			close(errChan)
+			break
+		}
+	}
+	return nil
+}

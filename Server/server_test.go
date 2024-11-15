@@ -551,4 +551,28 @@ func TestMapSinkServer(t *testing.T) {
 			t.Errorf("Expected sinkServerMap[\"test\"] to be %v, got %v", sinkServerMap["test"], mapSinkServer.sinkServerMap["test"])
 		}
 	})
+	t.Run("Serve", func(t *testing.T) {
+		sinkServerMap := make(map[string]SinkServer)
+		sinkServerMap["test1"] = &MockSinkServer{}
+		sinkServerMap["test2"] = &MockSinkServer{}
+		mapSinkServer := MapSinkServer{
+			sinkServerMap: sinkServerMap,
+		}
+		err := mapSinkServer.Serve()
+		if err != nil {
+			t.Errorf("Expected no error from Serve, got %v", err)
+		}
+		// Test when one server fails
+		sinkServerMap["test1"] = &MockSinkServer{isError: true}
+		err = mapSinkServer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		// Test when all servers fail
+		sinkServerMap["test2"] = &MockSinkServer{isError: true}
+		err = mapSinkServer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+	})
 }
