@@ -1,5 +1,10 @@
 package Server
 
+import (
+	"errors"
+	"sync"
+)
+
 // Server is an interface for a server that will
 // do some task/s. It has a Serve method that will
 // start the server and return an error if this fails
@@ -116,6 +121,58 @@ func (mss *MapSinkServer) Serve() error {
 		if counter == len(mss.sinkServerMap) {
 			close(errChan)
 			break
+		}
+	}
+	return nil
+}
+
+// SendTo is a method that will provide the interface to send data to the MapSinkServer
+// It will send the data to all the SinkServers in the map by looping through them
+// and return an error if any of them fail
+func (mss *MapSinkServer) SendTo(data *AppData) error {
+	var err error
+	inData := data.GetData()
+	handler, err := data.GetHandler()
+	if err != nil {
+		return err
+	}
+	defer func ()  {
+		errHandler := handler.Complete(inData, err)
+		if errHandler != nil {
+			panic(errHandler)
+		}
+	}()
+	// Ensure the inData is a map
+	dataMap, ok := inData.(map[string]any)
+	if !ok {
+		err = errors.New("data is not a map")
+		return err
+	}
+	wg := &sync.WaitGroup{}
+	var wgCompletionHandlerSlice []*WaitGroupCompletionHandler
+	for key, value := range dataMap {
+		sinkServer, ok := mss.sinkServerMap[key]
+		if !ok {
+			err = errors.New("sink server not found under key: " + key)
+			return err
+		}
+		wgCompletionHandler := NewWaitGroupCompletionHandler(wg)
+		wgCompletionHandlerSlice = append(wgCompletionHandlerSlice, wgCompletionHandler)
+		sendData := NewAppData(value, wgCompletionHandler)
+		err = sinkServer.SendTo(sendData)
+		if err != nil {
+			return err
+		}
+	}
+	wg.Wait()
+	for _, wgCompletionHandler := range wgCompletionHandlerSlice {
+		err, errGetError := wgCompletionHandler.GetError()
+		if errGetError != nil {
+			err = errGetError
+			return err
+		}
+		if err != nil {
+			return err
 		}
 	}
 	return nil

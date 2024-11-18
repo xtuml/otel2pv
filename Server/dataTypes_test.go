@@ -9,14 +9,15 @@ import (
 type MockCompletionHandler struct {
 	DataReceived  any
 	ErrorReceived error
+	isError	   bool
 }
 
 func (t *MockCompletionHandler) Complete(data any, err error) error {
+	if t.isError {
+		return errors.New("error")
+	}
 	t.DataReceived = data
 	t.ErrorReceived = err
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -43,19 +44,21 @@ func TestCompletionHandler(t *testing.T) {
 		}
 	})
 	t.Run("Error", func(t *testing.T) {
-		handler := &MockCompletionHandler{}
+		handler := &MockCompletionHandler{
+			isError: true,
+		}
 
 		testError := errors.New("test error")
 		err := handler.Complete(nil, testError)
 
-		if err != testError {
+		if err == nil {
 			t.Errorf("Expected error '%v' from Complete, got '%v'", testError, err)
 		}
 		if handler.DataReceived != nil {
 			t.Errorf("Expected no data, got %v", handler.DataReceived)
 		}
-		if handler.ErrorReceived != testError {
-			t.Errorf("Expected error '%v', got '%v'", testError, handler.ErrorReceived)
+		if handler.ErrorReceived != nil {
+			t.Errorf("Expected no error '%v', got '%v'", testError, handler.ErrorReceived)
 		}
 		// Type assertion to check if handler implements CompletionHandler
 		_, ok := interface{}(handler).(CompletionHandler)
