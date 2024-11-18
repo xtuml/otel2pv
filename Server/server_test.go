@@ -577,6 +577,11 @@ func TestMapSinkServer(t *testing.T) {
 		if mapSinkServer.sinkServerMap["test"] != sinkServerMap["test"] {
 			t.Errorf("Expected sinkServerMap[\"test\"] to be %v, got %v", sinkServerMap["test"], mapSinkServer.sinkServerMap["test"])
 		}
+        // test that MapSinkServer implements SinkServer
+        _, ok := interface{}(&mapSinkServer).(SinkServer)
+        if !ok {
+            t.Errorf("Expected mapSinkServer to implement SinkServer interface")
+        }
 	})
 	t.Run("Serve", func(t *testing.T) {
 		sinkServerMap := make(map[string]SinkServer)
