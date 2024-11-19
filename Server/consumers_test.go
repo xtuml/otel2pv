@@ -10,7 +10,7 @@ type MockConsumerConfig struct {
 	isError bool
 }
 
-func (c *MockConsumerConfig) IngestConfig(any) error {
+func (c *MockConsumerConfig) IngestConfig(map[string]any) error {
 	if c.isError {
 		return errors.New("test error")
 	}
@@ -28,7 +28,7 @@ func TestConsumerConfig(t *testing.T) {
 			t.Errorf("Expected config to implement ConsumerConfig interface")
 		}
 
-		err := config.IngestConfig(nil)
+		err := config.IngestConfig(map[string]any{})
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}
@@ -38,7 +38,7 @@ func TestConsumerConfig(t *testing.T) {
 			isError: true,
 		}
 
-		err := config.IngestConfig(nil)
+		err := config.IngestConfig(map[string]any{})
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}

@@ -12,5 +12,5 @@ type Consumer interface {
 // ConsumerConfig is a base interface that represents
 // configuration data for a consumer.
 type ConsumerConfig interface {
-	IngestConfig(any) error
+	IngestConfig(map[string]any) error
 }

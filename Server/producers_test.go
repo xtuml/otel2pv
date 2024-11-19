@@ -10,7 +10,7 @@ type MockProducerConfig struct {
 	isError bool
 }
 
-func (c *MockProducerConfig) IngestConfig(any) error {
+func (c *MockProducerConfig) IngestConfig(map[string]any) error {
 	if c.isError {
 		return errors.New("test error")
 	}
@@ -28,8 +28,7 @@ func TestProducerConfig(t *testing.T) {
 			t.Errorf("Expected config to implement ProducerConfig interface")
 		}
 
-		err := config.IngestConfig(1)
-
+		err := config.IngestConfig(map[string]any{})
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}
@@ -39,7 +38,7 @@ func TestProducerConfig(t *testing.T) {
 			isError: true,
 		}
 
-		err := config.IngestConfig(struct{}{})
+		err := config.IngestConfig(map[string]any{})
 
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got '%v'", err)
@@ -49,10 +48,10 @@ func TestProducerConfig(t *testing.T) {
 
 // MockProducer is a mock implementation of the Producer interface
 type MockProducer struct {
-	isSetupError              bool
+	isSetupError  bool
 	isSendToError bool
-	isServeError              bool
-	AppData                   *AppData
+	isServeError  bool
+	AppData       *AppData
 }
 
 func (p *MockProducer) Setup(ProducerConfig) error {
@@ -78,9 +77,9 @@ func (p *MockProducer) Serve() error {
 func TestProducer(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		producer := MockProducer{
-			isSetupError:              false,
+			isSetupError:  false,
 			isSendToError: false,
-			isServeError:              false,
+			isServeError:  false,
 		}
 
 		_, ok := interface{}(&producer).(Producer)
@@ -116,9 +115,9 @@ func TestProducer(t *testing.T) {
 	})
 	t.Run("Error", func(t *testing.T) {
 		producer := MockProducer{
-			isSetupError:              true,
+			isSetupError:  true,
 			isSendToError: true,
-			isServeError:              true,
+			isServeError:  true,
 		}
 
 		err := producer.Setup(&MockProducerConfig{})
@@ -134,6 +133,66 @@ func TestProducer(t *testing.T) {
 		err = producer.Serve()
 		if err == nil {
 			t.Errorf("Expected error from Serve, got '%v'", err)
+		}
+	})
+}
+
+// Tests for HTTPProducerConfig
+func TestHTTPProducerConfig(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		config := &HTTPProducerConfig{}
+		// With default values
+		err := config.IngestConfig(map[string]any{
+			"URL": "http://test.com",
+		})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if config.URL != "http://test.com" {
+			t.Errorf("Expected URL to be 'http://test.com', got '%v'", config.URL)
+		}
+		if config.numRetries != 3 {
+			t.Errorf("Expected numRetries to be 3, got %v", config.numRetries)
+		}
+		if config.timeout != 10 {
+			t.Errorf("Expected timeout to be 10, got %v", config.timeout)
+		}
+		// With custom values
+		err = config.IngestConfig(map[string]any{
+			"URL":        "http://test.com",
+			"numRetries": 5,
+			"timeout":    20,
+		})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if config.URL != "http://test.com" {
+			t.Errorf("Expected URL to be 'http://test.com', got '%v'", config.URL)
+		}
+		if config.numRetries != 5 {
+			t.Errorf("Expected numRetries to be 5, got %v", config.numRetries)
+		}
+		if config.timeout != 20 {
+			t.Errorf("Expected timeout to be 20, got %v", config.timeout)
+		}
+	})
+	t.Run("Error", func(t *testing.T) {
+		config := &HTTPProducerConfig{}
+
+		err := config.IngestConfig(map[string]any{
+			"URL":        "http://test.com",
+			"numRetries": "3",
+		})
+		if err.Error() != "invalid numRetries - must be an integer" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+
+		err = config.IngestConfig(map[string]any{
+			"URL":     "http://test.com",
+			"timeout": "10",
+		})
+		if err.Error() != "invalid timeout - must be an integer" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
 		}
 	})
 }

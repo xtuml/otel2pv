@@ -68,10 +68,17 @@ namespace Server {
         +error Serve()
     }
     interface ProducerConfig {
-        +error IngestConfig(any)
+        +error IngestConfig(map[string]any)
     }
+    struct HTTPProducerConfig {
+        +string URL
+        +int NumRetries
+        +int Timeout
+        +error IngestConfig(map[string]any)
+    }
+
     interface ConsumerConfig {
-        +error IngestConfig(any)
+        +error IngestConfig(map[string]any)
     }
 }
 Server.CompletionHandler <|-- Server.WaitGroupCompletionHandler
@@ -99,4 +106,5 @@ Server.Pushable *-- JSONExtractor.JQTransformer
 
 Server.ConsumerConfig *-up- Server.Consumer
 Server.ProducerConfig *-up- Server.Producer
+Server.ProducerConfig <|-- Server.HTTPProducerConfig
 @enduml
