@@ -52,6 +52,13 @@ namespace Server {
         +error SendTo(*AppData)
         +error Serve()
     }
+    struct HTTPProducer {
+        -HTTPProducerConfig config
+        -http.Client httpClient
+        +error Setup(ProducerConfig)
+        +error SendTo(*AppData)
+        +error Serve()
+    }
     interface Consumer {
         +error AddPushable(Pushable)
         +error Setup(ConsumerConfig)
@@ -107,4 +114,6 @@ Server.Pushable *-- JSONExtractor.JQTransformer
 Server.ConsumerConfig *-up- Server.Consumer
 Server.ProducerConfig *-up- Server.Producer
 Server.ProducerConfig <|-- Server.HTTPProducerConfig
+Server.Producer <|-- Server.HTTPProducer
+Server.HTTPProducerConfig *-up- Server.HTTPProducer
 @enduml
