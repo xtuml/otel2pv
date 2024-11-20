@@ -201,3 +201,48 @@ func (s *SelectProducerConfig) IngestConfig(config map[string]any) error {
 	}
 	return nil
 }
+
+// SetupProducersConfig is a struct that contains the configuration
+// for setting up producers.
+// It has the following fields:
+//
+// 1. IsMapping: bool. A flag that indicates whether the producers will have data
+// mapped to them. Defaults to false.
+//
+// 2. SelectProducerConfigs: []*SelectProducerConfig. A slice of SelectProducerConfigs
+// that will be used to set up the producers.
+type SetupProducersConfig struct {
+	IsMapping              bool
+	SelectProducerConfigs  []*SelectProducerConfig
+}
+
+// IngestConfig is a method that will ingest the configuration for the
+// SetupProducersConfig.
+// It takes in a map[string]any and returns an error if the configuration is invalid.
+func (s *SetupProducersConfig) IngestConfig(config map[string]any) error {
+	isMapping, ok := config["IsMapping"]
+	if ok {
+		isMapping, ok := isMapping.(bool)
+		if !ok {
+			return errors.New("invalid IsMapping - must be a boolean")
+		}
+		s.IsMapping = isMapping
+	}
+	selectProducerConfigs, ok := config["ProducerConfigs"].([]map[string]any)
+	if !ok {
+		return errors.New("ProducerConfigs not set correctly")
+	}
+	if len(selectProducerConfigs) == 0 {
+		return errors.New("ProducerConfigs is empty")
+	}
+	s.SelectProducerConfigs = []*SelectProducerConfig{}
+	for _, selectProducerConfig := range selectProducerConfigs {
+		selectProducerConfigStruct := &SelectProducerConfig{}
+		err := selectProducerConfigStruct.IngestConfig(selectProducerConfig)
+		if err != nil {
+			return err
+		}
+		s.SelectProducerConfigs = append(s.SelectProducerConfigs, selectProducerConfigStruct)
+	}
+	return nil
+}

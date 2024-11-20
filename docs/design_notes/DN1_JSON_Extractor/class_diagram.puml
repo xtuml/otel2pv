@@ -94,6 +94,11 @@ namespace Server {
         +Config ProducerConfig
         +error IngestConfig(map[string]any)
     }
+    struct SetupProducersConfig {
+        +IsMapping bool
+        +[]SelectProducerConfig SelectProducerConfigs
+        +error IngestConfig(map[string]any)
+    }
 }
 Server.CompletionHandler <|-- Server.WaitGroupCompletionHandler
 Server.CompletionHandler *-- Server.AppData
@@ -120,6 +125,8 @@ Server.Server *-- Server.Config
 Server.Config <|-- JSONExtractor.JQTransformerConfig
 Server.Config <|-- Server.HTTPProducerConfig
 Server.Config <|-- Server.SelectProducerConfig
+Server.Config <|-- Server.SetupProducersConfig
+Server.SelectProducerConfig *-- Server.SetupProducersConfig
 Server.Producer <|-- Server.HTTPProducer
 Server.HTTPProducerConfig *-- Server.HTTPProducer
 @enduml
