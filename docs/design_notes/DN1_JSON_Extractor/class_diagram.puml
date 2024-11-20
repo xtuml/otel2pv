@@ -104,6 +104,10 @@ namespace Server {
         +Config ConsumerConfig
         +error IngestConfig(map[string]any)
     }
+    struct SetupConsumersConfig {
+        +[]SelectConsumerConfig SelectConsumerConfigs
+        +error IngestConfig(map[string]any)
+    }
 }
 Server.CompletionHandler <|-- Server.WaitGroupCompletionHandler
 Server.CompletionHandler *-- Server.AppData
@@ -132,7 +136,9 @@ Server.Config <|-- Server.HTTPProducerConfig
 Server.Config <|-- Server.SelectProducerConfig
 Server.Config <|-- Server.SetupProducersConfig
 Server.Config <|-- Server.SelectConsumerConfig
+Server.Config <|-- Server.SetupConsumersConfig
 Server.SelectProducerConfig *-- Server.SetupProducersConfig
+Server.SelectConsumerConfig *-- Server.SetupConsumersConfig
 Server.Producer <|-- Server.HTTPProducer
 Server.HTTPProducerConfig *-- Server.HTTPProducer
 @enduml
