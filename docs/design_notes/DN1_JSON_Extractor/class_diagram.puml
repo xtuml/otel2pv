@@ -1,11 +1,16 @@
 @startuml
 namespace JSONExtractor {
+    struct JQTransformerConfig {
+        +map[string]string JQQueryStrings
+        +error IngestConfig(map[string]any)
+    }
     struct JQTransformer {
         -gojq.Code jqProgram
         -Pushable pushable
         +error AddPushable(Pushable)
         +error SendTo(*AppData)
         +error Serve()
+        +error Setup(Config)
     }
 }
 namespace Server {
@@ -27,6 +32,7 @@ namespace Server {
     }
     interface Server {
         +error Serve()
+        +error Setup(Config)
     }
     interface Pullable {
         +error AddPushable(Pushable)
@@ -37,54 +43,49 @@ namespace Server {
     interface SourceServer {
         +error AddPushable(Pushable)
         +error Serve()
+        +error Setup(Config)
     }
     interface SinkServer {
         +error SendTo(*AppData)
         +error Serve()
+        +error Setup(Config)
     }
     interface PipeServer {
         +error AddPushable(Pushable)
         +error SendTo(*AppData)
         +error Serve()
+        +error Setup(Config)
     }
     interface Producer {
-        +error Setup(ProducerConfig)
         +error SendTo(*AppData)
         +error Serve()
+        +error Setup(Config)
     }
     struct HTTPProducer {
         -HTTPProducerConfig config
         -http.Client httpClient
-        +error Setup(ProducerConfig)
         +error SendTo(*AppData)
         +error Serve()
+        +error Setup(Config)
     }
     interface Consumer {
         +error AddPushable(Pushable)
-        +error Setup(ConsumerConfig)
         +error Serve()
+        +error Setup(Config)
     }
     struct MapSinkServer {
         -map[string]SinkServer sinkServerMap
         +error SendTo(*AppData)
         +error Serve()
+        +error Setup(Config)
     }
-    struct ConsumerServer {
-        -map[string]Consumer consumersMap
-        +error AddPushable(Pushable)
-        +error Serve()
-    }
-    interface ProducerConfig {
+    interface Config {
         +error IngestConfig(map[string]any)
     }
     struct HTTPProducerConfig {
         +string URL
         +int NumRetries
         +int Timeout
-        +error IngestConfig(map[string]any)
-    }
-
-    interface ConsumerConfig {
         +error IngestConfig(map[string]any)
     }
 }
@@ -101,19 +102,17 @@ Server.Pullable <|-- Server.PipeServer
 Server.Server <|-- Server.PipeServer
 
 Server.SinkServer <|-- Server.Producer
-Server.SinkServer *-left- Server.MapSinkServer
-Server.SinkServer <|-left- Server.MapSinkServer
-Server.SourceServer <|-- Server.ConsumerServer
-Server.Consumer *-- Server.ConsumerServer
+Server.SinkServer *-- Server.MapSinkServer
+Server.SinkServer <|-- Server.MapSinkServer
 Server.SourceServer <|-- Server.Consumer
 
 Server.PipeServer <|-- JSONExtractor.JQTransformer
 Server.Pushable *-- JSONExtractor.JQTransformer
 
 
-Server.ConsumerConfig *-up- Server.Consumer
-Server.ProducerConfig *-up- Server.Producer
-Server.ProducerConfig <|-- Server.HTTPProducerConfig
+Server.Server *-- Server.Config
+Server.Config <|-- JSONExtractor.JQTransformerConfig
+Server.Config <|-- Server.HTTPProducerConfig
 Server.Producer <|-- Server.HTTPProducer
-Server.HTTPProducerConfig *-up- Server.HTTPProducer
+Server.HTTPProducerConfig *-- Server.HTTPProducer
 @enduml

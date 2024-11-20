@@ -9,47 +9,6 @@ import (
 	"time"
 )
 
-// MockProducerConfig is a mock implementation of the ProducerConfig interface
-type MockProducerConfig struct {
-	isError bool
-}
-
-func (c *MockProducerConfig) IngestConfig(map[string]any) error {
-	if c.isError {
-		return errors.New("test error")
-	}
-	return nil
-}
-
-func TestProducerConfig(t *testing.T) {
-	t.Run("Success", func(t *testing.T) {
-		config := MockProducerConfig{
-			isError: false,
-		}
-
-		_, ok := interface{}(&config).(ProducerConfig)
-		if !ok {
-			t.Errorf("Expected config to implement ProducerConfig interface")
-		}
-
-		err := config.IngestConfig(map[string]any{})
-		if err != nil {
-			t.Errorf("Expected no error from IngestConfig, got %v", err)
-		}
-	})
-	t.Run("Error", func(t *testing.T) {
-		config := MockProducerConfig{
-			isError: true,
-		}
-
-		err := config.IngestConfig(map[string]any{})
-
-		if err == nil {
-			t.Errorf("Expected error from IngestConfig, got '%v'", err)
-		}
-	})
-}
-
 // MockProducer is a mock implementation of the Producer interface
 type MockProducer struct {
 	isSetupError  bool
@@ -58,7 +17,7 @@ type MockProducer struct {
 	AppData       *AppData
 }
 
-func (p *MockProducer) Setup(ProducerConfig) error {
+func (p *MockProducer) Setup(Config) error {
 	if p.isSetupError {
 		return errors.New("test error")
 	}
@@ -95,7 +54,7 @@ func TestProducer(t *testing.T) {
 			t.Errorf("Expected producer to implement SinkServer interface")
 		}
 
-		err := producer.Setup(&MockProducerConfig{})
+		err := producer.Setup(&MockConfig{})
 		if err != nil {
 			t.Errorf("Expected no error from Setup, got %v", err)
 		}
@@ -124,7 +83,7 @@ func TestProducer(t *testing.T) {
 			isServeError:  true,
 		}
 
-		err := producer.Setup(&MockProducerConfig{})
+		err := producer.Setup(&MockConfig{})
 		if err == nil {
 			t.Errorf("Expected error from Setup, got '%v'", err)
 		}
@@ -141,8 +100,8 @@ func TestProducer(t *testing.T) {
 	})
 }
 
-// Tests for HTTPProducerConfig
-func TestHTTPProducerConfig(t *testing.T) {
+// Tests for HTTPConfig
+func TestHTTPConfig(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		config := &HTTPProducerConfig{}
 		// With default values
@@ -228,7 +187,7 @@ func TestHTTPProducer(t *testing.T) {
 			t.Errorf("Expected client.Timeout to be 10, got %v", producer.client.Timeout)
 		}
 		// Try with invalid config
-		err = producer.Setup(&MockProducerConfig{})
+		err = producer.Setup(&MockConfig{})
 		if err.Error() != "invalid config" {
 			t.Errorf("Expected specified error from Setup, got '%v'", err)
 		}
@@ -270,9 +229,9 @@ func TestHTTPProducer(t *testing.T) {
 		defer server.Close()
 		producer := &HTTPProducer{
 			config: &HTTPProducerConfig{
-				URL: server.URL + "/test",
+				URL:        server.URL + "/test",
 				numRetries: 1,
-				timeout: 1,
+				timeout:    1,
 			},
 			client: &http.Client{},
 		}
@@ -304,13 +263,13 @@ func TestHTTPProducer(t *testing.T) {
 		}
 		// Error case in which appData.GetHandler() returns an error
 		appData = &AppData{
-			data:    map[string]any{"test": "data"},
+			data: map[string]any{"test": "data"},
 		}
 		err = producer.SendTo(appData)
 		if err.Error() != "handler not set" {
 			t.Errorf("Expected specified error from SendTo, got '%v'", err)
 		}
-		// Error case in which url is not found (2 retries to test) 
+		// Error case in which url is not found (2 retries to test)
 		producer.config.URL = "invalid"
 		producer.config.numRetries = 2
 		appData.handler = &MockCompletionHandler{}
@@ -321,7 +280,7 @@ func TestHTTPProducer(t *testing.T) {
 		// Error case in which http.NewRequest() returns an error
 		producer.config.URL = server.URL + "/%%"
 		err = producer.SendTo(appData)
-		if err.Error() != "parse " + `"` + server.URL + `/%%": invalid URL escape "%%"` {
+		if err.Error() != "parse "+`"`+server.URL+`/%%": invalid URL escape "%%"` {
 			t.Errorf("Expected specified error from SendTo, got full '%v'", err)
 		}
 	})
@@ -333,14 +292,14 @@ func TestHTTPProducer(t *testing.T) {
 		}()
 		producer := &HTTPProducer{
 			config: &HTTPProducerConfig{
-				URL: "/test",
+				URL:        "/test",
 				numRetries: 0,
-				timeout: 0,
+				timeout:    0,
 			},
 			client: &http.Client{},
 		}
 		appData := &AppData{
-			data:    map[string]any{"test": "data"},
+			data: map[string]any{"test": "data"},
 			handler: &MockCompletionHandler{
 				isError: true,
 			},

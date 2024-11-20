@@ -8,19 +8,12 @@ import (
 	"time"
 )
 
-// ProducerConfig is an interface that represents a component capable
-// of ingesting configuration data.
-type ProducerConfig interface {
-	IngestConfig(map[string]any) error
-}
-
 // Producer is an interface that represents a component capable
 // of sending data to a location based on the setup.
 // Setup is used to configure the producer using a ProducerConfig
 // interface, and it has a SinkServer interface that combines the
 // Server and Pushable interfaces.
 type Producer interface {
-	Setup(ProducerConfig) error
 	SinkServer
 }
 
@@ -86,7 +79,7 @@ type HTTPProducer struct {
 
 // Setup is a method that will set up the HTTPProducer.
 // It takes in a ProducerConfig and returns an error if the setup fails.
-func (h *HTTPProducer) Setup(config ProducerConfig) error {
+func (h *HTTPProducer) Setup(config Config) error {
 	c, ok := config.(*HTTPProducerConfig)
 	if !ok {
 		return errors.New("invalid config")
@@ -114,7 +107,7 @@ func (h *HTTPProducer) SendTo(data *AppData) error {
 		return err
 	}
 	dataForHandler := data.GetData()
-	defer func () {
+	defer func() {
 		errHandler := completeHandler.Complete(dataForHandler, err)
 		if errHandler != nil {
 			panic(errHandler)

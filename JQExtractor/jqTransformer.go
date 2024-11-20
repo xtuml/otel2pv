@@ -8,10 +8,31 @@ import (
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
 )
 
+type JQTransformerConfig struct {
+	// JQTransformerConfig is a struct that contains the required fields for the JQTransformerConfig
+	// It has the following fields:
+	// 1. JQQueryStrings: map[string]string. A map that contains the JQ programs
+	JQQueryStrings map[string]string
+}
+
+func (jqt *JQTransformerConfig) IngestConfig(config map[string]any) error {
+	// IngestConfig is a method that will ingest the configuration for the JQTransformer
+	// It takes in a map[string]any and returns an error if the configuration is invalid
+	jqQueryStrings, ok := config["JQQueryStrings"].(map[string]string)
+	if !ok {
+		return errors.New("invalid JQQueryStrings map in config. Must map a string identifier to a string")
+	}
+	if len(jqQueryStrings) == 0 {
+		return errors.New("JQQueryStrings map is empty")
+	}
+	jqt.JQQueryStrings = jqQueryStrings
+	return nil
+}
+
 func getDataFromJQIterator(iter *gojq.Iter) (any, error) {
 	// getDataFromIterator is a helper function that will get the data from the iterator
 	// It returns the data and an error if the data cannot be retrieved
-	counter	:= 0
+	counter := 0
 	iterator := *iter
 	var data any
 	for {
@@ -36,7 +57,7 @@ type JQTransformer struct {
 	// It has the following fields:
 	// 1. jqProgram: Code. It is the JQ program that will be used to transform the input JSON
 	// 2. pushable: Pushable. Pushable to send data onto the next stage
-	jqProgram   *gojq.Code
+	jqProgram *gojq.Code
 	pushable  Server.Pushable
 }
 
@@ -87,5 +108,45 @@ func (jqt *JQTransformer) Serve() error {
 	if jqt.jqProgram == nil {
 		return errors.New("jq program not set")
 	}
+	return nil
+}
+
+func (jqt *JQTransformer) Setup(config Server.Config) error {
+	// Setup is a method that will set up the JQTransformer
+	// It will return an error if the configuration is invalid
+	jqtConfig, ok := config.(*JQTransformerConfig)
+	if !ok {
+		return errors.New("invalid config")
+	}
+	if jqtConfig.JQQueryStrings == nil {
+		return errors.New("JQQueryStrings not set")
+	}
+	if len(jqtConfig.JQQueryStrings) == 0 {
+		return errors.New("JQQueryStrings is empty")
+	}
+	jqBuiltString := "{ "
+	for key, jqString := range jqtConfig.JQQueryStrings {
+		checkJqString, err := gojq.Parse(jqString)
+		if err != nil {
+			return errors.New("The following JQ string for key \"" + key + "\" failed to be parsed correctly:\n" + jqString + "\n" + err.Error())
+		}
+		_, err = gojq.Compile(checkJqString)
+		if err != nil {
+			return errors.New("The following JQ string for key \"" + key + "\" failed to be compiled correctly:\n" + jqString + "\n" + err.Error())
+		}
+		jqBuiltString += key + ": [( " + jqString + " )],\n"
+	}
+	jqBuiltString += "}"
+	jqQuery, err := gojq.Parse(jqBuiltString)
+	if err != nil {
+		err = errors.New("The following built JQ string failed to be parsed correctly:\n" + jqBuiltString + "\n" + err.Error())
+		return err
+	}
+	jqProgram, err := gojq.Compile(jqQuery)
+	if err != nil {
+		err = errors.New("The following built JQ string failed to be compiled correctly:\n" + jqBuiltString + "\n" + err.Error())
+		return err
+	}
+	jqt.jqProgram = jqProgram
 	return nil
 }

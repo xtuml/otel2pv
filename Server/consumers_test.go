@@ -5,46 +5,6 @@ import (
 	"testing"
 )
 
-// Mock ConsumerConfig is a mock implementation of the ConsumerConfig interface
-type MockConsumerConfig struct {
-	isError bool
-}
-
-func (c *MockConsumerConfig) IngestConfig(map[string]any) error {
-	if c.isError {
-		return errors.New("test error")
-	}
-	return nil
-}
-
-func TestConsumerConfig(t *testing.T) {
-	t.Run("Success", func(t *testing.T) {
-		config := MockConsumerConfig{
-			isError: false,
-		}
-
-		_, ok := interface{}(&config).(ConsumerConfig)
-		if !ok {
-			t.Errorf("Expected config to implement ConsumerConfig interface")
-		}
-
-		err := config.IngestConfig(map[string]any{})
-		if err != nil {
-			t.Errorf("Expected no error from IngestConfig, got %v", err)
-		}
-	})
-	t.Run("Error", func(t *testing.T) {
-		config := MockConsumerConfig{
-			isError: true,
-		}
-
-		err := config.IngestConfig(map[string]any{})
-		if err == nil {
-			t.Errorf("Expected error from IngestConfig, got nil")
-		}
-	})
-}
-
 // MockConsumer is a mock implementation of the Consumer interface
 type MockConsumer struct {
 	isAddError   bool
@@ -61,7 +21,7 @@ func (c *MockConsumer) AddPushable(pushable Pushable) error {
 	return nil
 }
 
-func (c *MockConsumer) Setup(config ConsumerConfig) error {
+func (c *MockConsumer) Setup(config Config) error {
 	if c.isSetupError {
 		return errors.New("test error")
 	}
@@ -87,12 +47,12 @@ func TestConsumer(t *testing.T) {
 			t.Fatalf("Expected consumer to implement Consumer interface")
 		}
 
-		config := &MockConsumerConfig{isError: false}
+		config := &MockConfig{isError: false}
 		err := consumer.Setup(config)
 		if err != nil {
 			t.Fatalf("Expected no error from Setup, got %v", err)
 		}
-		if _, configOk := interface{}(config).(ConsumerConfig); !configOk {
+		if _, configOk := interface{}(config).(Config); !configOk {
 			t.Fatalf("Expected consumer to implement Consumer interface")
 		}
 
@@ -119,7 +79,7 @@ func TestConsumer(t *testing.T) {
 			isServeError: true,
 		}
 
-		err := consumer.Setup(&MockConsumerConfig{isError: true})
+		err := consumer.Setup(&MockConfig{isError: true})
 		if err == nil {
 			t.Fatalf("Expected error from Setup, got nil")
 		}

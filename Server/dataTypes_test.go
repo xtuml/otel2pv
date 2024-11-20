@@ -9,7 +9,7 @@ import (
 type MockCompletionHandler struct {
 	DataReceived  any
 	ErrorReceived error
-	isError	   bool
+	isError       bool
 }
 
 func (t *MockCompletionHandler) Complete(data any, err error) error {
@@ -212,7 +212,7 @@ func TestAppData(t *testing.T) {
 
 		_, err := appData.GetHandler()
 
-		if err == nil{
+		if err == nil {
 			t.Errorf("Expected error from GetHandler, got %v", err)
 		}
 

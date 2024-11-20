@@ -5,11 +5,21 @@ import (
 	"sync"
 )
 
+// Config is an interface that represents a configuration
+// for a server. It has an IngestConfig method that will
+// ingest the configuration and return an error if it fails
+type Config interface {
+	IngestConfig(map[string]any) error
+}
+
 // Server is an interface for a server that will
 // do some task/s. It has a Serve method that will
-// start the server and return an error if this fails
+// start the server and return an error if this fails.
+// It also has a Setup method that will set up the server
+// and return an error if this fails.
 type Server interface {
 	Serve() error
+	Setup(Config) error
 }
 
 // Pushable is an interface that represents a component capable
@@ -136,7 +146,7 @@ func (mss *MapSinkServer) SendTo(data *AppData) error {
 	if err != nil {
 		return err
 	}
-	defer func ()  {
+	defer func() {
 		errHandler := handler.Complete(inData, err)
 		if errHandler != nil {
 			panic(errHandler)
@@ -175,5 +185,12 @@ func (mss *MapSinkServer) SendTo(data *AppData) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// Setup is a method that will set up the MapSinkServer using Config interface
+// It will return an error if the configuration is invalid. Currently, it does not
+// do anything.
+func (mss *MapSinkServer) Setup(config Config) error {
 	return nil
 }

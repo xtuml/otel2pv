@@ -5,9 +5,51 @@ import (
 	"testing"
 )
 
+// MockConfig is a mock implementation of the Config interface
+type MockConfig struct {
+	isError bool
+}
+
+func (c *MockConfig) IngestConfig(map[string]any) error {
+	if c.isError {
+		return errors.New("test error")
+	}
+	return nil
+}
+
+func TestConfig(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		config := MockConfig{
+			isError: false,
+		}
+
+		_, ok := interface{}(&config).(Config)
+		if !ok {
+			t.Errorf("Expected config to implement Config interface")
+		}
+
+		err := config.IngestConfig(map[string]any{})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+	})
+	t.Run("Error", func(t *testing.T) {
+		config := MockConfig{
+			isError: true,
+		}
+
+		err := config.IngestConfig(map[string]any{})
+
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got '%v'", err)
+		}
+	})
+}
+
 // MockServer is a mock implementation of the Server interface
 type MockServer struct {
-	isError bool
+	isError      bool
+	isSetupError bool
 }
 
 func (s *MockServer) Serve() error {
@@ -16,10 +58,19 @@ func (s *MockServer) Serve() error {
 	}
 	return nil
 }
+
+func (s *MockServer) Setup(Config) error {
+	if s.isSetupError {
+		return errors.New("test error")
+	}
+	return nil
+}
+
 func TestServer(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		server := MockServer{
-			isError: false,
+			isError:      false,
+			isSetupError: false,
 		}
 
 		err := server.Serve()
@@ -32,16 +83,28 @@ func TestServer(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected no error from Serve, got %v", err)
 		}
+
+		err = server.Setup(&MockConfig{})
+
+		if err != nil {
+			t.Errorf("Expected no error from Setup, got %v", err)
+		}
 	})
 	t.Run("Error", func(t *testing.T) {
 		server := MockServer{
-			isError: true,
+			isError:      true,
+			isSetupError: true,
 		}
 
 		err := server.Serve()
 
 		if err == nil {
 			t.Errorf("Expected error from Serve, got '%v'", err)
+		}
+
+		err = server.Setup(&MockConfig{})
+		if err == nil {
+			t.Errorf("Expected error from Setup, got '%v'", err)
 		}
 	})
 }
@@ -184,6 +247,10 @@ func (s *MockSourceServer) Serve() error {
 	return nil
 }
 
+func (s *MockSourceServer) Setup(Config) error {
+	return nil
+}
+
 func TestSourceServer(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		sourceServer := MockSourceServer{
@@ -269,6 +336,10 @@ func (s *MockSinkServer) SendTo(data *AppData) error {
 	return nil
 }
 
+func (s *MockSinkServer) Setup(Config) error {
+	return nil
+}
+
 func TestSinkServer(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		sinkServer := MockSinkServer{
@@ -347,6 +418,10 @@ func (s *MockPipeServer) Serve() error {
 }
 
 func (s *MockPipeServer) SendTo(data *AppData) error {
+	return nil
+}
+
+func (s *MockPipeServer) Setup(Config) error {
 	return nil
 }
 
@@ -566,6 +641,10 @@ func (s *MockSinkServerForMapSinkServer) SendTo(data *AppData) error {
 	return nil
 }
 
+func (s *MockSinkServerForMapSinkServer) Setup(Config) error {
+	return nil
+}
+
 // Test for MapSinkServer
 func TestMapSinkServer(t *testing.T) {
 	t.Run("Instantiation", func(t *testing.T) {
@@ -577,11 +656,11 @@ func TestMapSinkServer(t *testing.T) {
 		if mapSinkServer.sinkServerMap["test"] != sinkServerMap["test"] {
 			t.Errorf("Expected sinkServerMap[\"test\"] to be %v, got %v", sinkServerMap["test"], mapSinkServer.sinkServerMap["test"])
 		}
-        // test that MapSinkServer implements SinkServer
-        _, ok := interface{}(&mapSinkServer).(SinkServer)
-        if !ok {
-            t.Errorf("Expected mapSinkServer to implement SinkServer interface")
-        }
+		// test that MapSinkServer implements SinkServer
+		_, ok := interface{}(&mapSinkServer).(SinkServer)
+		if !ok {
+			t.Errorf("Expected mapSinkServer to implement SinkServer interface")
+		}
 	})
 	t.Run("Serve", func(t *testing.T) {
 		sinkServerMap := make(map[string]SinkServer)
@@ -720,29 +799,29 @@ func TestMapSinkServer(t *testing.T) {
 			t.Errorf("Expected error to be received by handler, got nil")
 		}
 		// Test error case where on of the internal waitGroupCompletionHandlers has an error
-        sinkServerMap["test2"] = &MockSinkServerForMapSinkServer{isHandlerCompleteError: true}
-        appData = &AppData{
-            data:    map[string]any{"test": "value", "test2": "value2"},
-            handler: &MockCompletionHandler{},
-        }
-        err = mapSinkServer.SendTo(appData)
-        if err == nil {
-            t.Errorf("Expected error from SendTo, got nil")
-        }
-        if err.Error() != "handler complete error" {
-            t.Errorf("Expected error to be received by handler, got %v", err)
-        }
-        // test panic case where handler.Complete returns an error
-        sinkServerMap["test2"] = &MockSinkServerForMapSinkServer{}
-        appData = &AppData{
-            data:    map[string]any{"test": "value", "test2": "value2"},
-            handler: &MockCompletionHandler{isError: true},
-        }
-        defer func() {
-            if r := recover(); r == nil {
-                t.Errorf("Expected panic from SendTo, got nil")
-            }
-        }()
-        _ = mapSinkServer.SendTo(appData)
+		sinkServerMap["test2"] = &MockSinkServerForMapSinkServer{isHandlerCompleteError: true}
+		appData = &AppData{
+			data:    map[string]any{"test": "value", "test2": "value2"},
+			handler: &MockCompletionHandler{},
+		}
+		err = mapSinkServer.SendTo(appData)
+		if err == nil {
+			t.Errorf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "handler complete error" {
+			t.Errorf("Expected error to be received by handler, got %v", err)
+		}
+		// test panic case where handler.Complete returns an error
+		sinkServerMap["test2"] = &MockSinkServerForMapSinkServer{}
+		appData = &AppData{
+			data:    map[string]any{"test": "value", "test2": "value2"},
+			handler: &MockCompletionHandler{isError: true},
+		}
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("Expected panic from SendTo, got nil")
+			}
+		}()
+		_ = mapSinkServer.SendTo(appData)
 	})
 }
