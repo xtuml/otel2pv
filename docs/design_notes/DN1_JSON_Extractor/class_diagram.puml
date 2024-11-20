@@ -99,6 +99,11 @@ namespace Server {
         +[]SelectProducerConfig SelectProducerConfigs
         +error IngestConfig(map[string]any)
     }
+    struct SelectConsumerConfig {
+        +string Type
+        +Config ConsumerConfig
+        +error IngestConfig(map[string]any)
+    }
 }
 Server.CompletionHandler <|-- Server.WaitGroupCompletionHandler
 Server.CompletionHandler *-- Server.AppData
@@ -126,6 +131,7 @@ Server.Config <|-- JSONExtractor.JQTransformerConfig
 Server.Config <|-- Server.HTTPProducerConfig
 Server.Config <|-- Server.SelectProducerConfig
 Server.Config <|-- Server.SetupProducersConfig
+Server.Config <|-- Server.SelectConsumerConfig
 Server.SelectProducerConfig *-- Server.SetupProducersConfig
 Server.Producer <|-- Server.HTTPProducer
 Server.HTTPProducerConfig *-- Server.HTTPProducer

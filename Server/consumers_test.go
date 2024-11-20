@@ -96,3 +96,43 @@ func TestConsumer(t *testing.T) {
 		}
 	})
 }
+
+
+// Tests for SelectConsumerConfig
+func TestSelectConsumerConfig(t *testing.T) {
+	t.Run("IngestConfigInvalid", func(t *testing.T) {
+		scc := &SelectConsumerConfig{}
+		// Test when Type is not set
+		err := scc.IngestConfig(map[string]any{})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Type - must be a string and must be set" {
+			t.Errorf("Expected error message to be 'invalid Type - must be a string and must be set', got %v", err.Error())
+		}
+		// Test when ConsumerConfig is not set
+		err = scc.IngestConfig(map[string]any{"Type": "test"})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "Consumer config not set correctly" {
+			t.Errorf("Expected error message to be 'Consumer config not set correctly', got %v", err.Error())
+		}
+		// Test when ConsumerConfig is not a map
+		err = scc.IngestConfig(map[string]any{"Type": "test", "ConsumerConfig": "test"})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "Consumer config not set correctly" {
+			t.Errorf("Expected error message to be 'Consumer config not set correctly', got %v", err.Error())
+		}
+		// Test when ConsumerConfig is a map but the consumer type is invalid
+		err = scc.IngestConfig(map[string]any{"Type": "test", "ConsumerConfig": map[string]any{}})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid consumer type: test" {
+			t.Errorf("Expected error message to be 'invalid consumer type: test', got %v", err.Error())
+		}
+	})
+}
