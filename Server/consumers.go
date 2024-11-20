@@ -56,7 +56,6 @@ func (s *SelectConsumerConfig) IngestConfig(config map[string]any) error {
 	return nil
 }
 
-
 // SetupConsumersConfig is a struct that represents the configuration
 // for setting up consumers.
 // It has the following fields:

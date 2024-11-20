@@ -108,6 +108,12 @@ namespace Server {
         +[]SelectConsumerConfig SelectConsumerConfigs
         +error IngestConfig(map[string]any)
     }
+    struct AppConfig {
+        +SetupProducersConfig SetupProducersConfig
+        +SetupConsumersConfig SetupConsumersConfig
+        +Config PipeServerConfig
+        +error IngestConfig(map[string]any)
+    }
 }
 Server.CompletionHandler <|-- Server.WaitGroupCompletionHandler
 Server.CompletionHandler *-- Server.AppData
@@ -137,6 +143,7 @@ Server.Config <|-- Server.SelectProducerConfig
 Server.Config <|-- Server.SetupProducersConfig
 Server.Config <|-- Server.SelectConsumerConfig
 Server.Config <|-- Server.SetupConsumersConfig
+Server.Config <|-- Server.AppConfig
 Server.SelectProducerConfig *-- Server.SetupProducersConfig
 Server.SelectConsumerConfig *-- Server.SetupConsumersConfig
 Server.Producer <|-- Server.HTTPProducer

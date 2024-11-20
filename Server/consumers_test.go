@@ -97,7 +97,6 @@ func TestConsumer(t *testing.T) {
 	})
 }
 
-
 // Tests for SelectConsumerConfig
 func TestSelectConsumerConfig(t *testing.T) {
 	t.Run("ImplementsConfig", func(t *testing.T) {

@@ -447,109 +447,109 @@ func TestSelectProducerConfig(t *testing.T) {
 
 // Tests for SetupProducersConfig
 func TestSetupProducersConfig(t *testing.T) {
-    t.Run("ImplementsConfig", func(t *testing.T) {
-        config := &SetupProducersConfig{}
-        _, ok := interface{}(config).(Config)
-        if !ok {
-            t.Errorf("Expected config to implement Config interface")
-        }
-    })
-    t.Run("IngestConfig", func(t *testing.T) {
-        config := &SetupProducersConfig{}
-        // test ingest with valid config but default for IsMapping
-        err := config.IngestConfig(map[string]any{
-            "ProducerConfigs": []map[string]any{
-                {
-                    "Type": "HTTP",
-                    "ProducerConfig": map[string]any{
-                        "URL": "http://test.com",
-                    },
-                },
-                {
-                    "Type": "HTTP",
-                    "ProducerConfig": map[string]any{
-                        "URL": "http://test2.com",
-                    },
-                },
-            },
-        })
-        if err != nil {
-            t.Errorf("Expected no error from IngestConfig, got %v", err)
-        }
-        if len(config.SelectProducerConfigs) != 2 {
-            t.Errorf("Expected SelectProducerConfigs to have 2 elements, got %v", len(config.SelectProducerConfigs))
-        }
-        if config.IsMapping {
-            t.Errorf("Expected IsMapping to be false, got true")
-        }
-        // test ingest with valid config and value set for IsMapping
-        err = config.IngestConfig(map[string]any{
-            "IsMapping": true,
-            "ProducerConfigs": []map[string]any{
-                {
-                    "Type": "HTTP",
-                    "ProducerConfig": map[string]any{
-                        "URL": "http://test.com",
-                    },
-                },
-            },
-        })
-        if err != nil {
-            t.Errorf("Expected no error from IngestConfig, got %v", err)
-        }
-        if len(config.SelectProducerConfigs) != 1 {
-            t.Errorf("Expected SelectProducerConfigs to have 1 element, got %v", len(config.SelectProducerConfigs))
-        }
-        if !config.IsMapping {
-            t.Errorf("Expected IsMapping to be true, got false")
-        }
-        // test ingest when ProducerConfigs is not set
-        err = config.IngestConfig(map[string]any{})
-        if err == nil {
-            t.Errorf("Expected error from IngestConfig, got nil")
-        }
-        if err.Error() != "ProducerConfigs not set correctly" {
-            t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
-        }
-        // test ingest when ProducerConfigs is not a slice of map[string]any
-        err = config.IngestConfig(map[string]any{
-            "ProducerConfigs": "test",
-        })
-        if err == nil {
-            t.Errorf("Expected error from IngestConfig, got nil")
-        }
-        if err.Error() != "ProducerConfigs not set correctly" {
-            t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
-        }
-        // test ingest when ProducerConfigs is an empty slice
-        err = config.IngestConfig(map[string]any{
-            "ProducerConfigs": []map[string]any{},
-        })
-        if err == nil {
-            t.Errorf("Expected error from IngestConfig, got nil")
-        }
-        if err.Error() != "ProducerConfigs is empty" {
-            t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
-        }
-        // test when there is an error in one of the SelectProducerConfig.IngestConfig
-        err = config.IngestConfig(map[string]any{
-            "ProducerConfigs": []map[string]any{
-                {
-                    "Type": "HTTP",
-                    "ProducerConfig": map[string]any{
-                        "URL": "http://test.com",
-                    },
-                },
-                {
-                    "Type": "HTTP",
-                    "ProducerConfig": map[string]any{
-                        "URL": 1,
-                    },
-                },
-            },
-        })
-        if err == nil {
-            t.Errorf("Expected error from IngestConfig, got nil")
-        }
-    })
+	t.Run("ImplementsConfig", func(t *testing.T) {
+		config := &SetupProducersConfig{}
+		_, ok := interface{}(config).(Config)
+		if !ok {
+			t.Errorf("Expected config to implement Config interface")
+		}
+	})
+	t.Run("IngestConfig", func(t *testing.T) {
+		config := &SetupProducersConfig{}
+		// test ingest with valid config but default for IsMapping
+		err := config.IngestConfig(map[string]any{
+			"ProducerConfigs": []map[string]any{
+				{
+					"Type": "HTTP",
+					"ProducerConfig": map[string]any{
+						"URL": "http://test.com",
+					},
+				},
+				{
+					"Type": "HTTP",
+					"ProducerConfig": map[string]any{
+						"URL": "http://test2.com",
+					},
+				},
+			},
+		})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if len(config.SelectProducerConfigs) != 2 {
+			t.Errorf("Expected SelectProducerConfigs to have 2 elements, got %v", len(config.SelectProducerConfigs))
+		}
+		if config.IsMapping {
+			t.Errorf("Expected IsMapping to be false, got true")
+		}
+		// test ingest with valid config and value set for IsMapping
+		err = config.IngestConfig(map[string]any{
+			"IsMapping": true,
+			"ProducerConfigs": []map[string]any{
+				{
+					"Type": "HTTP",
+					"ProducerConfig": map[string]any{
+						"URL": "http://test.com",
+					},
+				},
+			},
+		})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if len(config.SelectProducerConfigs) != 1 {
+			t.Errorf("Expected SelectProducerConfigs to have 1 element, got %v", len(config.SelectProducerConfigs))
+		}
+		if !config.IsMapping {
+			t.Errorf("Expected IsMapping to be true, got false")
+		}
+		// test ingest when ProducerConfigs is not set
+		err = config.IngestConfig(map[string]any{})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "ProducerConfigs not set correctly" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// test ingest when ProducerConfigs is not a slice of map[string]any
+		err = config.IngestConfig(map[string]any{
+			"ProducerConfigs": "test",
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "ProducerConfigs not set correctly" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// test ingest when ProducerConfigs is an empty slice
+		err = config.IngestConfig(map[string]any{
+			"ProducerConfigs": []map[string]any{},
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "ProducerConfigs is empty" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// test when there is an error in one of the SelectProducerConfig.IngestConfig
+		err = config.IngestConfig(map[string]any{
+			"ProducerConfigs": []map[string]any{
+				{
+					"Type": "HTTP",
+					"ProducerConfig": map[string]any{
+						"URL": "http://test.com",
+					},
+				},
+				{
+					"Type": "HTTP",
+					"ProducerConfig": map[string]any{
+						"URL": 1,
+					},
+				},
+			},
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+	})
 }

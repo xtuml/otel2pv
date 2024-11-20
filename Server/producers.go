@@ -212,8 +212,8 @@ func (s *SelectProducerConfig) IngestConfig(config map[string]any) error {
 // 2. SelectProducerConfigs: []*SelectProducerConfig. A slice of SelectProducerConfigs
 // that will be used to set up the producers.
 type SetupProducersConfig struct {
-	IsMapping              bool
-	SelectProducerConfigs  []*SelectProducerConfig
+	IsMapping             bool
+	SelectProducerConfigs []*SelectProducerConfig
 }
 
 // IngestConfig is a method that will ingest the configuration for the
