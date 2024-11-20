@@ -307,3 +307,140 @@ func TestHTTPProducer(t *testing.T) {
 		_ = producer.SendTo(appData)
 	})
 }
+
+// Tests for SelectProducerConfig
+func TestSelectProducerConfig(t *testing.T) {
+	t.Run("ImplementsConfig", func(t *testing.T) {
+		config := &SelectProducerConfig{}
+		_, ok := interface{}(config).(Config)
+		if !ok {
+			t.Errorf("Expected config to implement Config interface")
+		}
+	})
+	t.Run("IngestConfigHTTP", func(t *testing.T) {
+		config := &SelectProducerConfig{}
+		// test ingest with valid config and default for
+		// Map
+		err := config.IngestConfig(map[string]any{
+			"Type": "HTTP",
+			"ProducerConfig": map[string]any{
+				"URL": "http://test.com",
+			},
+		})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if config.Type != "HTTP" {
+			t.Errorf("Expected Type to be 'HTTP', got '%v'", config.Type)
+		}
+		if config.Map != "" {
+			t.Errorf("Expected Map to be '', got '%v'", config.Map)
+		}
+		if config.ProducerConfig == nil {
+			t.Errorf("Expected ProducerConfig to be populated, got nil")
+		}
+		_, ok := config.ProducerConfig.(*HTTPProducerConfig)
+		if !ok {
+			t.Errorf("Expected ProducerConfig to be of type HTTPProducerConfig")
+		}
+		// test ingest with valid config and value set for map
+		err = config.IngestConfig(map[string]any{
+			"Type": "HTTP",
+			"Map":  "test",
+			"ProducerConfig": map[string]any{
+				"URL": "http://test.com",
+			},
+		})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if config.Type != "HTTP" {
+			t.Errorf("Expected Type to be 'HTTP', got '%v'", config.Type)
+		}
+		if config.Map != "test" {
+			t.Errorf("Expected Map to be 'test', got '%v'", config.Map)
+		}
+		if config.ProducerConfig == nil {
+			t.Errorf("Expected ProducerConfig to be populated, got nil")
+		}
+		_, ok = config.ProducerConfig.(*HTTPProducerConfig)
+		if !ok {
+			t.Errorf("Expected ProducerConfig to be of type HTTPProducerConfig")
+		}
+		// tests case where ProducerConfig.IngestConfig returns an error
+		err = config.IngestConfig(map[string]any{
+			"Type": "HTTP",
+			"ProducerConfig": map[string]any{
+				"URL": 1,
+			},
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid URL - must be a string and must be set" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+	})
+	t.Run("IngestConfigInvalid", func(t *testing.T) {
+		config := &SelectProducerConfig{}
+		// tests case where Type is not set
+		err := config.IngestConfig(map[string]any{
+			"ProducerConfig": map[string]any{
+				"URL": "http://test.com",
+			},
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid producer type" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// tests case where Type is not a string
+		err = config.IngestConfig(map[string]any{
+			"Type": 1,
+			"ProducerConfig": map[string]any{
+				"URL": "http://test.com",
+			},
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid producer type" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// tests case where type is not in PRODUCERCONFIGMAP
+		err = config.IngestConfig(map[string]any{
+			"Type": "test",
+			"ProducerConfig": map[string]any{
+				"URL": "http://test.com",
+			},
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid producer type: test" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// tests case where ProducerConfig is not set
+		err = config.IngestConfig(map[string]any{
+			"Type": "HTTP",
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "Producer config not set correctly" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// tests case where ProducerConfig is not a map[string]any
+		err = config.IngestConfig(map[string]any{
+			"Type":           "HTTP",
+			"ProducerConfig": "test",
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "Producer config not set correctly" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+	})
+}

@@ -88,6 +88,12 @@ namespace Server {
         +int Timeout
         +error IngestConfig(map[string]any)
     }
+    struct SelectProducerConfig {
+        +string Map
+        +string Type
+        +Config ProducerConfig
+        +error IngestConfig(map[string]any)
+    }
 }
 Server.CompletionHandler <|-- Server.WaitGroupCompletionHandler
 Server.CompletionHandler *-- Server.AppData
@@ -113,6 +119,7 @@ Server.Pushable *-- JSONExtractor.JQTransformer
 Server.Server *-- Server.Config
 Server.Config <|-- JSONExtractor.JQTransformerConfig
 Server.Config <|-- Server.HTTPProducerConfig
+Server.Config <|-- Server.SelectProducerConfig
 Server.Producer <|-- Server.HTTPProducer
 Server.HTTPProducerConfig *-- Server.HTTPProducer
 @enduml

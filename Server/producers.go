@@ -40,7 +40,7 @@ type HTTPProducerConfig struct {
 func (h *HTTPProducerConfig) IngestConfig(config map[string]any) error {
 	url, ok := config["URL"].(string)
 	if !ok {
-		return errors.New("invalid URL")
+		return errors.New("invalid URL - must be a string and must be set")
 	}
 	h.URL = url
 	numRetries, ok := config["numRetries"]
@@ -141,4 +141,63 @@ func (h *HTTPProducer) SendTo(data *AppData) error {
 	}
 	err = errors.New("failed to send data")
 	return err
+}
+
+// ProducerMap is a map that contains functions to get Producers.
+var PRODUCERMAP = map[string]func() Producer{
+	"HTTP": func() Producer {
+		return &HTTPProducer{}
+	},
+}
+
+// ProducerConfigMap is a map that contains functions to get ProducerConfigs.
+var PRODUCERCONFIGMAP = map[string]func() Config{
+	"HTTP": func() Config {
+		return &HTTPProducerConfig{}
+	},
+}
+
+// SelectProducerConfig is a struct that contains the configuration
+// for selecting a producer.
+// It has the following fields:
+//
+// 1. Type: string. The type of producer to select.
+//
+// 2. Map: string. An optional string that is used to map data to a producer.
+//
+// 3. ProducerConfig: Config. Configuration for the producer.
+type SelectProducerConfig struct {
+	Type           string
+	Map            string
+	ProducerConfig Config
+}
+
+// IngestConfig is a method that will ingest the configuration for the
+// SelectProducerConfig.
+// It takes in a map[string]any and returns an error if the configuration is invalid.
+func (s *SelectProducerConfig) IngestConfig(config map[string]any) error {
+	producerType, ok := config["Type"].(string)
+	if !ok {
+		return errors.New("invalid producer type")
+	}
+	s.Type = producerType
+	configMap, ok := PRODUCERCONFIGMAP[s.Type]
+	if !ok {
+		return errors.New("invalid producer type: " + s.Type)
+	}
+	producerConfig, ok := config["ProducerConfig"].(map[string]any)
+	if !ok {
+		return errors.New("Producer config not set correctly")
+	}
+	producerConfigStruct := configMap()
+
+	err := producerConfigStruct.IngestConfig(producerConfig)
+	if err != nil {
+		return err
+	}
+	s.ProducerConfig = producerConfigStruct
+	if producerMap, ok := config["Map"].(string); ok {
+		s.Map = producerMap
+	}
+	return nil
 }
