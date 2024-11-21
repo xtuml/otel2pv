@@ -89,19 +89,21 @@ func TestAppConfig(t *testing.T) {
 			t.Errorf("Expected error message to contain 'ConsumersSetup subfields incorrect', got %v", err.Error())
 		}
 		// Test when everything is set correctly
-		// TODO: update this line once Consumers have been added
-		// err = appConfig.IngestConfig(map[string]interface{}{
-		// 	"AppConfig": map[string]interface{}{},
-		// 	"ProducersSetup": map[string]interface{}{
-		// 		"ProducerConfigs": []map[string]interface{}{
-		// 			{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
-		// 		}},
-		// 	"ConsumersSetup": map[string]interface{}{
-		// 		"ConsumerConfigs": []map[string]interface{}{
-		// 			{"Type": "HTTP", "ConsumerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
-		// 		}}})
-		// if err != nil {
-		// 	t.Errorf("Expected no error from IngestConfig, got %v", err)
-		// }
+		err = appConfig.IngestConfig(map[string]interface{}{
+			"AppConfig": map[string]interface{}{},
+			"ProducersSetup": map[string]interface{}{
+				"ProducerConfigs": []map[string]interface{}{
+					{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
+				}},
+			"ConsumersSetup": map[string]interface{}{
+				"ConsumerConfigs": []map[string]interface{}{
+					{"Type": "RabbitMQ", "ConsumerConfig": map[string]interface{}{
+						"Connection": "amqp://localhost:5672",
+						"Queue":      "test",
+					}},
+				}}})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
 	})
 }

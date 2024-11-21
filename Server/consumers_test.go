@@ -2,6 +2,7 @@ package Server
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -107,6 +108,26 @@ func TestSelectConsumerConfig(t *testing.T) {
 			t.Errorf("Expected SelectConsumerConfig to implement Config interface")
 		}
 	})
+	t.Run("IngestConfig", func(t *testing.T) {
+		scc := &SelectConsumerConfig{}
+		// Tests valid case
+		err := scc.IngestConfig(map[string]any{"Type": "RabbitMQ", "ConsumerConfig": map[string]any{
+			"Connection": "test",
+			"Queue":      "test",
+		}})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if scc.Type != "RabbitMQ" {
+			t.Errorf("Expected Type to be 'RabbitMQ', got %v", scc.Type)
+		}
+		if scc.ConsumerConfig == nil {
+			t.Errorf("Expected ConsumerConfig to be set, got nil")
+		}
+		if _, ok := scc.ConsumerConfig.(*RabbitMQConsumerConfig); !ok {
+			t.Errorf("Expected ConsumerConfig to be of type RabbitMQConsumerConfig, got %T", scc.ConsumerConfig)
+		}
+	})
 	t.Run("IngestConfigInvalid", func(t *testing.T) {
 		scc := &SelectConsumerConfig{}
 		// Test when Type is not set
@@ -117,8 +138,24 @@ func TestSelectConsumerConfig(t *testing.T) {
 		if err.Error() != "invalid Type - must be a string and must be set" {
 			t.Errorf("Expected error message to be 'invalid Type - must be a string and must be set', got %v", err.Error())
 		}
-		// Test when ConsumerConfig is not set
+		// Test when Type is not a string
+		err = scc.IngestConfig(map[string]any{"Type": 1})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Type - must be a string and must be set" {
+			t.Errorf("Expected error message to be 'invalid Type - must be a string and must be set', got %v", err.Error())
+		}
+		// Tests when Type is not in the CONSUMERCONFIGMAP
 		err = scc.IngestConfig(map[string]any{"Type": "test"})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid consumer type: test" {
+			t.Errorf("Expected error message to be 'invalid consumer type: test', got %v", err.Error())
+		}
+		// Test when ConsumerConfig is not set
+		err = scc.IngestConfig(map[string]any{"Type": "RabbitMQ"})
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -126,20 +163,20 @@ func TestSelectConsumerConfig(t *testing.T) {
 			t.Errorf("Expected error message to be 'Consumer config not set correctly', got %v", err.Error())
 		}
 		// Test when ConsumerConfig is not a map
-		err = scc.IngestConfig(map[string]any{"Type": "test", "ConsumerConfig": "test"})
+		err = scc.IngestConfig(map[string]any{"Type": "RabbitMQ", "ConsumerConfig": "test"})
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
 		if err.Error() != "Consumer config not set correctly" {
 			t.Errorf("Expected error message to be 'Consumer config not set correctly', got %v", err.Error())
 		}
-		// Test when ConsumerConfig is a map but the consumer type is invalid
-		err = scc.IngestConfig(map[string]any{"Type": "test", "ConsumerConfig": map[string]any{}})
+		// Test when ConsumerConfig returns an error
+		err = scc.IngestConfig(map[string]any{"Type": "RabbitMQ", "ConsumerConfig": map[string]any{}})
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
-		if err.Error() != "invalid consumer type: test" {
-			t.Errorf("Expected error message to be 'invalid consumer type: test', got %v", err.Error())
+		if !strings.Contains(err.Error(), "Consumer config not set correctly:") {
+			t.Errorf("Expected error message to contain 'Consumer config not set correctly:', got %v", err.Error())
 		}
 	})
 }
@@ -165,25 +202,133 @@ func TestSetupConsumersConfig(t *testing.T) {
 			t.Errorf("Expected error message to be 'ConsumerConfigs not set correctly', got %v", err.Error())
 		}
 		// Test when SelectConsumerConfigs is not a slice
-		err = scc.IngestConfig(map[string]any{"SelectConsumerConfigs": "test"})
+		err = scc.IngestConfig(map[string]any{"ConsumerConfigs": "test"})
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
 		if err.Error() != "ConsumerConfigs not set correctly" {
 			t.Errorf("Expected error message to be 'ConsumerConfigs not set correctly', got %v", err.Error())
 		}
-		// Test when SelectConsumerConfigs is a slice but the elements are not SelectConsumerConfig
-		err = scc.IngestConfig(map[string]any{"SelectConsumerConfigs": []any{"test"}})
+		// Test when SelectConsumerConfigs is an empty slice
+		err = scc.IngestConfig(map[string]any{"ConsumerConfigs": []map[string]any{}})
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
-		if err.Error() != "ConsumerConfigs not set correctly" {
-			t.Errorf("Expected error message to be 'ConsumerConfigs not set correctly', got %v", err.Error())
+		if err.Error() != "ConsumerConfigs is empty" {
+			t.Errorf("Expected error message to be 'ConsumerConfigs is empty', got %v", err.Error())
 		}
 		// Test when SelectConsumerConfigs is a slice of SelectConsumerConfig but one of them is invalid
-		err = scc.IngestConfig(map[string]any{"SelectConsumerConfigs": []any{map[string]any{}}})
+		err = scc.IngestConfig(map[string]any{"ConsumerConfigs": []map[string]any{
+			{"Type": "RabbitMQ", "ConsumerConfig": map[string]any{
+				"Connection": "test",
+				"Queue":      "test",
+			}},
+			{},
+		}})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got ")
+		}
+		// Tests the valid case
+		err = scc.IngestConfig(map[string]any{"ConsumerConfigs": []map[string]any{
+			{"Type": "RabbitMQ", "ConsumerConfig": map[string]any{
+				"Connection": "test",
+				"Queue":      "test",
+			}},
+			{"Type": "RabbitMQ", "ConsumerConfig": map[string]any{
+				"Connection": "test",
+				"Queue":      "test",
+			}},
+		}})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if len(scc.SelectConsumerConfigs) != 2 {
+			t.Errorf("Expected SelectConsumerConfigs to have 2 elements, got %v", len(scc.SelectConsumerConfigs))
+		}
+	})
+}
+
+// Tests for RabbitMQConsumerConfig
+func TestRabbitMQConsumerConfig(t *testing.T) {
+	t.Run("ImplementsConfig", func(t *testing.T) {
+		rcc := &RabbitMQConsumerConfig{}
+		// Type assertion to check if RabbitMQConsumerConfig implements Config
+		_, ok := interface{}(rcc).(Config)
+		if !ok {
+			t.Errorf("Expected RabbitMQConsumerConfig to implement Config interface")
+		}
+	})
+	t.Run("IngestConfig", func(t *testing.T) {
+		rcc := &RabbitMQConsumerConfig{}
+		// Test when the RabbitMQConsumerConfig has no fields
+		err := rcc.IngestConfig(map[string]any{})
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Connection - must be a string and must be set" {
+			t.Errorf("Expected error message to be 'invalid Connection - must be a string and must be set', got %v", err.Error())
+		}
+		// Test when the RabbitMQConsumerConfig has the Connection field set but it is not a string
+		err = rcc.IngestConfig(map[string]any{"Connection": 1})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Connection - must be a string and must be set" {
+			t.Errorf("Expected error message to be 'invalid Connection - must be a string and must be set', got %v", err.Error())
+		}
+		// Test when the RabbitMQConsumerConfig has a valid Connection field but the Queue field is not set
+		err = rcc.IngestConfig(map[string]any{"Connection": "test"})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Queue - must be a string and must be set" {
+			t.Errorf("Expected error message to be 'invalid Queue - must be a string and must be set', got %v", err.Error())
+		}
+		// Tests when the RabbitMQConsumerConfig has a valid Connection and Queue field is set but not a string
+		err = rcc.IngestConfig(map[string]any{"Connection": "test", "Queue": 1})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Queue - must be a string and must be set" {
+			t.Errorf("Expected error message to be 'invalid Queue - must be a string and must be set', got %v", err.Error())
+		}
+		// Test when the RabbitMQConsumerConfig has a valid Connection, Queue, and ConsumerTag field set but ConsumerTag is not a string
+		err = rcc.IngestConfig(map[string]any{"Connection": "test", "Queue": "test", "ConsumerTag": 1})
+		if err == nil {
+			t.Errorf("Expected errnilor from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid ConsumerTag - must be a string" {
+			t.Errorf("Expected error message to be 'invalid ConsumerTag - must be a string', got %v", err.Error())
+		}
+		// Test when the RabbitMQConsumerConfig has a valid Connection and Queue field set but ConsumerTag is not set
+		rcc = &RabbitMQConsumerConfig{}
+		err = rcc.IngestConfig(map[string]any{"Connection": "test", "Queue": "test"})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if rcc.ConsumerTag != "" {
+			t.Errorf("Expected ConsumerTag to be empty, got %v", rcc.ConsumerTag)
+		}
+		if rcc.Connection != "test" {
+			t.Errorf("Expected Connection to be 'test', got %v", rcc.Connection)
+		}
+		if rcc.Queue != "test" {
+			t.Errorf("Expected Queue to be 'test', got %v", rcc.Queue)
+		}
+		// Test when the RabbitMQConsumerConfig has a valid Connection, Queue, and ConsumerTag field set
+		rcc = &RabbitMQConsumerConfig{}
+		err = rcc.IngestConfig(map[string]any{"Connection": "test", "Queue": "test", "ConsumerTag": "test"})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if rcc.ConsumerTag != "test" {
+			t.Errorf("Expected ConsumerTag to be 'test', got %v", rcc.ConsumerTag)
+		}
+		if rcc.Connection != "test" {
+			t.Errorf("Expected Connection to be 'test', got %v", rcc.Connection)
+		}
+		if rcc.Queue != "test" {
+			t.Errorf("Expected Queue to be 'test', got %v", rcc.Queue)
 		}
 	})
 }

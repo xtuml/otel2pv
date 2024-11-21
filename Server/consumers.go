@@ -14,7 +14,9 @@ type Consumer interface {
 var CONSUMERMAP = map[string]func() Consumer{}
 
 // CONSUMERCONFIGMAP is a map that maps a string to a Config.
-var CONSUMERCONFIGMAP = map[string]func() Config{}
+var CONSUMERCONFIGMAP = map[string]func() Config{
+	"RabbitMQ": func() Config { return &RabbitMQConsumerConfig{} },
+}
 
 // SelectConsumerConfig is a struct that represents the configuration
 // for selecting a consumer.
@@ -37,20 +39,19 @@ func (s *SelectConsumerConfig) IngestConfig(config map[string]any) error {
 	if !ok {
 		return errors.New("invalid Type - must be a string and must be set")
 	}
+	configMap, ok := CONSUMERCONFIGMAP[consumerType]
+	if !ok {
+		return errors.New("invalid consumer type: " + consumerType)
+	}
 	s.Type = consumerType
+	consumerConfigStruct := configMap()
 	consumerConfig, ok := config["ConsumerConfig"].(map[string]any)
 	if !ok {
 		return errors.New("Consumer config not set correctly")
 	}
-	configMap, ok := CONSUMERCONFIGMAP[s.Type]
-	if !ok {
-		return errors.New("invalid consumer type: " + s.Type)
-	}
-	consumerConfigStruct := configMap()
-
 	err := consumerConfigStruct.IngestConfig(consumerConfig)
 	if err != nil {
-		return err
+		return errors.New("Consumer config not set correctly:\n" + err.Error())
 	}
 	s.ConsumerConfig = consumerConfigStruct
 	return nil
@@ -85,6 +86,49 @@ func (s *SetupConsumersConfig) IngestConfig(config map[string]any) error {
 			return err
 		}
 		s.SelectConsumerConfigs = append(s.SelectConsumerConfigs, selectConsumerConfigStruct)
+	}
+	return nil
+}
+
+// RabbitMQConsumerConfig is a struct that represents the configuration
+// for a RabbitMQ consumer.
+// It has the following fields:
+//
+// 1. Connection: string. The connection string for the RabbitMQ server.
+//
+// 2. Queue: string. The name of the queue to consume from.
+//
+// 3. ConsumerTag: string. The consumer tag for the consumer. Defaults to "".
+type RabbitMQConsumerConfig struct {
+	Connection  string
+	Queue       string
+	ConsumerTag string
+}
+
+// IngestConfig is a method that will ingest the configuration
+// for the RabbitMQConsumerConfig.
+// It takes in a map[string]any and returns an error if the configuration
+// is invalid.
+func (r *RabbitMQConsumerConfig) IngestConfig(config map[string]any) error {
+	connection, ok := config["Connection"].(string)
+	if !ok {
+		return errors.New("invalid Connection - must be a string and must be set")
+	}
+	r.Connection = connection
+	queue, ok := config["Queue"].(string)
+	if !ok {
+		return errors.New("invalid Queue - must be a string and must be set")
+	}
+	r.Queue = queue
+	consumerTag, ok := config["ConsumerTag"]
+	if !ok {
+		r.ConsumerTag = ""
+	} else {
+		if consumerTag, ok := consumerTag.(string); ok {
+			r.ConsumerTag = consumerTag
+		} else {
+			return errors.New("invalid ConsumerTag - must be a string")
+		}
 	}
 	return nil
 }

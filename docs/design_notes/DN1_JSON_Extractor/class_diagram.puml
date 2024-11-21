@@ -88,6 +88,12 @@ namespace Server {
         +int Timeout
         +error IngestConfig(map[string]any)
     }
+    struct RabbitMQConsumerConfig {
+        +string Connection
+        +string Queue
+        +string ConsumerTag
+        +error IngestConfig(map[string]any)
+    }
     struct SelectProducerConfig {
         +string Map
         +string Type
@@ -139,11 +145,9 @@ Server.Pushable *-- JSONExtractor.JQTransformer
 Server.Server *-- Server.Config
 Server.Config <|-- JSONExtractor.JQTransformerConfig
 Server.Config <|-- Server.HTTPProducerConfig
-Server.Config <|-- Server.SelectProducerConfig
-Server.Config <|-- Server.SetupProducersConfig
-Server.Config <|-- Server.SelectConsumerConfig
-Server.Config <|-- Server.SetupConsumersConfig
-Server.Config <|-- Server.AppConfig
+Server.Config <|-- Server.RabbitMQConsumerConfig
+Server.SetupProducersConfig *-- Server.AppConfig
+Server.SetupConsumersConfig *-- Server.AppConfig
 Server.SelectProducerConfig *-- Server.SetupProducersConfig
 Server.SelectConsumerConfig *-- Server.SetupConsumersConfig
 Server.Producer <|-- Server.HTTPProducer
