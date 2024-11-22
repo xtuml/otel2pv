@@ -237,3 +237,47 @@ func (s *SetupProducersConfig) IngestConfig(config map[string]any) error {
 	}
 	return nil
 }
+
+// RabbitMQProducerConfig is a struct that represents the configuration
+// for a RabbitMQProducer.
+// It has the following fields:
+//
+// 1. Connection: string. The connection string for the RabbitMQ server.
+//
+//  2. Exchange: string. The name of the exchange to send the data to.
+//     This defaults to "".
+//
+// 3. RoutingKey: string. The routing key for the exchange.
+type RabbitMQProducerConfig struct {
+	Connection string
+	Exchange   string
+	RoutingKey string
+}
+
+// IngestConfig is a method that will ingest the configuration
+// for the RabbitMQProducerConfig.
+// It takes in a map[string]any and returns an error if the configuration
+// is invalid.
+func (r *RabbitMQProducerConfig) IngestConfig(config map[string]any) error {
+	connection, ok := config["Connection"].(string)
+	if !ok {
+		return errors.New("invalid Connection - must be a string and must be set")
+	}
+	r.Connection = connection
+	exchange, ok := config["Exchange"]
+	if !ok {
+		r.Exchange = ""
+	} else {
+		exchange, ok := exchange.(string)
+		if !ok {
+			return errors.New("invalid Exchange - must be a string")
+		}
+		r.Exchange = exchange
+	}
+	routingKey, ok := config["RoutingKey"].(string)
+	if !ok {
+		return errors.New("invalid RoutingKey - must be a string and must be set")
+	}
+	r.RoutingKey = routingKey
+	return nil
+}

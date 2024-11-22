@@ -71,6 +71,12 @@ namespace Server {
         +int Timeout
         +error IngestConfig(map[string]any)
     }
+    struct RabbitMQProducerConfig {
+        +string Connection
+        +string Exchange
+        +string RoutingKey
+        +error IngestConfig(map[string]any)
+    }
     struct RabbitMQConsumerConfig {
         +string Connection
         +string Queue
@@ -125,6 +131,7 @@ Server.Pushable *-- Server.RabbitMQConsumer
 
 Server.Server *-- Server.Config
 Server.Config <|-- Server.HTTPProducerConfig
+Server.Config <|-- Server.RabbitMQProducerConfig
 Server.Config <|-- Server.RabbitMQConsumerConfig
 Server.SetupProducersConfig *-- Server.AppConfig
 Server.SetupConsumersConfig *-- Server.AppConfig

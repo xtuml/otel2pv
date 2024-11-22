@@ -461,3 +461,106 @@ func TestSetupProducersConfig(t *testing.T) {
 		}
 	})
 }
+
+// Tests for RabbitMQProducerConfig
+func TestRabbitMQProducerConfig(t *testing.T) {
+	t.Run("ImplementConfig", func(t *testing.T) {
+		config := &RabbitMQProducerConfig{}
+		_, ok := interface{}(config).(Config)
+		if !ok {
+			t.Errorf("Expected config to implement Config interface")
+		}
+	})
+	t.Run("IngestConfig", func(t *testing.T) {
+		config := &RabbitMQProducerConfig{}
+		// Tests when nothing is set
+		err := config.IngestConfig(map[string]any{})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Connection - must be a string and must be set" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// Test when Connection is not a string
+		err = config.IngestConfig(map[string]any{
+			"Connection": 1,
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Connection - must be a string and must be set" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// Test when Connection is set correctly and Exchange is set but not a string
+		err = config.IngestConfig(map[string]any{
+			"Connection": "test",
+			"Exchange":   1,
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Exchange - must be a string" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// Test when Connection is set and Exchange is set correctly but RoutingKey is not set
+		err = config.IngestConfig(map[string]any{
+			"Connection": "test",
+			"Exchange":   "test",
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid RoutingKey - must be a string and must be set" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// Test when Connection and Exchange are set correctly and RoutingKey is set but not a string
+		err = config.IngestConfig(map[string]any{
+			"Connection": "test",
+			"Exchange":   "test",
+			"RoutingKey": 1,
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid RoutingKey - must be a string and must be set" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// Test when everything is set correctly with default value for Exchange
+		config = &RabbitMQProducerConfig{}
+		err = config.IngestConfig(map[string]any{
+			"Connection": "test",
+			"RoutingKey": "test",
+		})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if config.Connection != "test" {
+			t.Errorf("Expected Connection to be 'test', got '%v'", config.Connection)
+		}
+		if config.Exchange != "" {
+			t.Errorf("Expected Exchange to be '', got '%v'", config.Exchange)
+		}
+		if config.RoutingKey != "test" {
+			t.Errorf("Expected RoutingKey to be 'test', got '%v'", config.RoutingKey)
+		}
+		// Test when everything is set correctly
+		config = &RabbitMQProducerConfig{}
+		err = config.IngestConfig(map[string]any{
+			"Connection": "test",
+			"Exchange":   "test",
+			"RoutingKey": "test",
+		})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if config.Connection != "test" {
+			t.Errorf("Expected Connection to be 'test', got '%v'", config.Connection)
+		}
+		if config.Exchange != "test" {
+			t.Errorf("Expected Exchange to be 'test', got '%v'", config.Exchange)
+		}
+		if config.RoutingKey != "test" {
+			t.Errorf("Expected RoutingKey to be 'test', got '%v'", config.RoutingKey)
+		}
+	})
+}
