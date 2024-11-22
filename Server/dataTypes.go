@@ -89,9 +89,30 @@ func (a *AppData) GetHandler() (CompletionHandler, error) {
 	return a.handler, nil
 }
 
+// NewAppData is a function that creates a new AppData struct.
 func NewAppData(data any, handler CompletionHandler) *AppData {
 	return &AppData{
 		data:    data,
 		handler: handler,
 	}
+}
+
+// convertBytesJSONDataToAppData is a function that converts a byte slice to an AppData struct.
+// It takes in a byte slice and a CompletionHandler and returns an AppData struct and an error.
+func convertBytesJSONDataToAppData(message []byte, completionHandler CompletionHandler) (*AppData, error) {
+	if jsonDataMap, err := convertBytesToMap(message); err == nil {
+		appData := &AppData{
+			data:    jsonDataMap,
+			handler: completionHandler,
+		}
+		return appData, nil
+	}
+	if jsonDataArray, err := convertBytesToArray(message); err == nil {
+		appData := &AppData{
+			data:    jsonDataArray,
+			handler: completionHandler,
+		}
+		return appData, nil
+	}
+	return nil, errors.New("Bytes data is not a JSON map or an array")
 }

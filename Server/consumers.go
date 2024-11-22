@@ -1,17 +1,17 @@
 package Server
 
-import "errors"
+import (
+	"context"
+	"errors"
+	"sync"
 
-// Consumer is an interface that represents a component capable
-// of receiving data from a location based on the setup.
-// Setup is used to configure the consumer, and it has a SourceServer
-// interface that combines the Server and Pullable interfaces.
-type Consumer interface {
-	SourceServer
-}
+	rabbitmq "github.com/rabbitmq/amqp091-go"
+)
 
 // CONSUMERMAP is a map that maps a string to a Consumer.
-var CONSUMERMAP = map[string]func() Consumer{}
+var CONSUMERMAP = map[string]func() SourceServer{
+	"RabbitMQ": func() SourceServer { return &RabbitMQConsumer{} },
+}
 
 // CONSUMERCONFIGMAP is a map that maps a string to a Config.
 var CONSUMERCONFIGMAP = map[string]func() Config{
@@ -131,4 +131,179 @@ func (r *RabbitMQConsumerConfig) IngestConfig(config map[string]any) error {
 		}
 	}
 	return nil
+}
+
+// RabbitMQCompletionHandler is a struct that represents a RabbitMQ completion handler.
+// It has the following fields:
+//
+// 1. message: *rabbitmq.Delivery. The message to handle.
+type RabbitMQCompletionHandler struct {
+	message *rabbitmq.Delivery
+}
+
+// Complete is a method that will complete the message.
+func (r *RabbitMQCompletionHandler) Complete(data any, err error) error {
+	if r.message == nil {
+		return errors.New("message not set")
+	}
+	if err != nil {
+		nackErr := r.message.Nack(false, false)
+		if nackErr != nil {
+			return nackErr
+		}
+		return nil
+	}
+	ackErr := r.message.Ack(false)
+	if ackErr != nil {
+		return ackErr
+	}
+	return nil
+}
+
+// RabbitMQChannel is an interface that represents a RabbitMQ channel.
+type RabbitMQChannel interface {
+	QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args rabbitmq.Table) (rabbitmq.Queue, error)
+	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args rabbitmq.Table) (<-chan rabbitmq.Delivery, error)
+	Close() error
+}
+
+// RabbitMQConnection is an interface that represents a RabbitMQ connection.
+type RabbitMQConnection interface {
+	Channel() (RabbitMQChannel, error)
+	Close() error
+}
+
+// RabbitMQDial is a function type that represents a dialer for RabbitMQ.
+type RabbitMQDial func(url string) (RabbitMQConnection, error)
+
+// RabbitMQDialWrapper is a function that wraps the RabbitMQ dial function.
+// It takes in a string and returns a RabbitMQConnection and an error.
+func RabbitMQDialWrapper(url string) (RabbitMQConnection, error) {
+	conn, err := rabbitmq.Dial(url)
+	if err != nil {
+		return nil, err
+	}
+	return &RabbitMQConnectionWrapper{conn: conn}, nil
+}
+
+// RabbitMQConnectionWrapper is a struct that wraps a RabbitMQ connection.
+type RabbitMQConnectionWrapper struct {
+	conn *rabbitmq.Connection
+}
+
+// Channel is a method that will return a RabbitMQ channel.
+func (r RabbitMQConnectionWrapper) Channel() (RabbitMQChannel, error) {
+	return r.conn.Channel()
+}
+
+// Close is a method that will close the RabbitMQ connection.
+func (r RabbitMQConnectionWrapper) Close() error {
+	return r.conn.Close()
+}
+
+// RabbitMQConsumer is a struct that represents a RabbitMQ consumer.
+// It has the following fields:
+//
+// 1. config: *RabbitMQConsumerConfig. The configuration for the RabbitMQ consumer.
+//
+// 2. pushable: Pushable. The pushable to push data to.
+type RabbitMQConsumer struct {
+	config   *RabbitMQConsumerConfig
+	pushable Pushable
+	dial     RabbitMQDial
+}
+
+// Setup is a method that will set up the RabbitMQ consumer.
+// It takes in a Config and returns an error if the setup fails.
+func (r *RabbitMQConsumer) Setup(config Config) error {
+	c, ok := config.(*RabbitMQConsumerConfig)
+	if !ok {
+		return errors.New("config is not a RabbitMQConsumerConfig")
+	}
+	r.config = c
+	r.dial = RabbitMQDialWrapper
+	return nil
+}
+
+// AddPushable is a method that will add a Pushable to the RabbitMQ consumer.
+// It takes in a Pushable and returns an error if the Pushable is already set.
+func (r *RabbitMQConsumer) AddPushable(p Pushable) error {
+	if r.pushable != nil {
+		return errors.New("Pushable already set")
+	}
+	r.pushable = p
+	return nil
+}
+
+// sendRabbitMQMessageDataToPushable is a function that sends RabbitMQ message data to a Pushable.
+// It takes in a *rabbitmq.Delivery and a Pushable and returns an error if the conversion to
+// AppData fails or if the Pushable fails to send the data.
+func sendRabbitMQMessageDataToPushable(msg *rabbitmq.Delivery, pushable Pushable) error {
+	completionHandler := &RabbitMQCompletionHandler{message: msg}
+
+	appData, err := convertBytesJSONDataToAppData(msg.Body, completionHandler)
+	if err != nil {
+		return err
+	}
+	err = pushable.SendTo(appData)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// sendChannelOfRabbitMQDeliveryToPushable is a function that sends a channel of RabbitMQ deliveries to a Pushable.
+func sendChannelOfRabbitMQDeliveryToPushable(channel <-chan rabbitmq.Delivery, pushable Pushable) error {
+	wg := &sync.WaitGroup{}
+	ctx, cancel := context.WithCancelCause(context.Background())
+	for msg := range channel {
+		if ctx.Err() != nil {
+			break
+		}
+		wg.Add(1)
+		go func(msg *rabbitmq.Delivery) {
+			defer wg.Done()
+			err := sendRabbitMQMessageDataToPushable(msg, pushable)
+			if err != nil {
+				cancel(err)
+			}
+		}(&msg)
+	}
+	wg.Wait()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return nil
+}
+
+// Serve is a method that will start the RabbitMQ consumer and begin consuming messages.
+func (r *RabbitMQConsumer) Serve() error {
+	if r.pushable == nil {
+		return errors.New("Pushable not set")
+	}
+	if r.config == nil {
+		return errors.New("Config not set")
+	}
+	if r.dial == nil {
+		return errors.New("Dialer not set")
+	}
+	conn, err := r.dial(r.config.Connection)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	ch, err := conn.Channel()
+	if err != nil {
+		return err
+	}
+	defer ch.Close()
+	q, err := ch.QueueDeclare(r.config.Queue, true, false, false, false, nil)
+	if err != nil {
+		return err
+	}
+	msgs, err := ch.Consume(q.Name, r.config.ConsumerTag, false, false, false, false, nil)
+	if err != nil {
+		return err
+	}
+	return sendChannelOfRabbitMQDeliveryToPushable(msgs, r.pushable)
 }

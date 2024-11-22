@@ -107,9 +107,9 @@ This provides the functionality to send data across the application.
 The class diagram for the JSON Extractor are as follows - split into the following two parts as before: 
 
 - Server
+    ![Class Diagram](./class_diagram.svg)
 - JSON Extractor
-
-![Class Diagram](./class_diagram.svg)
+    ![Class Diagram](./class_diagram_JQExtractor.svg)
 
 ### Functional Implementation
 As has been outlined above, the JSON Extractor will be implemented in two parts:

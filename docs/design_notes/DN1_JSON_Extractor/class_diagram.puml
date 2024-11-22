@@ -1,18 +1,4 @@
 @startuml
-namespace JSONExtractor {
-    struct JQTransformerConfig {
-        +map[string]string JQQueryStrings
-        +error IngestConfig(map[string]any)
-    }
-    struct JQTransformer {
-        -gojq.Code jqProgram
-        -Pushable pushable
-        +error AddPushable(Pushable)
-        +error SendTo(*AppData)
-        +error Serve()
-        +error Setup(Config)
-    }
-}
 namespace Server {
     interface CompletionHandler {
         +error Complete(any, error)
@@ -56,11 +42,6 @@ namespace Server {
         +error Serve()
         +error Setup(Config)
     }
-    interface Producer {
-        +error SendTo(*AppData)
-        +error Serve()
-        +error Setup(Config)
-    }
     struct HTTPProducer {
         -HTTPProducerConfig config
         -http.Client httpClient
@@ -68,8 +49,10 @@ namespace Server {
         +error Serve()
         +error Setup(Config)
     }
-    interface Consumer {
-        +error AddPushable(Pushable)
+    struct RabbitMQConsumer {
+        -RabbitMQConsumerConfig config
+        -Pushable pushable
+        +error AddPushable(Pushable) 
         +error Serve()
         +error Setup(Config)
     }
@@ -133,23 +116,20 @@ Server.Pushable <|-- Server.PipeServer
 Server.Pullable <|-- Server.PipeServer
 Server.Server <|-- Server.PipeServer
 
-Server.SinkServer <|-- Server.Producer
+Server.SinkServer <|-- Server.HTTPProducer
 Server.SinkServer *-- Server.MapSinkServer
 Server.SinkServer <|-- Server.MapSinkServer
-Server.SourceServer <|-- Server.Consumer
-
-Server.PipeServer <|-- JSONExtractor.JQTransformer
-Server.Pushable *-- JSONExtractor.JQTransformer
+Server.SourceServer <|-- Server.RabbitMQConsumer
+Server.Pushable *-- Server.RabbitMQConsumer
 
 
 Server.Server *-- Server.Config
-Server.Config <|-- JSONExtractor.JQTransformerConfig
 Server.Config <|-- Server.HTTPProducerConfig
 Server.Config <|-- Server.RabbitMQConsumerConfig
 Server.SetupProducersConfig *-- Server.AppConfig
 Server.SetupConsumersConfig *-- Server.AppConfig
 Server.SelectProducerConfig *-- Server.SetupProducersConfig
 Server.SelectConsumerConfig *-- Server.SetupConsumersConfig
-Server.Producer <|-- Server.HTTPProducer
 Server.HTTPProducerConfig *-- Server.HTTPProducer
+Server.RabbitMQConsumerConfig *-- Server.RabbitMQConsumer
 @enduml

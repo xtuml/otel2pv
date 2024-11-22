@@ -2,6 +2,7 @@ package Server
 
 import (
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 )
@@ -239,6 +240,66 @@ func TestAppData(t *testing.T) {
 		}
 		if appData.handler != testHandler {
 			t.Errorf("Expected handler to be '%v', got '%v'", testHandler, appData.handler)
+		}
+	})
+}
+
+// Tests for convertBytesJSONDataToAppData
+func TestConvertBytesJSONDataToAppData(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		// check when JSON is a map
+		message := []byte(`{"key":"value"}`)
+		handler := &MockCompletionHandler{}
+
+		appData, err := convertBytesJSONDataToAppData(message, handler)
+
+		if err != nil {
+			t.Errorf("Expected no error from convertBytesJSONDataToAppData, got %v", err)
+		}
+		if appData.data == nil {
+			t.Errorf("Expected data to be set, got nil")
+		}
+		if appData.handler != handler {
+			t.Errorf("Expected handler to be '%v', got '%v'", handler, appData.handler)
+		}
+		if heldmapData, ok := appData.data.(map[string]any); ok {
+			if !reflect.DeepEqual(heldmapData, map[string]any{"key": "value"}) {
+				t.Errorf("Expected data to be '%v', got '%v'", map[string]any{"key": "value"}, heldmapData)
+			}
+		} else {
+			t.Errorf("Expected data to be a map, got %v", appData.data)
+		}
+		// check when JSON is an array
+		message = []byte(`["value"]`)
+		handler = &MockCompletionHandler{}
+
+		appData, err = convertBytesJSONDataToAppData(message, handler)
+
+		if err != nil {
+			t.Errorf("Expected no error from convertBytesJSONDataToAppData, got %v", err)
+		}
+		if appData.data == nil {
+			t.Errorf("Expected data to be set, got nil")
+		}
+		if appData.handler != handler {
+			t.Errorf("Expected handler to be '%v', got '%v'", handler, appData.handler)
+		}
+		if heldArrayData, ok := appData.data.([]any); ok {
+			if !reflect.DeepEqual(heldArrayData, []any{"value"}) {
+				t.Errorf("Expected data to be '%v', got '%v'", []any{"value"}, heldArrayData)
+			}
+		} else {
+			t.Errorf("Expected data to be an array, got %v", appData.data)
+		}
+	})
+	t.Run("Error", func(t *testing.T) {
+		message := []byte(`{"key":"value"`)
+		handler := &MockCompletionHandler{}
+
+		_, err := convertBytesJSONDataToAppData(message, handler)
+
+		if err == nil {
+			t.Errorf("Expected error from convertBytesJSONDataToAppData, got nil")
 		}
 	})
 }

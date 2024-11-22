@@ -8,15 +8,6 @@ import (
 	"time"
 )
 
-// Producer is an interface that represents a component capable
-// of sending data to a location based on the setup.
-// Setup is used to configure the producer using a ProducerConfig
-// interface, and it has a SinkServer interface that combines the
-// Server and Pushable interfaces.
-type Producer interface {
-	SinkServer
-}
-
 // HTTPProducerConfig is a struct that represents the configuration
 // for an HTTPProducer.
 // It has the following fields:
@@ -144,8 +135,8 @@ func (h *HTTPProducer) SendTo(data *AppData) error {
 }
 
 // ProducerMap is a map that contains functions to get Producers.
-var PRODUCERMAP = map[string]func() Producer{
-	"HTTP": func() Producer {
+var PRODUCERMAP = map[string]func() SinkServer{
+	"HTTP": func() SinkServer {
 		return &HTTPProducer{}
 	},
 }
