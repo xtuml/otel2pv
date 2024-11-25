@@ -230,6 +230,7 @@ type MockSourceServer struct {
 	isAddError   bool
 	isServeError bool
 	Pushable     Pushable
+	isSetupError bool
 }
 
 func (s *MockSourceServer) AddPushable(pushable Pushable) error {
@@ -248,6 +249,9 @@ func (s *MockSourceServer) Serve() error {
 }
 
 func (s *MockSourceServer) Setup(Config) error {
+	if s.isSetupError {
+		return errors.New("test error")
+	}
 	return nil
 }
 
@@ -319,6 +323,7 @@ func TestSourceServer(t *testing.T) {
 type MockSinkServer struct {
 	isError      bool
 	incomingData *AppData
+	isSetupError bool
 }
 
 func (s *MockSinkServer) Serve() error {
@@ -337,6 +342,9 @@ func (s *MockSinkServer) SendTo(data *AppData) error {
 }
 
 func (s *MockSinkServer) Setup(Config) error {
+	if s.isSetupError {
+		return errors.New("test error")
+	}
 	return nil
 }
 
@@ -400,6 +408,7 @@ type MockPipeServer struct {
 	isAddError   bool
 	isServeError bool
 	Pushable     Pushable
+	isSetupError bool
 }
 
 func (s *MockPipeServer) AddPushable(pushable Pushable) error {
@@ -422,6 +431,9 @@ func (s *MockPipeServer) SendTo(data *AppData) error {
 }
 
 func (s *MockPipeServer) Setup(Config) error {
+	if s.isSetupError {
+		return errors.New("test error")
+	}
 	return nil
 }
 
