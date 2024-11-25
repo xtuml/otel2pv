@@ -1,0 +1,39 @@
+@startuml
+namespace Server {
+    interface Pushable {
+        +error SendTo(*AppData)
+    }
+    interface SourceServer {
+        +error AddPushable(Pushable)
+        +error Serve()
+        +error Setup(Config)
+    }
+    interface Config {
+        +error IngestConfig(map[string]any)
+    }
+}
+namespace Consumer {
+    struct RabbitMQConsumer {
+        -RabbitMQConsumerConfig config
+        -Pushable pushable
+        -RabbitMQDial dial
+        +error AddPushable(Pushable) 
+        +error Serve()
+        +error Setup(Config)
+    }
+    struct RabbitMQConsumerConfig {
+        +string Connection
+        +string Queue
+        +string ConsumerTag
+        +error IngestConfig(map[string]any)
+    }
+
+}
+
+Server.SourceServer <|-- Consumer.RabbitMQConsumer
+Server.Pushable *-- Consumer.RabbitMQConsumer
+
+
+Server.Config <|-- Consumer.RabbitMQConsumerConfig
+Consumer.RabbitMQConsumerConfig *-- Consumer.RabbitMQConsumer
+@enduml

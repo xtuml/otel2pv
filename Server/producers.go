@@ -2,10 +2,13 @@ package Server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
+
+	rabbitmq "github.com/rabbitmq/amqp091-go"
 )
 
 // HTTPProducerConfig is a struct that represents the configuration
@@ -274,10 +277,172 @@ func (r *RabbitMQProducerConfig) IngestConfig(config map[string]any) error {
 		}
 		r.Exchange = exchange
 	}
-	routingKey, ok := config["RoutingKey"].(string)
+	routingKey, ok := config["Queue"].(string)
 	if !ok {
-		return errors.New("invalid RoutingKey - must be a string and must be set")
+		return errors.New("invalid Queue - must be a string and must be set")
 	}
 	r.RoutingKey = routingKey
+	return nil
+}
+
+// RabbitMQProducerChannel is an interface that represents a RabbitMQ channel.
+type RabbitMQProducerChannel interface {
+	QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args rabbitmq.Table) (rabbitmq.Queue, error)
+	Publish(exchange, key string, mandatory, immediate bool, msg rabbitmq.Publishing) error
+	Close() error
+}
+
+// RabbitMQProducerConnection is an interface that represents a RabbitMQ connection.
+type RabbitMQProducerConnection interface {
+	Channel() (RabbitMQProducerChannel, error)
+	Close() error
+}
+
+// RabbitMQProducerDial is a function type that represents a dialer for RabbitMQ.
+type RabbitMQProducerDial func(url string) (RabbitMQProducerConnection, error)
+
+// RabbitMQProducerDialWrapper is a function that wraps the RabbitMQ dial function.
+// It takes in a string and returns a RabbitMQProducerConnection and an error.
+func RabbitMQProducerDialWrapper(url string) (RabbitMQProducerConnection, error) {
+	conn, err := rabbitmq.Dial(url)
+	if err != nil {
+		return nil, err
+	}
+	return &RabbitMQProducerConnectionWrapper{conn: conn}, nil
+}
+
+// RabbitMQConnectionWrapper is a struct that wraps a RabbitMQ connection.
+type RabbitMQProducerConnectionWrapper struct {
+	conn *rabbitmq.Connection
+}
+
+// Channel is a method that will return a RabbitMQ channel.
+func (r RabbitMQProducerConnectionWrapper) Channel() (RabbitMQProducerChannel, error) {
+	return r.conn.Channel()
+}
+
+// Close is a method that will close the RabbitMQ connection.
+func (r RabbitMQProducerConnectionWrapper) Close() error {
+	return r.conn.Close()
+}
+
+// RabbitMQProducer is a struct that represents a RabbitMQ producer.
+// It has the following fields:
+//
+// 1. config: *RabbitMQProducerConfig. A pointer to the configuration for the producer.
+//
+// 2. dial: RabbitMQProducerDial. The dialer for the RabbitMQ producer.
+//
+// 3. channel: RabbitMQProducerChannel. The channel for the RabbitMQ producer.
+//
+// 4. ctx: context.Context. The context for the RabbitMQ producer. Gives an appropriate
+// way to cancel the producer.
+//
+// 5. cancel: context.CancelCauseFunc. The cancel function for the RabbitMQ producer. Gives
+// an appropriate way to cancel the producer.
+type RabbitMQProducer struct {
+	config  *RabbitMQProducerConfig
+	dial    RabbitMQProducerDial
+	channel RabbitMQProducerChannel
+	ctx    context.Context
+	cancel context.CancelCauseFunc
+}
+
+// Setup is a method that will set up the RabbitMQProducer.
+// It takes in a ProducerConfig and returns an error if the setup fails.
+func (r *RabbitMQProducer) Setup(config Config) error {
+	c, ok := config.(*RabbitMQProducerConfig)
+	if !ok {
+		return errors.New("config is not a RabbitMQProducerConfig")
+	}
+	r.config = c
+	r.dial = RabbitMQProducerDialWrapper
+	ctx, cancel := context.WithCancelCause(context.Background())
+	r.ctx = ctx
+	r.cancel = cancel
+	return nil
+}
+
+// Serve is a method that will start the RabbitMQProducer.
+// It will return an error if the producer fails to send the data.
+func (r *RabbitMQProducer) Serve() error {
+	if r.config == nil {
+		return errors.New("config not set")
+	}
+	if r.dial == nil {
+		return errors.New("dial not set")
+	}
+	if r.ctx == nil {
+		return errors.New("context not set")
+	}
+	if r.cancel == nil {
+		return errors.New("context cancel not set")
+	}
+	conn, err := r.dial(r.config.Connection)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	r.channel, err = conn.Channel()
+	if err != nil {
+		return err
+	}
+	defer r.channel.Close()
+	<-r.ctx.Done()
+	if context.Cause(r.ctx) != nil {
+		if context.Cause(r.ctx).Error() == "context canceled" {
+			return nil
+		}
+		return context.Cause(r.ctx)
+	}
+	return nil
+}
+
+// SendTo is a method that will send data to the RabbitMQProducer to be sent
+// to the configured exchange and routing key.
+// It takes in an *AppData and returns an error if the data is invalid.
+func (r *RabbitMQProducer) SendTo(data *AppData) error {
+	if r.config == nil {
+		return errors.New("config not set")
+	}
+	if r.ctx == nil {
+		return errors.New("context not set")
+	}
+	if r.cancel == nil {
+		return errors.New("context cancel not set")
+	}
+	if r.channel == nil {
+		return errors.New("channel not set")
+	}
+
+	var err error
+	completeHandler, err := data.GetHandler()
+	if err != nil {
+		return err 
+	}
+	dataForHandler := data.GetData()
+	var errHandler error
+	defer func() {
+		if errHandler != nil {
+			r.cancel(errHandler)
+		}
+	}()
+	jsonData, err := json.Marshal(data.GetData())
+	if err != nil {
+		return err
+	}
+	err = r.channel.Publish(r.config.Exchange, r.config.RoutingKey, false, false, rabbitmq.Publishing{
+		ContentType: "application/json",
+		Body:        jsonData,
+	})
+	if err != nil {
+		r.cancel(err)
+		errHandler = completeHandler.Complete(dataForHandler, err)
+		return err
+	}
+	errHandler = completeHandler.Complete(dataForHandler, err)
+	if errHandler != nil {
+		return errHandler
+	}
 	return nil
 }

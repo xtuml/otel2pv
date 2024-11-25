@@ -1,11 +1,16 @@
 package Server
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 	"time"
+
+	rabbitmq "github.com/rabbitmq/amqp091-go"
 )
 
 // Tests for HTTPConfig
@@ -510,7 +515,7 @@ func TestRabbitMQProducerConfig(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
-		if err.Error() != "invalid RoutingKey - must be a string and must be set" {
+		if err.Error() != "invalid Queue - must be a string and must be set" {
 			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
 		}
 		// Test when Connection and Exchange are set correctly and RoutingKey is set but not a string
@@ -522,14 +527,14 @@ func TestRabbitMQProducerConfig(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
-		if err.Error() != "invalid RoutingKey - must be a string and must be set" {
+		if err.Error() != "invalid Queue - must be a string and must be set" {
 			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
 		}
 		// Test when everything is set correctly with default value for Exchange
 		config = &RabbitMQProducerConfig{}
 		err = config.IngestConfig(map[string]any{
 			"Connection": "test",
-			"RoutingKey": "test",
+			"Queue": "test",
 		})
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
@@ -548,7 +553,7 @@ func TestRabbitMQProducerConfig(t *testing.T) {
 		err = config.IngestConfig(map[string]any{
 			"Connection": "test",
 			"Exchange":   "test",
-			"RoutingKey": "test",
+			"Queue": "test",
 		})
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
@@ -563,4 +568,329 @@ func TestRabbitMQProducerConfig(t *testing.T) {
 			t.Errorf("Expected RoutingKey to be 'test', got '%v'", config.RoutingKey)
 		}
 	})
+}
+
+// MockRabbitMQProducerChannel is a mock implementation of the RabbitMQProducerChannel interface
+type MockRabbitMQProducerChannel struct {
+	isQueueDeclareError bool
+	isPublishError      bool
+	isCloseError        bool
+	incomingData        rabbitmq.Publishing
+}
+
+func (c *MockRabbitMQProducerChannel) QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args rabbitmq.Table) (rabbitmq.Queue, error) {
+	if c.isQueueDeclareError {
+		return rabbitmq.Queue{}, errors.New("error getting queue")
+	}
+	return rabbitmq.Queue{Name: "test"}, nil
+}
+
+func (c *MockRabbitMQProducerChannel) Publish(exchange, key string, mandatory, immediate bool, msg rabbitmq.Publishing) error {
+	if c.isPublishError {
+		return errors.New("error publishing message")
+	}
+	c.incomingData = msg
+	return nil
+}
+
+func (c *MockRabbitMQProducerChannel) Close() error {
+	if c.isCloseError {
+		return errors.New("test error")
+	}
+	return nil
+}
+
+// MockRabbitMQProducerConnection is a mock implementation of the RabbitMQProducerConnection interface
+type MockRabbitMQProducerConnection struct {
+	isChannelError bool
+	isCloseError   bool
+	channel        *MockRabbitMQProducerChannel
+}
+
+func (c *MockRabbitMQProducerConnection) Channel() (RabbitMQProducerChannel, error) {
+	if c.isChannelError {
+		return nil, errors.New("error getting channel")
+	}
+	if c.channel == nil {
+		return nil, errors.New("channel not set")
+	}
+	return c.channel, nil
+}
+
+func (c *MockRabbitMQProducerConnection) Close() error {
+	if c.isCloseError {
+		return errors.New("test error")
+	}
+	return nil
+}
+
+// MockRabbitMQProducerDialWrapper
+func MockRabbitMQProducerDialWrapper(url string, mockRabbitMQProducerConnection *MockRabbitMQProducerConnection, isError bool) func(string) (RabbitMQProducerConnection, error) {
+	return func(url string) (RabbitMQProducerConnection, error) {
+		if isError {
+			return nil, errors.New("error dialing")
+		}
+		return mockRabbitMQProducerConnection, nil
+	}
+}
+
+// Tests for RabbitMQProducer
+func TestRabbitMQProducer(t *testing.T) {
+	t.Run("ImplementsSinkServer", func(t *testing.T) {
+		producer := &RabbitMQProducer{}
+		_, ok := interface{}(producer).(SinkServer)
+		if !ok {
+			t.Errorf("Expected producer to implement SinkServer interface")
+		}
+	})
+	t.Run("Setup", func(t *testing.T) {
+		producer := &RabbitMQProducer{}
+		config := &RabbitMQProducerConfig{
+			Connection: "test",
+			RoutingKey: "test",
+		}
+
+		err := producer.Setup(config)
+		if err != nil {
+			t.Errorf("Expected no error from Setup, got %v", err)
+		}
+		if producer.config != config {
+			t.Errorf("Expected producer.config to be equal to config")
+		}
+		if producer.dial == nil {
+			t.Errorf("Expected dial to be set, got nil")
+		}
+		if producer.ctx == nil {
+			t.Errorf("Expected context to be set, got nil")
+		}
+		if producer.cancel == nil {
+			t.Errorf("Expected cancel to be set, got nil")
+		}
+		// Try with invalid config
+		err = producer.Setup(&MockConfig{})
+		if err.Error() != "config is not a RabbitMQProducerConfig" {
+			t.Errorf("Expected specified error from Setup, got '%v'", err)
+		}
+	})
+	t.Run("Serve", func(t *testing.T) {
+		producer := &RabbitMQProducer{}
+		err := producer.Serve()
+		// check error case when config is not set
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "config not set" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check error case when dial is not set
+		producer.config = &RabbitMQProducerConfig{}
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "dial not set" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check error case when ctx is not set
+		producer.dial = MockRabbitMQProducerDialWrapper("", &MockRabbitMQProducerConnection{}, false)
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "context not set" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check error case when cancel is not set
+		ctx, cancel := context.WithCancelCause(context.Background())
+		producer.ctx = ctx
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "context cancel not set" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check case when there is an error in dial
+		producer.cancel = cancel
+		producer.dial = MockRabbitMQProducerDialWrapper("", &MockRabbitMQProducerConnection{}, true)
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "error dialing" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check case when there is an error in getting channel
+		producer.dial = MockRabbitMQProducerDialWrapper("", &MockRabbitMQProducerConnection{isChannelError: true}, false)
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "error getting channel" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check case when the context is cancelled but with an error
+		producer.dial = MockRabbitMQProducerDialWrapper("", &MockRabbitMQProducerConnection{
+			channel: &MockRabbitMQProducerChannel{},
+		}, false)
+		producer.cancel(errors.New("check context with error"))
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "check context with error" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check case when everything is set correctly
+		channel := &MockRabbitMQProducerChannel{}
+		producer = &RabbitMQProducer{
+			config: &RabbitMQProducerConfig{
+				Connection: "test",
+				RoutingKey: "test",
+			},
+			dial: MockRabbitMQProducerDialWrapper("", &MockRabbitMQProducerConnection{
+				channel: channel,
+			}, false),
+		}
+
+		ctx, cancel = context.WithCancelCause(context.Background())
+		producer.ctx = ctx
+		producer.cancel = cancel
+		producer.cancel(nil)
+		err = producer.Serve()
+		if err != nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if producer.channel != channel {
+			t.Errorf("Expected producer.channel to be equal to channel")
+		}
+	})
+	t.Run("SendTo", func(t *testing.T) {
+		producer := &RabbitMQProducer{}
+		appData := &AppData{
+			data: map[string]any{"test": "data"},
+		}
+		// check error case when config is not set
+		err := producer.SendTo(appData)
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "config not set" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		// check error case when context is not set 
+		producer.config = &RabbitMQProducerConfig{}
+		err = producer.SendTo(appData)
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "context not set" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		// check error case when cancel not set
+		ctx, cancel := context.WithCancelCause(context.Background())
+		producer.ctx = ctx
+		err = producer.SendTo(appData)
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "context cancel not set" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		// check error case when channel is not set
+		producer.cancel = cancel
+		err = producer.SendTo(appData)
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "channel not set" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		// check error case when appData.GetHandler() returns an error
+		producer.channel = &MockRabbitMQProducerChannel{}
+		err = producer.SendTo(appData)
+		if err.Error() != "handler not set" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		// check error when the data cannot be marshalled to json
+		appData = &AppData{
+			data: make(chan int),
+			handler: &MockCompletionHandler{},
+		}
+		err = producer.SendTo(appData)
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "json: unsupported type: chan int" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		// check error case when Publish() returns an error
+		appData = &AppData{
+			data: map[string]any{"test": "data"},
+			handler: &MockCompletionHandler{},
+		}
+		producer.channel = &MockRabbitMQProducerChannel{isPublishError: true}
+		err = producer.SendTo(appData)
+		if err.Error() != "error publishing message" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		<-producer.ctx.Done()
+		if context.Cause(producer.ctx).Error() != "error publishing message" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", context.Cause(producer.ctx).Error())
+		}
+		// check case when everything is set correctly
+		ctx, cancel = context.WithCancelCause(context.Background())
+		producer = &RabbitMQProducer{
+			config: &RabbitMQProducerConfig{
+				Connection: "test",
+				RoutingKey: "test",
+			},
+			ctx:    ctx,
+			cancel: cancel,
+			channel: &MockRabbitMQProducerChannel{},
+		}
+		appData = &AppData{
+			data: map[string]any{"test": "data"},
+			handler: &MockCompletionHandler{},
+		}
+		err = producer.SendTo(appData)
+		if err != nil {
+			t.Fatalf("Expected no error from SendTo, got %v", err)
+		}
+		marshalledData, err := json.Marshal(appData.data)
+		if err != nil {
+			t.Fatalf("Expected no error from json.Marshal, got %v", err)
+		}
+		publishedData := rabbitmq.Publishing{
+			Body:    marshalledData,
+			ContentType: "application/json",
+		}
+		if !reflect.DeepEqual(producer.channel.(*MockRabbitMQProducerChannel).incomingData, publishedData) {
+			t.Fatalf("Expected incomingData to be '%v', got '%v'", publishedData, producer.channel.(*MockRabbitMQProducerChannel).incomingData)
+		}
+		if producer.ctx.Err() != nil {
+			t.Fatalf("Expected context to still be active, got %v", producer.ctx.Err())
+		}
+		// check case when there is an error in Complete method of the handler
+		appData = &AppData{
+			data: map[string]any{"test": "data"},
+			handler: &MockCompletionHandler{
+				isError: true,
+			},
+		}
+		err = producer.SendTo(appData)
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "error" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		<-producer.ctx.Done()
+		if context.Cause(producer.ctx).Error() != "error" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", context.Cause(producer.ctx).Error())
+		}
+	})
+
+
+
 }

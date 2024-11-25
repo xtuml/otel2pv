@@ -108,6 +108,10 @@ The class diagram for the JSON Extractor are as follows - split into the followi
 
 - Server
     ![Class Diagram](./class_diagram.svg)
+    - Consumer
+        ![Class Diagram](./class_diagram_Consumers.svg)
+    - Producer
+        ![Class Diagram](./class_diagram_Producers.svg)
 - JSON Extractor
     ![Class Diagram](./class_diagram_JQExtractor.svg)
 

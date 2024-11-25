@@ -42,20 +42,6 @@ namespace Server {
         +error Serve()
         +error Setup(Config)
     }
-    struct HTTPProducer {
-        -HTTPProducerConfig config
-        -http.Client httpClient
-        +error SendTo(*AppData)
-        +error Serve()
-        +error Setup(Config)
-    }
-    struct RabbitMQConsumer {
-        -RabbitMQConsumerConfig config
-        -Pushable pushable
-        +error AddPushable(Pushable) 
-        +error Serve()
-        +error Setup(Config)
-    }
     struct MapSinkServer {
         -map[string]SinkServer sinkServerMap
         +error SendTo(*AppData)
@@ -65,28 +51,10 @@ namespace Server {
     interface Config {
         +error IngestConfig(map[string]any)
     }
-    struct HTTPProducerConfig {
-        +string URL
-        +int NumRetries
-        +int Timeout
-        +error IngestConfig(map[string]any)
-    }
-    struct RabbitMQProducerConfig {
-        +string Connection
-        +string Exchange
-        +string RoutingKey
-        +error IngestConfig(map[string]any)
-    }
-    struct RabbitMQConsumerConfig {
-        +string Connection
-        +string Queue
-        +string ConsumerTag
-        +error IngestConfig(map[string]any)
-    }
     struct SelectProducerConfig {
         +string Map
         +string Type
-        +Config ProducerConfig
+        +Config Config
         +error IngestConfig(map[string]any)
     }
     struct SetupProducersConfig {
@@ -96,7 +64,7 @@ namespace Server {
     }
     struct SelectConsumerConfig {
         +string Type
-        +Config ConsumerConfig
+        +Config Config
         +error IngestConfig(map[string]any)
     }
     struct SetupConsumersConfig {
@@ -122,21 +90,14 @@ Server.Pushable <|-- Server.PipeServer
 Server.Pullable <|-- Server.PipeServer
 Server.Server <|-- Server.PipeServer
 
-Server.SinkServer <|-- Server.HTTPProducer
 Server.SinkServer *-- Server.MapSinkServer
 Server.SinkServer <|-- Server.MapSinkServer
-Server.SourceServer <|-- Server.RabbitMQConsumer
-Server.Pushable *-- Server.RabbitMQConsumer
-
 
 Server.Server *-- Server.Config
-Server.Config <|-- Server.HTTPProducerConfig
-Server.Config <|-- Server.RabbitMQProducerConfig
-Server.Config <|-- Server.RabbitMQConsumerConfig
+Server.Config *-- Server.SelectProducerConfig
+Server.Config *-- Server.SelectConsumerConfig
 Server.SetupProducersConfig *-- Server.AppConfig
 Server.SetupConsumersConfig *-- Server.AppConfig
 Server.SelectProducerConfig *-- Server.SetupProducersConfig
 Server.SelectConsumerConfig *-- Server.SetupConsumersConfig
-Server.HTTPProducerConfig *-- Server.HTTPProducer
-Server.RabbitMQConsumerConfig *-- Server.RabbitMQConsumer
 @enduml

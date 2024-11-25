@@ -345,8 +345,11 @@ func (c *MockRabbitMQConnection) Close() error {
 }
 
 // MockRabbitMQDialWrapper
-func MockRabbitMQDialWrapper(url string, mockRabbitMQConnection *MockRabbitMQConnection) func(string) (RabbitMQConnection, error) {
+func MockRabbitMQDialWrapper(url string, mockRabbitMQConnection *MockRabbitMQConnection, isError bool) func(string) (RabbitMQConnection, error) {
 	return func(url string) (RabbitMQConnection, error) {
+		if isError {
+			return nil, errors.New("dial error")
+		}
 		return mockRabbitMQConnection, nil
 	}
 }
@@ -605,8 +608,17 @@ func TestRabbitMQConsumer(t *testing.T) {
 		if err.Error() != "Dialer not set" {
 			t.Fatalf("Expected error message to be 'Dialer not set', got %v", err.Error())
 		}
+		// Test when the pushable, config, and dial are set but there is an error in dial
+		rc.dial = MockRabbitMQDialWrapper("", nil, true)
+		err = rc.Serve()
+		if err == nil {
+			t.Fatalf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "dial error" {
+			t.Fatalf("Expected error message to be 'dial error', got %v", err.Error())
+		}
 		// Test when the pushable, config, and dial are set but there is an error in Channel
-		rc.dial = MockRabbitMQDialWrapper("", &MockRabbitMQConnection{isChannelError: true})
+		rc.dial = MockRabbitMQDialWrapper("", &MockRabbitMQConnection{isChannelError: true}, false)
 		err = rc.Serve()
 		if err == nil {
 			t.Fatalf("Expected error from Serve, got nil")
@@ -615,7 +627,7 @@ func TestRabbitMQConsumer(t *testing.T) {
 			t.Fatalf("Expected error message to be 'error getting channel', got %v", err.Error())
 		}
 		// Test when the pushable, config, and dial are set but there is an error in QueueDeclare
-		rc.dial = MockRabbitMQDialWrapper("", &MockRabbitMQConnection{channel: &MockRabbitMQChannel{isQueueDeclareError: true}})
+		rc.dial = MockRabbitMQDialWrapper("", &MockRabbitMQConnection{channel: &MockRabbitMQChannel{isQueueDeclareError: true}}, false)
 		err = rc.Serve()
 		if err == nil {
 			t.Fatalf("Expected error from Serve, got nil")
@@ -624,7 +636,7 @@ func TestRabbitMQConsumer(t *testing.T) {
 			t.Fatalf("Expected error message to be 'error getting queue', got %v", err.Error())
 		}
 		// Test when the pushable, config, and dial are set but there is an error in Consume
-		rc.dial = MockRabbitMQDialWrapper("", &MockRabbitMQConnection{channel: &MockRabbitMQChannel{isConsumeError: true}})
+		rc.dial = MockRabbitMQDialWrapper("", &MockRabbitMQConnection{channel: &MockRabbitMQChannel{isConsumeError: true}}, false)
 		err = rc.Serve()
 		if err == nil {
 			t.Fatalf("Expected error from Serve, got nil")
@@ -643,7 +655,7 @@ func TestRabbitMQConsumer(t *testing.T) {
 				channel: channel,
 			},
 		}
-		rc.dial = MockRabbitMQDialWrapper("", mockRabbitMQConnection)
+		rc.dial = MockRabbitMQDialWrapper("", mockRabbitMQConnection, false)
 		rc.config = &RabbitMQConsumerConfig{}
 		mockAcknowledger := &MockAcknowledger{}
 		msg1 := rabbitmq.Delivery{
@@ -696,7 +708,7 @@ func TestRabbitMQConsumer(t *testing.T) {
 				channel: channel,
 			},
 		}
-		rc.dial = MockRabbitMQDialWrapper("", mockRabbitMQConnection)
+		rc.dial = MockRabbitMQDialWrapper("", mockRabbitMQConnection, false)
 		msg1 = rabbitmq.Delivery{
 			Body:         []byte(`{"key":"value1"}`),
 			Acknowledger: mockAcknowledger,
