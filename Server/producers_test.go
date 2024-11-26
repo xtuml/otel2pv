@@ -223,13 +223,6 @@ func TestHTTPProducer(t *testing.T) {
 
 // Tests for SelectProducerConfig
 func TestSelectProducerConfig(t *testing.T) {
-	t.Run("ImplementsConfig", func(t *testing.T) {
-		config := &SelectProducerConfig{}
-		_, ok := interface{}(config).(Config)
-		if !ok {
-			t.Errorf("Expected config to implement Config interface")
-		}
-	})
 	t.Run("IngestConfigHTTP", func(t *testing.T) {
 		config := &SelectProducerConfig{}
 		// test ingest with valid config and default for
@@ -239,7 +232,7 @@ func TestSelectProducerConfig(t *testing.T) {
 			"ProducerConfig": map[string]any{
 				"URL": "http://test.com",
 			},
-		})
+		}, PRODUCERCONFIGMAP)
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}
@@ -263,7 +256,7 @@ func TestSelectProducerConfig(t *testing.T) {
 			"ProducerConfig": map[string]any{
 				"URL": "http://test.com",
 			},
-		})
+		}, PRODUCERCONFIGMAP)
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}
@@ -286,7 +279,7 @@ func TestSelectProducerConfig(t *testing.T) {
 			"ProducerConfig": map[string]any{
 				"URL": 1,
 			},
-		})
+		}, PRODUCERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -301,7 +294,7 @@ func TestSelectProducerConfig(t *testing.T) {
 			"ProducerConfig": map[string]any{
 				"URL": "http://test.com",
 			},
-		})
+		}, PRODUCERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -314,7 +307,7 @@ func TestSelectProducerConfig(t *testing.T) {
 			"ProducerConfig": map[string]any{
 				"URL": "http://test.com",
 			},
-		})
+		}, PRODUCERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -327,7 +320,7 @@ func TestSelectProducerConfig(t *testing.T) {
 			"ProducerConfig": map[string]any{
 				"URL": "http://test.com",
 			},
-		})
+		}, PRODUCERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -337,7 +330,7 @@ func TestSelectProducerConfig(t *testing.T) {
 		// tests case where ProducerConfig is not set
 		err = config.IngestConfig(map[string]any{
 			"Type": "HTTP",
-		})
+		}, PRODUCERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -348,7 +341,7 @@ func TestSelectProducerConfig(t *testing.T) {
 		err = config.IngestConfig(map[string]any{
 			"Type":           "HTTP",
 			"ProducerConfig": "test",
-		})
+		}, PRODUCERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -360,13 +353,6 @@ func TestSelectProducerConfig(t *testing.T) {
 
 // Tests for SetupProducersConfig
 func TestSetupProducersConfig(t *testing.T) {
-	t.Run("ImplementsConfig", func(t *testing.T) {
-		config := &SetupProducersConfig{}
-		_, ok := interface{}(config).(Config)
-		if !ok {
-			t.Errorf("Expected config to implement Config interface")
-		}
-	})
 	t.Run("IngestConfig", func(t *testing.T) {
 		config := &SetupProducersConfig{}
 		// test ingest with valid config but default for IsMapping
@@ -385,7 +371,7 @@ func TestSetupProducersConfig(t *testing.T) {
 					},
 				},
 			},
-		})
+		}, PRODUCERCONFIGMAP)
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}
@@ -406,7 +392,7 @@ func TestSetupProducersConfig(t *testing.T) {
 					},
 				},
 			},
-		})
+		}, PRODUCERCONFIGMAP)
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}
@@ -417,7 +403,7 @@ func TestSetupProducersConfig(t *testing.T) {
 			t.Errorf("Expected IsMapping to be true, got false")
 		}
 		// test ingest when ProducerConfigs is not set
-		err = config.IngestConfig(map[string]any{})
+		err = config.IngestConfig(map[string]any{}, PRODUCERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -427,7 +413,7 @@ func TestSetupProducersConfig(t *testing.T) {
 		// test ingest when ProducerConfigs is not a slice of map[string]any
 		err = config.IngestConfig(map[string]any{
 			"ProducerConfigs": "test",
-		})
+		}, PRODUCERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -437,7 +423,7 @@ func TestSetupProducersConfig(t *testing.T) {
 		// test ingest when ProducerConfigs is an empty slice
 		err = config.IngestConfig(map[string]any{
 			"ProducerConfigs": []map[string]any{},
-		})
+		}, PRODUCERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -460,7 +446,7 @@ func TestSetupProducersConfig(t *testing.T) {
 					},
 				},
 			},
-		})
+		}, PRODUCERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}

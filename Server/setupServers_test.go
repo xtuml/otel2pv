@@ -7,18 +7,10 @@ import (
 
 // TestAppConfig tests the IngestConfig method of the AppConfig struct
 func TestAppConfig(t *testing.T) {
-	t.Run("ImplementsConfig", func(t *testing.T) {
-		ac := &AppConfig{}
-		// Type assertion to check if AppConfig implements Config
-		_, ok := interface{}(ac).(Config)
-		if !ok {
-			t.Errorf("Expected AppConfig to implement Config interface")
-		}
-	})
 	t.Run("IngestConfig", func(t *testing.T) {
 		appConfig := AppConfig{}
 		// Test when the PipeServerConfig is not set
-		err := appConfig.IngestConfig(map[string]interface{}{})
+		err := appConfig.IngestConfig(map[string]interface{}{}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -27,7 +19,7 @@ func TestAppConfig(t *testing.T) {
 		}
 		// Test when the PipeServerConfig is set but the AppConfig map field is not a map
 		appConfig.PipeServerConfig = &MockConfig{}
-		err = appConfig.IngestConfig(map[string]interface{}{"AppConfig": 1})
+		err = appConfig.IngestConfig(map[string]interface{}{"AppConfig": 1}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -36,14 +28,14 @@ func TestAppConfig(t *testing.T) {
 		}
 		// Test when the PipeServerConfig is set and the AppConfig map field is a map but there is an error in the IngestConfig method of the PipeServerConfig
 		appConfig.PipeServerConfig = &MockConfig{isError: true}
-		err = appConfig.IngestConfig(map[string]interface{}{"AppConfig": map[string]interface{}{}})
+		err = appConfig.IngestConfig(map[string]interface{}{"AppConfig": map[string]interface{}{}}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
 		// Test when the PipeServerConfig is set and the AppConfig map field is a map and there is no error in the IngestConfig method of the PipeServerConfig
 		// but the ProducersSetup field is not set correctly
 		appConfig.PipeServerConfig = &MockConfig{}
-		err = appConfig.IngestConfig(map[string]interface{}{"AppConfig": map[string]interface{}{}, "ProducersSetup": 1})
+		err = appConfig.IngestConfig(map[string]interface{}{"AppConfig": map[string]interface{}{}, "ProducersSetup": 1}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -52,7 +44,10 @@ func TestAppConfig(t *testing.T) {
 		}
 		// Test when the PipeServerConfig is set and the AppConfig map field is a map and there is no error in the IngestConfig method of the PipeServerConfig
 		// and the ProducersSetup field is set correctly but there is an error in the IngestConfig method of the SetupProducersConfig
-		err = appConfig.IngestConfig(map[string]interface{}{"AppConfig": map[string]interface{}{}, "ProducersSetup": map[string]interface{}{}})
+		err = appConfig.IngestConfig(
+			map[string]interface{}{"AppConfig": map[string]interface{}{},
+			"ProducersSetup": map[string]interface{}{}}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP,
+		)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -65,7 +60,7 @@ func TestAppConfig(t *testing.T) {
 				"ProducerConfigs": []map[string]interface{}{
 					{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
 				}},
-			"ConsumersSetup": 1})
+			"ConsumersSetup": 1}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -81,7 +76,7 @@ func TestAppConfig(t *testing.T) {
 				"ProducerConfigs": []map[string]interface{}{
 					{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
 				}},
-			"ConsumersSetup": map[string]interface{}{}})
+			"ConsumersSetup": map[string]interface{}{}}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -101,7 +96,7 @@ func TestAppConfig(t *testing.T) {
 						"Connection": "amqp://localhost:5672",
 						"Queue":      "test",
 					}},
-				}}})
+				}}}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP)
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}
@@ -495,5 +490,88 @@ func TestSetupApp(t *testing.T) {
 	}
 	if sinkServer != MockSinkServer {
 		t.Errorf("Expected sinkServer to be the same as MockSinkServer")
+	}
+}
+
+// Test SetupAndRunApp
+func TestSetupAndRunApp(t *testing.T) {
+	// Tests the case where the appConfig IngestConfig method returns an error
+	config := map[string]any{}
+	err := SetupAndRunApp(
+		config, &MockPipeServer{}, &MockConfig{},
+		map[string]func() Config{}, map[string]func() Config{},
+		map[string]func() SinkServer{}, map[string]func() SourceServer{},
+	)
+	if err == nil {
+		t.Errorf("Expected error from SetupAndRunApp, got nil")
+	}
+	if err.Error() != "AppConfig not set correctly - must map fields to values" {
+		t.Errorf("Expected error message to be 'AppConfig not set correctly - must map fields to values', got %v", err.Error())
+	}
+	// tests the case where the SetupApp method returns an error
+	config = map[string]any{
+		"AppConfig": map[string]any{},
+		"ProducersSetup": map[string]interface{}{
+				"ProducerConfigs": []map[string]interface{}{
+					{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
+				}},
+		"ConsumersSetup": map[string]interface{}{
+			"ConsumerConfigs": []map[string]interface{}{
+				{"Type": "RabbitMQ", "ConsumerConfig": map[string]interface{}{
+					"Connection": "amqp://localhost:5672",
+					"Queue":      "test",
+				}},
+		}},
+	}
+	err = SetupAndRunApp(
+		config, &MockPipeServer{isSetupError: true}, &MockConfig{},
+		PRODUCERCONFIGMAP, CONSUMERCONFIGMAP,
+		map[string]func() SinkServer{}, map[string]func() SourceServer{},
+	)
+	if err == nil {
+		t.Errorf("Expected error from SetupAndRunApp, got nil")
+	}
+	if err.Error() != "test error" {
+		t.Errorf("Expected error message to be 'test error', got %v", err.Error())
+	}
+	// Tests the case when ServersRun returns an error
+	err = SetupAndRunApp(
+		config, &MockPipeServer{isAddError: true}, &MockConfig{},
+		PRODUCERCONFIGMAP, CONSUMERCONFIGMAP,
+		PRODUCERMAP, CONSUMERMAP,
+	)
+	if err == nil {
+		t.Errorf("Expected error from SetupAndRunApp, got nil")
+	}
+	if err.Error() != "test error" {
+		t.Errorf("Expected error message to be 'test error', got %v", err.Error())
+	}
+	// test case when everything runs correctly
+	config = map[string]any{
+		"AppConfig": map[string]any{},
+		"ProducersSetup": map[string]interface{}{
+			"ProducerConfigs": []map[string]interface{}{
+				{"Type": "MockSink", "ProducerConfig": map[string]interface{}{}},
+			}},
+		"ConsumersSetup": map[string]interface{}{
+			"ConsumerConfigs": []map[string]interface{}{
+				{"Type": "MockSource", "ConsumerConfig": map[string]interface{}{}},
+			}},
+	}
+	err = SetupAndRunApp(
+		config, &MockPipeServer{}, &MockConfig{},
+		map[string]func() Config{
+			"MockSink": func() Config { return &MockConfig{} },
+		}, map[string]func() Config{
+			"MockSource": func() Config { return &MockConfig{} },
+		},
+		map[string]func() SinkServer{
+			"MockSink": func() SinkServer { return &MockSinkServer{} },
+		}, map[string]func() SourceServer{
+			"MockSource": func() SourceServer { return &MockSourceServer{} },
+		},
+	)
+	if err != nil {
+		t.Errorf("Expected no error from SetupAndRunApp, got %v", err)
 	}
 }

@@ -29,8 +29,14 @@ type HTTPProducerConfig struct {
 
 // IngestConfig is a method that will ingest the configuration
 // for the HTTPProducer.
-// It takes in a map[string]any and returns an error if the
-// configuration is invalid.
+//
+// Its args are:
+//
+// 1. config: map[string]any. The raw configuration for the producer.
+//
+// It returns:
+//
+// 1. error. An error if the process fails.
 func (h *HTTPProducerConfig) IngestConfig(config map[string]any) error {
 	url, ok := config["URL"].(string)
 	if !ok {
@@ -72,7 +78,14 @@ type HTTPProducer struct {
 }
 
 // Setup is a method that will set up the HTTPProducer.
-// It takes in a ProducerConfig and returns an error if the setup fails.
+//
+// Its args are:
+//
+// 1. config: Config. The configuration for the HTTPProducer.
+//
+// It returns:
+//
+// 1. error. An error if the process fails.
 func (h *HTTPProducer) Setup(config Config) error {
 	c, ok := config.(*HTTPProducerConfig)
 	if !ok {
@@ -168,14 +181,18 @@ type SelectProducerConfig struct {
 
 // IngestConfig is a method that will ingest the configuration for the
 // SelectProducerConfig.
-// It takes in a map[string]any and returns an error if the configuration is invalid.
-func (s *SelectProducerConfig) IngestConfig(config map[string]any) error {
+// Its args are:
+// 1. config: map[string]any. The raw configuration for the producer.
+// 2. configMap: map[string]func() Config. A map that maps a string to a func that produces Config.
+// It returns:
+// 1. error. An error if the process fails.
+func (s *SelectProducerConfig) IngestConfig(config map[string]any, configMap map[string]func() Config) error {
 	producerType, ok := config["Type"].(string)
 	if !ok {
 		return errors.New("invalid producer type")
 	}
 	s.Type = producerType
-	configMap, ok := PRODUCERCONFIGMAP[s.Type]
+	configMapFunc, ok := configMap[s.Type]
 	if !ok {
 		return errors.New("invalid producer type: " + s.Type)
 	}
@@ -183,7 +200,7 @@ func (s *SelectProducerConfig) IngestConfig(config map[string]any) error {
 	if !ok {
 		return errors.New("Producer config not set correctly")
 	}
-	producerConfigStruct := configMap()
+	producerConfigStruct := configMapFunc()
 
 	err := producerConfigStruct.IngestConfig(producerConfig)
 	if err != nil {
@@ -212,8 +229,12 @@ type SetupProducersConfig struct {
 
 // IngestConfig is a method that will ingest the configuration for the
 // SetupProducersConfig.
-// It takes in a map[string]any and returns an error if the configuration is invalid.
-func (s *SetupProducersConfig) IngestConfig(config map[string]any) error {
+// Its args are:
+// 1. config: map[string]any. The raw configuration for the producers.
+// 2. configMap: map[string]func() Config. A map that maps a string to a func that produces Config.
+// It returns:
+// 1. error. An error if the process fails.
+func (s *SetupProducersConfig) IngestConfig(config map[string]any, configMap map[string]func() Config) error {
 	isMapping, ok := config["IsMapping"]
 	if ok {
 		isMapping, ok := isMapping.(bool)
@@ -232,7 +253,7 @@ func (s *SetupProducersConfig) IngestConfig(config map[string]any) error {
 	s.SelectProducerConfigs = []*SelectProducerConfig{}
 	for _, selectProducerConfig := range selectProducerConfigs {
 		selectProducerConfigStruct := &SelectProducerConfig{}
-		err := selectProducerConfigStruct.IngestConfig(selectProducerConfig)
+		err := selectProducerConfigStruct.IngestConfig(selectProducerConfig, configMap)
 		if err != nil {
 			return err
 		}
@@ -259,8 +280,14 @@ type RabbitMQProducerConfig struct {
 
 // IngestConfig is a method that will ingest the configuration
 // for the RabbitMQProducerConfig.
-// It takes in a map[string]any and returns an error if the configuration
-// is invalid.
+//
+// Its args are:
+//
+// 1. config: map[string]any. The raw configuration for the RabbitMQ producer.
+//
+// It returns:
+//
+// 1. error. An error if the process fails.
 func (r *RabbitMQProducerConfig) IngestConfig(config map[string]any) error {
 	connection, ok := config["Connection"].(string)
 	if !ok {
@@ -349,7 +376,14 @@ type RabbitMQProducer struct {
 }
 
 // Setup is a method that will set up the RabbitMQProducer.
-// It takes in a ProducerConfig and returns an error if the setup fails.
+//
+// Its args are:
+//
+// 1. config: Config. The configuration for the RabbitMQ producer.
+//
+// It returns:
+//
+// 1. error. An error if the process fails.
 func (r *RabbitMQProducer) Setup(config Config) error {
 	c, ok := config.(*RabbitMQProducerConfig)
 	if !ok {
@@ -364,7 +398,10 @@ func (r *RabbitMQProducer) Setup(config Config) error {
 }
 
 // Serve is a method that will start the RabbitMQProducer.
-// It will return an error if the producer fails to send the data.
+//
+// It returns:
+//
+// 1. error. An error if the producer fails to send the data.
 func (r *RabbitMQProducer) Serve() error {
 	if r.config == nil {
 		return errors.New("config not set")
@@ -400,7 +437,14 @@ func (r *RabbitMQProducer) Serve() error {
 
 // SendTo is a method that will send data to the RabbitMQProducer to be sent
 // to the configured exchange and routing key.
-// It takes in an *AppData and returns an error if the data is invalid.
+//
+// Its args are:
+//
+// 1. data: *AppData. The data to send.
+//
+// It returns:
+//
+// 1. error. An error if the data is invalid.
 func (r *RabbitMQProducer) SendTo(data *AppData) error {
 	if r.config == nil {
 		return errors.New("config not set")

@@ -13,21 +13,13 @@ import (
 
 // Tests for SelectConsumerConfig
 func TestSelectConsumerConfig(t *testing.T) {
-	t.Run("ImplementsConfig", func(t *testing.T) {
-		scc := &SelectConsumerConfig{}
-		// Type assertion to check if SelectConsumerConfig implements Config
-		_, ok := interface{}(scc).(Config)
-		if !ok {
-			t.Errorf("Expected SelectConsumerConfig to implement Config interface")
-		}
-	})
 	t.Run("IngestConfig", func(t *testing.T) {
 		scc := &SelectConsumerConfig{}
 		// Tests valid case
 		err := scc.IngestConfig(map[string]any{"Type": "RabbitMQ", "ConsumerConfig": map[string]any{
 			"Connection": "test",
 			"Queue":      "test",
-		}})
+		}}, CONSUMERCONFIGMAP)
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}
@@ -44,7 +36,7 @@ func TestSelectConsumerConfig(t *testing.T) {
 	t.Run("IngestConfigInvalid", func(t *testing.T) {
 		scc := &SelectConsumerConfig{}
 		// Test when Type is not set
-		err := scc.IngestConfig(map[string]any{})
+		err := scc.IngestConfig(map[string]any{}, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -52,7 +44,7 @@ func TestSelectConsumerConfig(t *testing.T) {
 			t.Errorf("Expected error message to be 'invalid Type - must be a string and must be set', got %v", err.Error())
 		}
 		// Test when Type is not a string
-		err = scc.IngestConfig(map[string]any{"Type": 1})
+		err = scc.IngestConfig(map[string]any{"Type": 1}, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -60,7 +52,7 @@ func TestSelectConsumerConfig(t *testing.T) {
 			t.Errorf("Expected error message to be 'invalid Type - must be a string and must be set', got %v", err.Error())
 		}
 		// Tests when Type is not in the CONSUMERCONFIGMAP
-		err = scc.IngestConfig(map[string]any{"Type": "test"})
+		err = scc.IngestConfig(map[string]any{"Type": "test"}, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -68,7 +60,7 @@ func TestSelectConsumerConfig(t *testing.T) {
 			t.Errorf("Expected error message to be 'invalid consumer type: test', got %v", err.Error())
 		}
 		// Test when ConsumerConfig is not set
-		err = scc.IngestConfig(map[string]any{"Type": "RabbitMQ"})
+		err = scc.IngestConfig(map[string]any{"Type": "RabbitMQ"}, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -76,7 +68,7 @@ func TestSelectConsumerConfig(t *testing.T) {
 			t.Errorf("Expected error message to be 'Consumer config not set correctly', got %v", err.Error())
 		}
 		// Test when ConsumerConfig is not a map
-		err = scc.IngestConfig(map[string]any{"Type": "RabbitMQ", "ConsumerConfig": "test"})
+		err = scc.IngestConfig(map[string]any{"Type": "RabbitMQ", "ConsumerConfig": "test"}, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -84,7 +76,7 @@ func TestSelectConsumerConfig(t *testing.T) {
 			t.Errorf("Expected error message to be 'Consumer config not set correctly', got %v", err.Error())
 		}
 		// Test when ConsumerConfig returns an error
-		err = scc.IngestConfig(map[string]any{"Type": "RabbitMQ", "ConsumerConfig": map[string]any{}})
+		err = scc.IngestConfig(map[string]any{"Type": "RabbitMQ", "ConsumerConfig": map[string]any{}}, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -96,18 +88,10 @@ func TestSelectConsumerConfig(t *testing.T) {
 
 // Tests for SetupConsumersConfig
 func TestSetupConsumersConfig(t *testing.T) {
-	t.Run("ImplementsConfig", func(t *testing.T) {
-		scc := &SetupConsumersConfig{}
-		// Type assertion to check if SetupConsumersConfig implements Config
-		_, ok := interface{}(scc).(Config)
-		if !ok {
-			t.Errorf("Expected SetupConsumersConfig to implement Config interface")
-		}
-	})
 	t.Run("IngestConfig", func(t *testing.T) {
 		scc := &SetupConsumersConfig{}
 		// Test when SelectConsumerConfigs is not set
-		err := scc.IngestConfig(map[string]any{})
+		err := scc.IngestConfig(map[string]any{}, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -115,7 +99,7 @@ func TestSetupConsumersConfig(t *testing.T) {
 			t.Errorf("Expected error message to be 'ConsumerConfigs not set correctly', got %v", err.Error())
 		}
 		// Test when SelectConsumerConfigs is not a slice
-		err = scc.IngestConfig(map[string]any{"ConsumerConfigs": "test"})
+		err = scc.IngestConfig(map[string]any{"ConsumerConfigs": "test"}, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -123,7 +107,7 @@ func TestSetupConsumersConfig(t *testing.T) {
 			t.Errorf("Expected error message to be 'ConsumerConfigs not set correctly', got %v", err.Error())
 		}
 		// Test when SelectConsumerConfigs is an empty slice
-		err = scc.IngestConfig(map[string]any{"ConsumerConfigs": []map[string]any{}})
+		err = scc.IngestConfig(map[string]any{"ConsumerConfigs": []map[string]any{}}, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -137,7 +121,7 @@ func TestSetupConsumersConfig(t *testing.T) {
 				"Queue":      "test",
 			}},
 			{},
-		}})
+		}}, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got ")
 		}
@@ -151,7 +135,7 @@ func TestSetupConsumersConfig(t *testing.T) {
 				"Connection": "test",
 				"Queue":      "test",
 			}},
-		}})
+		}}, CONSUMERCONFIGMAP)
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}

@@ -32,19 +32,26 @@ type SelectConsumerConfig struct {
 
 // IngestConfig is a method that will ingest the configuration
 // for the SelectConsumerConfig.
-// It takes in a map[string]any and returns an error if the
-// configuration is invalid.
-func (s *SelectConsumerConfig) IngestConfig(config map[string]any) error {
+// Its args are:
+//
+// 1. config: map[string]any. The raw configuration for the consumer.
+//
+// 2. configMap: map[string]func() Config. A map that maps a string to a func that produces Config.
+//
+// It returns:\
+//
+// 1. error. An error if the process fails.
+func (s *SelectConsumerConfig) IngestConfig(config map[string]any, configMap map[string]func() Config) error {
 	consumerType, ok := config["Type"].(string)
 	if !ok {
 		return errors.New("invalid Type - must be a string and must be set")
 	}
-	configMap, ok := CONSUMERCONFIGMAP[consumerType]
+	configMapFunc, ok := configMap[consumerType]
 	if !ok {
 		return errors.New("invalid consumer type: " + consumerType)
 	}
 	s.Type = consumerType
-	consumerConfigStruct := configMap()
+	consumerConfigStruct := configMapFunc()
 	consumerConfig, ok := config["ConsumerConfig"].(map[string]any)
 	if !ok {
 		return errors.New("Consumer config not set correctly")
@@ -68,9 +75,17 @@ type SetupConsumersConfig struct {
 
 // IngestConfig is a method that will ingest the configuration
 // for the SetupConsumersConfig.
-// It takes in a map[string]any and returns an error if the configuration
-// is invalid.
-func (s *SetupConsumersConfig) IngestConfig(config map[string]any) error {
+//
+// Its args are:
+//
+// 1. config: map[string]any. The raw configuration for the consumers.
+//
+// 2. configMap: map[string]func() Config. A map that maps a string to a func that produces Config.
+//
+// It returns:
+//
+// 1. error. An error if the process fails.
+func (s *SetupConsumersConfig) IngestConfig(config map[string]any, configMap map[string]func() Config) error {
 	selectConsumerConfigs, ok := config["ConsumerConfigs"].([]map[string]any)
 	if !ok {
 		return errors.New("ConsumerConfigs not set correctly")
@@ -81,7 +96,7 @@ func (s *SetupConsumersConfig) IngestConfig(config map[string]any) error {
 	s.SelectConsumerConfigs = []*SelectConsumerConfig{}
 	for _, selectConsumerConfig := range selectConsumerConfigs {
 		selectConsumerConfigStruct := &SelectConsumerConfig{}
-		err := selectConsumerConfigStruct.IngestConfig(selectConsumerConfig)
+		err := selectConsumerConfigStruct.IngestConfig(selectConsumerConfig, configMap)
 		if err != nil {
 			return err
 		}
@@ -107,8 +122,14 @@ type RabbitMQConsumerConfig struct {
 
 // IngestConfig is a method that will ingest the configuration
 // for the RabbitMQConsumerConfig.
-// It takes in a map[string]any and returns an error if the configuration
-// is invalid.
+//
+// Its args are:
+//
+// 1. config: map[string]any. The raw configuration for the RabbitMQ consumer.
+//
+// It returns:
+//
+// 1. error. An error if the process fails.
 func (r *RabbitMQConsumerConfig) IngestConfig(config map[string]any) error {
 	connection, ok := config["Connection"].(string)
 	if !ok {
@@ -142,6 +163,16 @@ type RabbitMQCompletionHandler struct {
 }
 
 // Complete is a method that will complete the message.
+//
+// Its args are:
+//
+// 1. data: any. The data to complete the message with.
+//
+// 2. err: error. An error to provide the completion process with (if any).
+//
+// It returns:
+//
+// 1. error. An error if the process fails.
 func (r *RabbitMQCompletionHandler) Complete(data any, err error) error {
 	if r.message == nil {
 		return errors.New("message not set")
@@ -214,7 +245,14 @@ type RabbitMQConsumer struct {
 }
 
 // Setup is a method that will set up the RabbitMQ consumer.
-// It takes in a Config and returns an error if the setup fails.
+//
+// Its args are:
+//
+// 1. config: Config. The configuration for the RabbitMQ consumer.
+//
+// It returns:
+//
+// 1. error. An error if the process fails.
 func (r *RabbitMQConsumer) Setup(config Config) error {
 	c, ok := config.(*RabbitMQConsumerConfig)
 	if !ok {
@@ -226,7 +264,10 @@ func (r *RabbitMQConsumer) Setup(config Config) error {
 }
 
 // AddPushable is a method that will add a Pushable to the RabbitMQ consumer.
-// It takes in a Pushable and returns an error if the Pushable is already set.
+// Its args are:
+// 1. p: Pushable. The Pushable to add.
+// It returns:
+// 1. error. An error if the process fails.
 func (r *RabbitMQConsumer) AddPushable(p Pushable) error {
 	if r.pushable != nil {
 		return errors.New("Pushable already set")
@@ -236,8 +277,16 @@ func (r *RabbitMQConsumer) AddPushable(p Pushable) error {
 }
 
 // sendRabbitMQMessageDataToPushable is a function that sends RabbitMQ message data to a Pushable.
-// It takes in a *rabbitmq.Delivery and a Pushable and returns an error if the conversion to
-// AppData fails or if the Pushable fails to send the data.
+//
+// Its args are:
+//
+// 1. msg: *rabbitmq.Delivery. The message to send.
+//
+// 2. pushable: Pushable. The Pushable to send to.
+//
+// It returns:
+//
+// 1. error. An error if the process fails.
 func sendRabbitMQMessageDataToPushable(msg *rabbitmq.Delivery, pushable Pushable) error {
 	completionHandler := &RabbitMQCompletionHandler{message: msg}
 
@@ -253,6 +302,16 @@ func sendRabbitMQMessageDataToPushable(msg *rabbitmq.Delivery, pushable Pushable
 }
 
 // sendChannelOfRabbitMQDeliveryToPushable is a function that sends a channel of RabbitMQ deliveries to a Pushable.
+//
+// Its args are:
+//
+// 1. channel: <-chan rabbitmq.Delivery. The channel of RabbitMQ deliveries to send.
+//
+// 2. pushable: Pushable. The Pushable to send to.
+//
+// It returns:
+//
+// 1. error. An error if the process fails.
 func sendChannelOfRabbitMQDeliveryToPushable(channel <-chan rabbitmq.Delivery, pushable Pushable) error {
 	wg := &sync.WaitGroup{}
 	ctx, cancel := context.WithCancelCause(context.Background())
@@ -277,6 +336,10 @@ func sendChannelOfRabbitMQDeliveryToPushable(channel <-chan rabbitmq.Delivery, p
 }
 
 // Serve is a method that will start the RabbitMQ consumer and begin consuming messages.
+//
+// It returns:
+//
+// 1. error. An error if the process fails.
 func (r *RabbitMQConsumer) Serve() error {
 	if r.pushable == nil {
 		return errors.New("Pushable not set")

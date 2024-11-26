@@ -10,9 +10,22 @@ type AppConfig struct {
 
 // IngestConfig is a method that will ingest the configuration
 // for the AppConfig.
-// It takes in a map[string]any and returns an error if the
-// configuration is invalid.
-func (a *AppConfig) IngestConfig(config map[string]any) error {
+// Its args are:
+//
+// 1. config: map[string]any. The raw configuration for the application.
+//
+// 2. producerConfigMap: map[string]func() Config. A map that maps a string to a func that produces Config.
+//
+// 3. consumerConfigMap: map[string]func() Config. A map that maps a string to a func that produces Config.
+//
+// It returns:
+//
+// 1. error. An error if the process fails
+func (a *AppConfig) IngestConfig(
+	config map[string]any,
+	producerConfigMap map[string]func() Config,
+	consumerConfigMap map[string]func() Config,
+) error {
 	// make sure PipeServerConfig is already set
 	if a.PipeServerConfig == nil {
 		return errors.New("PipeServerConfig must be set before calling IngestConfig")
@@ -31,7 +44,7 @@ func (a *AppConfig) IngestConfig(config map[string]any) error {
 		return errors.New("ProducersSetup field not set correctly - must map fields to values")
 	}
 	producersConfigStruct := SetupProducersConfig{}
-	err = producersConfigStruct.IngestConfig(producersConfig)
+	err = producersConfigStruct.IngestConfig(producersConfig, producerConfigMap)
 	if err != nil {
 		return errors.New("ProducersSetup subfields incorrect:\n" + err.Error())
 	}
@@ -42,7 +55,7 @@ func (a *AppConfig) IngestConfig(config map[string]any) error {
 		return errors.New("ConsumersSetup field not set correctly - must map fields to values")
 	}
 	consumersConfigStruct := SetupConsumersConfig{}
-	err = consumersConfigStruct.IngestConfig(consumersConfig)
+	err = consumersConfigStruct.IngestConfig(consumersConfig, consumerConfigMap)
 	if err != nil {
 		return errors.New("ConsumersSetup subfields incorrect:\n" + err.Error())
 	}
@@ -50,8 +63,26 @@ func (a *AppConfig) IngestConfig(config map[string]any) error {
 	return nil
 }
 
-// setupProducerWithConfigTypeAndMap
-func setupProducerWithTypeConfigAndMap(config Config, configType string, serverMap map[string]func() SinkServer) (SinkServer, error) {
+// setupProducerWithConfigTypeAndMap is a function that will setup the producer server.
+//
+// It takes as args:
+//
+// 1. config: Config. The configuration for the producer.
+//
+// 2. configType: string. The type of the producer.
+//
+// 3. serverMap: map[string]func() SinkServer. A map that maps a string to a func that produces SinkServer.
+//
+// It returns:
+//
+// 1. SinkServer. The server that will handle the outgoing data.
+//
+// 2. error. An error if the setup fails.
+func setupProducerWithTypeConfigAndMap(
+	config Config,
+	configType string,
+	serverMap map[string]func() SinkServer,
+) (SinkServer, error) {
 	serverGetFunc, ok := serverMap[configType]
 	if !ok {
 		return nil, errors.New("Producer type not found: " + configType)
@@ -64,8 +95,26 @@ func setupProducerWithTypeConfigAndMap(config Config, configType string, serverM
 	return server, nil
 }
 
-// setupConsumerWithConfigTypeAndMap
-func setupConsumerWithTypeConfigAndMap(config Config, configType string, serverMap map[string]func() SourceServer) (SourceServer, error) {
+// setupConsumerWithConfigTypeAndMap is a function that will setup the consumer server.
+//
+// It takes as args:
+//
+// 1. config: Config. The configuration for the consumer.
+//
+// 2. configType: string. The type of the consumer.
+//
+// 3. serverMap: map[string]func() SourceServer. A map that maps a string to a func that produces SourceServer.
+//
+// It returns:
+//
+// 1. SourceServer. The server that will handle the incoming data.
+//
+// 2. error. An error if the setup fails.
+func setupConsumerWithTypeConfigAndMap(
+	config Config,
+	configType string,
+	serverMap map[string]func() SourceServer,
+) (SourceServer, error) {
 	serverGetFunc, ok := serverMap[configType]
 	if !ok {
 		return nil, errors.New("Consumer type not found: " + configType)
@@ -79,10 +128,22 @@ func setupConsumerWithTypeConfigAndMap(config Config, configType string, serverM
 }
 
 // setupProducerServer is a function that will setup the producer server.
+//
 // It takes as args:
+//
 // 1. producersConfig: SetupProducersConfig. The configuration for the producers.
+//
 // 2. producerMap: map[string]func() SinkServer. A map that maps a string to a func that produces SinkServer.
-func setupProducerServer(producersConfig SetupProducersConfig, producerMap map[string]func() SinkServer) (SinkServer, error) {
+//
+// It returns:
+//
+// 1. SinkServer. The server that will handle the outgoing data.
+//
+// 2. error. An error if the setup fails.
+func setupProducerServer(
+	producersConfig SetupProducersConfig,
+	producerMap map[string]func() SinkServer,
+) (SinkServer, error) {
 	var producerServer SinkServer
 	var err error
 	if producersConfig.IsMapping {
@@ -129,10 +190,22 @@ func setupProducerServer(producersConfig SetupProducersConfig, producerMap map[s
 }
 
 // setupConsumerServer is a function that will setup the consumer server.
+//
 // It takes as args:
+//
 // 1. consumersConfig: SetupConsumersConfig. The configuration for the consumers.
+//
 // 2. consumerMap: map[string]func() SourceServer. A map that maps a string to a func that produces SourceServer.
-func setupConsumerServer(consumersConfig SetupConsumersConfig, consumerMap map[string]func() SourceServer) (SourceServer, error) {
+//
+// It returns:
+//
+// 1. SourceServer. The server that will handle the incoming data.
+//
+// 2. error. An error if the setup fails.
+func setupConsumerServer(
+	consumersConfig SetupConsumersConfig,
+	consumerMap map[string]func() SourceServer,
+) (SourceServer, error) {
 	if len(consumersConfig.SelectConsumerConfigs) != 1 {
 		return nil, errors.New("Only one consumer can be set up")
 	}
@@ -150,16 +223,30 @@ func setupConsumerServer(consumersConfig SetupConsumersConfig, consumerMap map[s
 
 // SetupApp is a method that will setup the application
 // based on the configuration in the AppConfig.
+//
 // It takes as args:
+//
 // 1. appConfig: AppConfig. The configuration for the application.
+//
 // 2. pipeServer: *PipeServer. A pointer to the server that will handle the data.
+//
 // 3. consumerMap: map[string]func() SourceServer. A map that maps a string to a func that produces SourceServer.
+//
 // 4. producerMap: map[string]func() SinkServer. A map that maps a string to a func that produces StringServer.
+//
 // It returns:
+//
 // 1. SourceServer. The server that will handle the incoming data.
+//
 // 2. SinkServer. The server that will handle the outgoing data.
+//
 // 3. error. An error if the setup fails.
-func SetupApp(appConfig AppConfig, pipeServer PipeServer, consumerMap map[string]func() SourceServer, producerMap map[string]func() SinkServer) (SourceServer, SinkServer, error) {
+func SetupApp(
+	appConfig AppConfig,
+	pipeServer PipeServer,
+	consumerMap map[string]func() SourceServer,
+	producerMap map[string]func() SinkServer,
+) (SourceServer, SinkServer, error) {
 	// setup the pipe server
 	err := pipeServer.Setup(appConfig.PipeServerConfig)
 	if err != nil {
@@ -177,4 +264,52 @@ func SetupApp(appConfig AppConfig, pipeServer PipeServer, consumerMap map[string
 	}
 	// return the first producer and the first consumer
 	return consumerServer, producerServer, nil
+}
+
+// SetupAndRunApp is a method that will setup and run the application
+// based on raw configuration and provided pipeserver, pipeserverconfig,
+// config maps and producer and consumer maps.
+//
+// It takes as args:
+//
+// 1. config: map[string]any. The raw configuration for the application.
+//
+// 2. pipeServer: *PipeServer. A pointer to the server that will handle the data.
+//
+// 3. pipeServerConfig: Config. The configuration for the pipe server.
+//
+// 4. producerConfigMap: map[string]func() Config. A map that maps a string to a func that produces Config.
+//
+// 5. consumerConfigMap: map[string]func() Config. A map that maps a string to a func that produces Config.
+//
+// 6. producerMap: map[string]func() SinkServer. A map that maps a string to a func that produces SinkServer.
+//
+// 7. consumerMap: map[string]func() SourceServer. A map that maps a string to a func that produces SourceServer.
+//
+// It returns:
+//
+// 1. error. An error if anything fails.
+func SetupAndRunApp(
+	config map[string]any,
+	pipeServer PipeServer,
+	pipeServerConfig Config,
+	producerConfigMap map[string]func() Config,
+	consumerConfigMap map[string]func() Config,
+	producerMap map[string]func() SinkServer,
+	consumerMap map[string]func() SourceServer,
+) error {
+	appConfig := AppConfig{
+		PipeServerConfig:     pipeServerConfig,
+		SetupProducersConfig: SetupProducersConfig{},
+		SetupConsumersConfig: SetupConsumersConfig{},
+	}
+	err := appConfig.IngestConfig(config, producerConfigMap, consumerConfigMap)
+	if err != nil {
+		return err
+	}
+	consumerServer, producerServer, err := SetupApp(appConfig, pipeServer, consumerMap, producerMap)
+	if err != nil {
+		return err
+	}
+	return ServersRun(consumerServer, pipeServer, producerServer)
 }
