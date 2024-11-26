@@ -1,6 +1,7 @@
 package Server
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -46,7 +47,7 @@ func TestAppConfig(t *testing.T) {
 		// and the ProducersSetup field is set correctly but there is an error in the IngestConfig method of the SetupProducersConfig
 		err = appConfig.IngestConfig(
 			map[string]interface{}{"AppConfig": map[string]interface{}{},
-			"ProducersSetup": map[string]interface{}{}}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP,
+				"ProducersSetup": map[string]interface{}{}}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP,
 		)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
@@ -57,8 +58,8 @@ func TestAppConfig(t *testing.T) {
 		err = appConfig.IngestConfig(map[string]interface{}{
 			"AppConfig": map[string]interface{}{},
 			"ProducersSetup": map[string]interface{}{
-				"ProducerConfigs": []map[string]interface{}{
-					{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
+				"ProducerConfigs": []any{
+					map[string]any{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
 				}},
 			"ConsumersSetup": 1}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP)
 		if err == nil {
@@ -73,8 +74,8 @@ func TestAppConfig(t *testing.T) {
 		err = appConfig.IngestConfig(map[string]interface{}{
 			"AppConfig": map[string]interface{}{},
 			"ProducersSetup": map[string]interface{}{
-				"ProducerConfigs": []map[string]interface{}{
-					{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
+				"ProducerConfigs": []any{
+					map[string]any{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
 				}},
 			"ConsumersSetup": map[string]interface{}{}}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP)
 		if err == nil {
@@ -87,12 +88,12 @@ func TestAppConfig(t *testing.T) {
 		err = appConfig.IngestConfig(map[string]interface{}{
 			"AppConfig": map[string]interface{}{},
 			"ProducersSetup": map[string]interface{}{
-				"ProducerConfigs": []map[string]interface{}{
-					{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
+				"ProducerConfigs": []any{
+					map[string]any{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
 				}},
 			"ConsumersSetup": map[string]interface{}{
-				"ConsumerConfigs": []map[string]interface{}{
-					{"Type": "RabbitMQ", "ConsumerConfig": map[string]interface{}{
+				"ConsumerConfigs": []any{
+					map[string]any{"Type": "RabbitMQ", "ConsumerConfig": map[string]interface{}{
 						"Connection": "amqp://localhost:5672",
 						"Queue":      "test",
 					}},
@@ -512,16 +513,16 @@ func TestSetupAndRunApp(t *testing.T) {
 	config = map[string]any{
 		"AppConfig": map[string]any{},
 		"ProducersSetup": map[string]interface{}{
-				"ProducerConfigs": []map[string]interface{}{
-					{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
-				}},
+			"ProducerConfigs": []any{
+				map[string]any{"Type": "HTTP", "ProducerConfig": map[string]interface{}{"URL": "http://localhost:8080"}},
+			}},
 		"ConsumersSetup": map[string]interface{}{
-			"ConsumerConfigs": []map[string]interface{}{
-				{"Type": "RabbitMQ", "ConsumerConfig": map[string]interface{}{
+			"ConsumerConfigs": []any{
+				map[string]any{"Type": "RabbitMQ", "ConsumerConfig": map[string]interface{}{
 					"Connection": "amqp://localhost:5672",
 					"Queue":      "test",
 				}},
-		}},
+			}},
 	}
 	err = SetupAndRunApp(
 		config, &MockPipeServer{isSetupError: true}, &MockConfig{},
@@ -550,12 +551,12 @@ func TestSetupAndRunApp(t *testing.T) {
 	config = map[string]any{
 		"AppConfig": map[string]any{},
 		"ProducersSetup": map[string]interface{}{
-			"ProducerConfigs": []map[string]interface{}{
-				{"Type": "MockSink", "ProducerConfig": map[string]interface{}{}},
+			"ProducerConfigs": []any{
+				map[string]any{"Type": "MockSink", "ProducerConfig": map[string]interface{}{}},
 			}},
 		"ConsumersSetup": map[string]interface{}{
-			"ConsumerConfigs": []map[string]interface{}{
-				{"Type": "MockSource", "ConsumerConfig": map[string]interface{}{}},
+			"ConsumerConfigs": []any{
+				map[string]any{"Type": "MockSource", "ConsumerConfig": map[string]interface{}{}},
 			}},
 	}
 	err = SetupAndRunApp(
@@ -574,4 +575,62 @@ func TestSetupAndRunApp(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error from SetupAndRunApp, got %v", err)
 	}
+}
+
+// TestRunAppFromConfigPath
+func TestRunAppFromConfigPath(t *testing.T) {
+	// Tests the case where the config file is not found
+	err := RunAppFromConfigPath("", &MockPipeServer{}, &MockConfig{}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP, PRODUCERMAP, CONSUMERMAP)
+	if err == nil {
+		t.Errorf("Expected error from RunAppFromConfigPath, got nil")
+	}
+	if err.Error() != "Error reading config file:\nopen : no such file or directory" {
+		t.Errorf("Expected error message to be 'Error reading config file:\nopen : no such file or directory', got %v", err.Error())
+	}
+	// Tests the case where SetupAndRunApp returns an error
+	tmpFile1, err := os.CreateTemp("", "test.json")
+	if err != nil {
+		t.Errorf("Error creating temp file: %v", err)
+	}
+	defer os.Remove(tmpFile1.Name())
+	data := []byte(`{"key":"value"}`)
+	err = os.WriteFile(tmpFile1.Name(), data, 0644)
+	if err != nil {
+		t.Errorf("Error writing to temp file: %v", err)
+	}
+	err = RunAppFromConfigPath(tmpFile1.Name(), &MockPipeServer{}, &MockConfig{}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP, PRODUCERMAP, CONSUMERMAP)
+	if err == nil {
+		t.Errorf("Expected error from RunAppFromConfigPath, got nil")
+	}
+	if err.Error() != "Error setting up and running app:\nAppConfig not set correctly - must map fields to values" {
+		t.Errorf("Expected error message to be 'Error setting up and running app:\nAppConfig not set correctly - must map fields to values', got %v", err.Error())
+	}
+	// Tests the case where everything runs correctly
+	tmpFile2, err := os.CreateTemp("", "test2.json")
+	if err != nil {
+		t.Errorf("Error creating temp file: %v", err)
+	}
+	defer os.Remove(tmpFile2.Name())
+	data = []byte(`{"AppConfig":{},"ProducersSetup":{"ProducerConfigs":[{"Type":"MockSink","ProducerConfig":{}}]},"ConsumersSetup":{"ConsumerConfigs":[{"Type":"MockSource","ConsumerConfig":{}}]}}`)
+	err = os.WriteFile(tmpFile2.Name(), data, 0644)
+	if err != nil {
+		t.Errorf("Error writing to temp file: %v", err)
+	}
+	err = RunAppFromConfigPath(tmpFile2.Name(), &MockPipeServer{}, &MockConfig{},
+		map[string]func() Config{
+			"MockSink": func() Config { return &MockConfig{} },
+		}, map[string]func() Config{
+			"MockSource": func() Config { return &MockConfig{} },
+		},
+		map[string]func() SinkServer{
+			"MockSink": func() SinkServer { return &MockSinkServer{} },
+		}, map[string]func() SourceServer{
+			"MockSource": func() SourceServer { return &MockSourceServer{} },
+		},
+	)
+	if err != nil {
+		t.Errorf("Expected no error from RunAppFromConfigPath, got %v", err)
+	}
+
+
 }

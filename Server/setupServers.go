@@ -1,6 +1,8 @@
 package Server
 
-import "errors"
+import (
+	"errors"
+)
 
 type AppConfig struct {
 	PipeServerConfig     Config
@@ -312,4 +314,53 @@ func SetupAndRunApp(
 		return err
 	}
 	return ServersRun(consumerServer, pipeServer, producerServer)
+}
+
+// RunAppCLI is a function that will run the application with
+// a flag --config that points to the configuration file.
+//
+// It takes as args:
+// 1. configPath: string. The path to the configuration file.
+//
+// 2. pipeServer: PipeServer. A pointer to the server that will handle the data.
+//
+// 3. pipeServerConfig: Config. The configuration struct for the pipe server.
+//
+// 4. producerConfigMap: map[string]func() Config. A map that maps a string to a func that produces Config.
+//
+// 5. consumerConfigMap: map[string]func() Config. A map that maps a string to a func that produces Config.
+//
+// 6. producerMap: map[string]func() SinkServer. A map that maps a string to a func that produces SinkServer.
+//
+// 7. consumerMap: map[string]func() SourceServer. A map that maps a string to a func that produces SourceServer.
+//
+// It returns:
+//
+// 1. error. An error if anything fails.
+func RunAppFromConfigPath(
+    configPath string,
+    pipeServer PipeServer,
+    pipeServerConfig Config,
+    producerConfigMap map[string]func() Config,
+    consumerConfigMap map[string]func() Config,
+    producerMap map[string]func() SinkServer,
+    consumerMap map[string]func() SourceServer,
+) error {
+    config, err := ReadConfigJSON(configPath)
+    if err != nil {
+        return errors.New("Error reading config file:\n" + err.Error())
+    }
+    err = SetupAndRunApp(
+        config,
+        pipeServer,
+        pipeServerConfig,
+        producerConfigMap,
+        consumerConfigMap,
+        producerMap,
+        consumerMap,
+    )
+    if err != nil {
+        return errors.New("Error setting up and running app:\n" + err.Error())
+    }
+    return nil
 }

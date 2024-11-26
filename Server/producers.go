@@ -243,7 +243,7 @@ func (s *SetupProducersConfig) IngestConfig(config map[string]any, configMap map
 		}
 		s.IsMapping = isMapping
 	}
-	selectProducerConfigs, ok := config["ProducerConfigs"].([]map[string]any)
+	selectProducerConfigs, ok := config["ProducerConfigs"].([]any)
 	if !ok {
 		return errors.New("ProducerConfigs not set correctly")
 	}
@@ -252,6 +252,10 @@ func (s *SetupProducersConfig) IngestConfig(config map[string]any, configMap map
 	}
 	s.SelectProducerConfigs = []*SelectProducerConfig{}
 	for _, selectProducerConfig := range selectProducerConfigs {
+		selectProducerConfig, ok := selectProducerConfig.(map[string]any)
+		if !ok {
+			return errors.New("ProducerConfig not set correctly")
+		}
 		selectProducerConfigStruct := &SelectProducerConfig{}
 		err := selectProducerConfigStruct.IngestConfig(selectProducerConfig, configMap)
 		if err != nil {

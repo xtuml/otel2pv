@@ -357,14 +357,14 @@ func TestSetupProducersConfig(t *testing.T) {
 		config := &SetupProducersConfig{}
 		// test ingest with valid config but default for IsMapping
 		err := config.IngestConfig(map[string]any{
-			"ProducerConfigs": []map[string]any{
-				{
+			"ProducerConfigs": []any{
+				map[string]any{
 					"Type": "HTTP",
 					"ProducerConfig": map[string]any{
 						"URL": "http://test.com",
 					},
 				},
-				{
+				map[string]any{
 					"Type": "HTTP",
 					"ProducerConfig": map[string]any{
 						"URL": "http://test2.com",
@@ -384,8 +384,8 @@ func TestSetupProducersConfig(t *testing.T) {
 		// test ingest with valid config and value set for IsMapping
 		err = config.IngestConfig(map[string]any{
 			"IsMapping": true,
-			"ProducerConfigs": []map[string]any{
-				{
+			"ProducerConfigs": []any{
+				map[string]any{
 					"Type": "HTTP",
 					"ProducerConfig": map[string]any{
 						"URL": "http://test.com",
@@ -422,7 +422,7 @@ func TestSetupProducersConfig(t *testing.T) {
 		}
 		// test ingest when ProducerConfigs is an empty slice
 		err = config.IngestConfig(map[string]any{
-			"ProducerConfigs": []map[string]any{},
+			"ProducerConfigs": []any{},
 		}, PRODUCERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
@@ -432,14 +432,14 @@ func TestSetupProducersConfig(t *testing.T) {
 		}
 		// test when there is an error in one of the SelectProducerConfig.IngestConfig
 		err = config.IngestConfig(map[string]any{
-			"ProducerConfigs": []map[string]any{
-				{
+			"ProducerConfigs": []any{
+				map[string]any{
 					"Type": "HTTP",
 					"ProducerConfig": map[string]any{
 						"URL": "http://test.com",
 					},
 				},
-				{
+				map[string]any{
 					"Type": "HTTP",
 					"ProducerConfig": map[string]any{
 						"URL": 1,

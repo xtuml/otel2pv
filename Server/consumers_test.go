@@ -107,7 +107,7 @@ func TestSetupConsumersConfig(t *testing.T) {
 			t.Errorf("Expected error message to be 'ConsumerConfigs not set correctly', got %v", err.Error())
 		}
 		// Test when SelectConsumerConfigs is an empty slice
-		err = scc.IngestConfig(map[string]any{"ConsumerConfigs": []map[string]any{}}, CONSUMERCONFIGMAP)
+		err = scc.IngestConfig(map[string]any{"ConsumerConfigs": []any{}}, CONSUMERCONFIGMAP)
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -126,12 +126,12 @@ func TestSetupConsumersConfig(t *testing.T) {
 			t.Errorf("Expected error from IngestConfig, got ")
 		}
 		// Tests the valid case
-		err = scc.IngestConfig(map[string]any{"ConsumerConfigs": []map[string]any{
-			{"Type": "RabbitMQ", "ConsumerConfig": map[string]any{
+		err = scc.IngestConfig(map[string]any{"ConsumerConfigs": []any{
+			map[string]any{"Type": "RabbitMQ", "ConsumerConfig": map[string]any{
 				"Connection": "test",
 				"Queue":      "test",
 			}},
-			{"Type": "RabbitMQ", "ConsumerConfig": map[string]any{
+			map[string]any{"Type": "RabbitMQ", "ConsumerConfig": map[string]any{
 				"Connection": "test",
 				"Queue":      "test",
 			}},

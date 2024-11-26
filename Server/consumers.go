@@ -86,7 +86,7 @@ type SetupConsumersConfig struct {
 //
 // 1. error. An error if the process fails.
 func (s *SetupConsumersConfig) IngestConfig(config map[string]any, configMap map[string]func() Config) error {
-	selectConsumerConfigs, ok := config["ConsumerConfigs"].([]map[string]any)
+	selectConsumerConfigs, ok := config["ConsumerConfigs"].([]any)
 	if !ok {
 		return errors.New("ConsumerConfigs not set correctly")
 	}
@@ -95,6 +95,10 @@ func (s *SetupConsumersConfig) IngestConfig(config map[string]any, configMap map
 	}
 	s.SelectConsumerConfigs = []*SelectConsumerConfig{}
 	for _, selectConsumerConfig := range selectConsumerConfigs {
+		selectConsumerConfig, ok := selectConsumerConfig.(map[string]any)
+		if !ok {
+			return errors.New("ConsumerConfig not set correctly")
+		}
 		selectConsumerConfigStruct := &SelectConsumerConfig{}
 		err := selectConsumerConfigStruct.IngestConfig(selectConsumerConfig, configMap)
 		if err != nil {
