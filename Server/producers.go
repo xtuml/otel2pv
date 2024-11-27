@@ -109,20 +109,8 @@ func (h *HTTPProducer) Serve() error {
 // It takes in an *AppData and returns an error if the data is invalid.
 func (h *HTTPProducer) SendTo(data *AppData) error {
 	var err error
-	completeHandler, err := data.GetHandler()
+	gotData, err := data.GetData()
 	if err != nil {
-		return err
-	}
-	dataForHandler := data.GetData()
-	defer func() {
-		errHandler := completeHandler.Complete(dataForHandler, err)
-		if errHandler != nil {
-			panic(errHandler)
-		}
-	}()
-	gotData, ok := data.GetData().(map[string]any)
-	if !ok {
-		err = errors.New("invalid data")
 		return err
 	}
 	jsonData, err := json.Marshal(gotData)
@@ -464,18 +452,11 @@ func (r *RabbitMQProducer) SendTo(data *AppData) error {
 	}
 
 	var err error
-	completeHandler, err := data.GetHandler()
+	gotData, err := data.GetData()
 	if err != nil {
-		return err 
+		return err
 	}
-	dataForHandler := data.GetData()
-	var errHandler error
-	defer func() {
-		if errHandler != nil {
-			r.cancel(errHandler)
-		}
-	}()
-	jsonData, err := json.Marshal(data.GetData())
+	jsonData, err := json.Marshal(gotData)
 	if err != nil {
 		return err
 	}
@@ -485,12 +466,7 @@ func (r *RabbitMQProducer) SendTo(data *AppData) error {
 	})
 	if err != nil {
 		r.cancel(err)
-		errHandler = completeHandler.Complete(dataForHandler, err)
 		return err
-	}
-	errHandler = completeHandler.Complete(dataForHandler, err)
-	if errHandler != nil {
-		return errHandler
 	}
 	return nil
 }

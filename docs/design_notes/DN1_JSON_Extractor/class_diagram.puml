@@ -1,20 +1,10 @@
 @startuml
 namespace Server {
-    interface CompletionHandler {
-        +error Complete(any, error)
-    }
-    struct WaitGroupCompletionHandler {
-        -sync.WaitGroup wg
-        -any data
-        -error error
-        -bool isComplete
-        +error Complete(any, error)
-    }
     struct AppData {
         -any data
-        +CompletionHandler completionHandler
-        +any GetData()
-        +CompletionHandler GetCompletionHandler()
+        -string routingKey
+        +(any, error) GetData()
+        +(string, error) GetRoutingKey()
     }
     interface Server {
         +error Serve()
@@ -55,31 +45,45 @@ namespace Server {
         +string Map
         +string Type
         +Config Config
-        +error IngestConfig(map[string]any)
+        +error IngestConfig(
+            map[string]any,
+            map[string]func() Config
+        )
     }
     struct SetupProducersConfig {
         +IsMapping bool
         +[]SelectProducerConfig SelectProducerConfigs
-        +error IngestConfig(map[string]any)
+        +error IngestConfig(
+            map[string]any,
+            map[string]func() Config
+        )
     }
     struct SelectConsumerConfig {
         +string Type
         +Config Config
-        +error IngestConfig(map[string]any)
+        +error IngestConfig(
+            map[string]any,
+            map[string]func() Config
+        )
     }
     struct SetupConsumersConfig {
         +[]SelectConsumerConfig SelectConsumerConfigs
-        +error IngestConfig(map[string]any)
+        +error IngestConfig(
+            map[string]any,
+            map[string]func() Config
+        )
     }
     struct AppConfig {
         +SetupProducersConfig SetupProducersConfig
         +SetupConsumersConfig SetupConsumersConfig
         +Config PipeServerConfig
-        +error IngestConfig(map[string]any)
+        +error IngestConfig(
+            map[string]any,
+            map[string]func() Config,
+            map[string]func() Config
+        )
     }
 }
-Server.CompletionHandler <|-- Server.WaitGroupCompletionHandler
-Server.CompletionHandler *-- Server.AppData
 Server.AppData *-- Server.Pushable
 Server.Server <|-- Server.SourceServer
 Server.Pushable *-- Server.Pullable

@@ -5,7 +5,6 @@ digraph G {
     MapSinkServer [style=rounded, shape=box];
     MapSinkServer -> "MapSinkServer.\nSendTo";
     "MapSinkServer.\nSendTo" -> "SinkServer.\nSendTo";
-    "MapSinkServer.\nSendTo" -> "CompletionHandler.\nComplete";
     MapSinkServer -> "MapSinkServer.\nServe";
     "MapSinkServer.\nServe" -> "SinkServer.\nServe";
 }

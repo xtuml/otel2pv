@@ -338,77 +338,6 @@ func MockRabbitMQDialWrapper(url string, mockRabbitMQConnection *MockRabbitMQCon
 	}
 }
 
-// Tests for RabbitMQCompletionHandler
-func TestRabbitMQCompletionHandler(t *testing.T) {
-	t.Run("ImplementsCompletionHandler", func(t *testing.T) {
-		rch := &RabbitMQCompletionHandler{}
-		// Type assertion to check if RabbitMQCompletionHandler implements CompletionHandler
-		_, ok := interface{}(rch).(CompletionHandler)
-		if !ok {
-			t.Errorf("Expected RabbitMQCompletionHandler to implement CompletionHandler interface")
-		}
-	})
-	t.Run("Complete", func(t *testing.T) {
-		rch := &RabbitMQCompletionHandler{}
-		// Tests when the message is not set
-		err := rch.Complete(nil, nil)
-		if err == nil {
-			t.Errorf("Expected error from Complete, got nil")
-		}
-		if err.Error() != "message not set" {
-			t.Errorf("Expected error message to be 'message not set', got %v", err.Error())
-		}
-		// Test when there is an error but there is an error in Nack
-		mockAcknowledger := &MockAcknowledger{
-			isNackError: true,
-		}
-		msg := rabbitmq.Delivery{Acknowledger: mockAcknowledger}
-		rch.message = &msg
-		err = rch.Complete(nil, errors.New("test error"))
-		if err == nil {
-			t.Errorf("Expected error from Complete, got nil")
-		}
-		if err.Error() != "nack error" {
-			t.Errorf("Expected error message to be 'nack error', got %v", err.Error())
-		}
-		// Test when there is an error but there is no error in Nack
-		mockAcknowledger = &MockAcknowledger{}
-		msg = rabbitmq.Delivery{Acknowledger: mockAcknowledger}
-		rch.message = &msg
-		err = rch.Complete(nil, errors.New("test error"))
-		if err != nil {
-			t.Errorf("Expected no error from Complete, got %v", err)
-		}
-		if !mockAcknowledger.hasNacknowledged {
-			t.Errorf("Expected message to be nacked")
-		}
-		// Test when there is no error but there is an error in Ack
-		mockAcknowledger = &MockAcknowledger{
-			isError: true,
-		}
-		msg = rabbitmq.Delivery{Acknowledger: mockAcknowledger}
-		rch.message = &msg
-		err = rch.Complete(nil, nil)
-		if err == nil {
-			t.Errorf("Expected error from Complete, got nil")
-		}
-		if err.Error() != "acknowledge error" {
-			t.Errorf("Expected error message to be 'acknowledge error', got %v", err.Error())
-		}
-		// Test when there is no error and there is no error in Ack
-		mockAcknowledger = &MockAcknowledger{}
-		msg = rabbitmq.Delivery{Acknowledger: mockAcknowledger}
-		rch.message = &msg
-		err = rch.Complete(nil, nil)
-		if err != nil {
-			t.Errorf("Expected no error from Complete, got %v", err)
-		}
-		if !mockAcknowledger.hasAcknowledged {
-			t.Errorf("Expected message to be acknowledged")
-		}
-	})
-}
-
 // Tests for RabbitMQConsumer
 func TestRabbitMQConsumer(t *testing.T) {
 	t.Run("ImplementsSourceServer", func(t *testing.T) {
@@ -476,12 +405,6 @@ func TestRabbitMQConsumer(t *testing.T) {
 				t.Errorf("Expected data to be %v, got %v", map[string]any{"key": "value"}, dataMap)
 			}
 		}
-		if appData.handler == nil {
-			t.Errorf("Expected handler to be set, got nil")
-		}
-		if appData.handler.(*RabbitMQCompletionHandler).message != &msg {
-			t.Errorf("Expected handler to be %v, got %v", &msg, appData.handler.(*RabbitMQCompletionHandler).message)
-		}
 		// Test when there is an error in convertBytesJSONDataToAppData
 		pushable = &MockPushable{}
 		msg = rabbitmq.Delivery{Body: []byte(`{"key":"value"`)}
@@ -512,7 +435,6 @@ func TestRabbitMQConsumer(t *testing.T) {
 			Body:         []byte(`{"key":"value2"}`),
 			Acknowledger: mockAcknowledger,
 		}
-		msgs := []rabbitmq.Delivery{msg1, msg2}
 		channel <- msg1
 		channel <- msg2
 		close(channel)
@@ -536,12 +458,6 @@ func TestRabbitMQConsumer(t *testing.T) {
 					t.Fatalf("Expected data to be %v, got %v", map[string]any{"key": "value" + strconv.Itoa(i+1)}, dataMap)
 				}
 			}
-			if appData.handler == nil {
-				t.Fatalf("Expected handler to be set, got nil")
-			}
-			if appData.handler.(*RabbitMQCompletionHandler).message.Acknowledger != msgs[i].Acknowledger {
-				t.Fatalf("Expected handler to be %v, got %v", msgs[i], appData.handler.(*RabbitMQCompletionHandler).message)
-			}
 		}
 		// Test when there is an error in sendRabbitMQMessageDataToPushable
 		pushable = &MockPushableForRabbitMQConsumer{
@@ -562,6 +478,26 @@ func TestRabbitMQConsumer(t *testing.T) {
 		err = sendChannelOfRabbitMQDeliveryToPushable(channel, pushable)
 		if err == nil {
 			t.Fatalf("Expected error from sendChannelOfRabbitMQDeliveryToPushable, got nil")
+		}
+		// Test when there is an error in Ack
+		pushable = &MockPushableForRabbitMQConsumer{
+			incomingData: []*AppData{},
+		}
+		channel = make(chan rabbitmq.Delivery, 2)
+		msg2 = rabbitmq.Delivery{
+			Body:         []byte(`{"key":"value2"}`),
+			Acknowledger: mockAcknowledger,
+		}
+		mockAcknowledger.isError = true
+		channel <- msg1
+		channel <- msg2
+		close(channel)
+		err = sendChannelOfRabbitMQDeliveryToPushable(channel, pushable)
+		if err == nil {
+			t.Fatalf("Expected error from sendChannelOfRabbitMQDeliveryToPushable, got nil")
+		}
+		if err.Error() != "acknowledge error" {
+			t.Fatalf("Expected error message to be 'acknowledge error', got %v", err.Error())
 		}
 	})
 	t.Run("Serve", func(t *testing.T) {
@@ -650,7 +586,6 @@ func TestRabbitMQConsumer(t *testing.T) {
 			Body:         []byte(`{"key":"value2"}`),
 			Acknowledger: mockAcknowledger,
 		}
-		msgs := []rabbitmq.Delivery{msg1, msg2}
 		channel <- msg1
 		channel <- msg2
 		close(channel)
@@ -673,12 +608,6 @@ func TestRabbitMQConsumer(t *testing.T) {
 				if !reflect.DeepEqual(dataMap, map[string]any{"key": "value" + strconv.Itoa(i+1)}) {
 					t.Fatalf("Expected data to be %v, got %v", map[string]any{"key": "value" + strconv.Itoa(i+1)}, dataMap)
 				}
-			}
-			if appData.handler == nil {
-				t.Fatalf("Expected handler to be set, got nil")
-			}
-			if appData.handler.(*RabbitMQCompletionHandler).message.Acknowledger != msgs[i].Acknowledger {
-				t.Fatalf("Expected handler to be %v, got %v", msgs[i], appData.handler.(*RabbitMQCompletionHandler).message)
 			}
 		}
 		// Tests when there is an error in sendChannelOfRabbitMQDeliveryToPushable

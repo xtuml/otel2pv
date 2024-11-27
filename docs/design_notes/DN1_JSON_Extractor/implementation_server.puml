@@ -18,33 +18,10 @@
                 detach
             }
             group SendTo(*MapSinkServer, AppData) error {
-                :confirm AppData is a map;
-                :create WaitGroup;
-                repeat
-                    :Send portion of AppData to SinkServer identified by key;
-                    if (key not in sinkServerMap) then (error)
-                        :Call AppData\nCompletionHandler with error;
-                        :Return error;
-                    else (success)
-                        :Add 1 to WaitGroup;
-                        :Sent in WaitGroupCompletionHandler;
-                        :Call SendTo SinkServer;
-                        if (error) then (error)
-                            :Call AppData\nCompletionHandler with error;
-                            :Return error;
-                        endif
-                    endif
-                repeat while (For each key in AppData);
-                :Wait for all WaitGroup to finish;
-                repeat
-                    :check error in WaitGroupCompletionHandler;
-                    if (error) then (error)
-                        :Call AppData CompletionHandler with error;
-                        :Return error;
-                    endif
-                repeat while (For each WaitGroupCompletionHandler)
-                :Call AppData CompletionHandler with success;
-                :Return error;
+                :make sure AppData is not empty and has routingKey;
+                :check if routingKey is in sinkServerMap if not error;
+                :Send AppData to SinkServer identified by key;
+                :return error;
                 detach
             }
         }

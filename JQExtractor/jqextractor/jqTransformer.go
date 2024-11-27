@@ -1,7 +1,9 @@
 package jqextractor
 
 import (
+	"context"
 	"errors"
+	"sync"
 
 	"github.com/itchyny/gojq"
 
@@ -18,18 +20,26 @@ type JQTransformerConfig struct {
 func (jqt *JQTransformerConfig) IngestConfig(config map[string]any) error {
 	// IngestConfig is a method that will ingest the configuration for the JQTransformer
 	// It takes in a map[string]any and returns an error if the configuration is invalid
-	jqQueryStrings, ok := config["JQQueryStrings"].(map[string]string)
+	jqQueryStrings, ok := config["JQQueryStrings"].(map[string]any)
 	if !ok {
 		return errors.New("invalid JQQueryStrings map in config. Must map a string identifier to a string")
 	}
 	if len(jqQueryStrings) == 0 {
 		return errors.New("JQQueryStrings map is empty")
 	}
-	jqt.JQQueryStrings = jqQueryStrings
+	jqQueryStringsMap := make(map[string]string)
+	for key, value := range jqQueryStrings {
+		jqString, ok := value.(string)
+		if !ok {
+			return errors.New("invalid JQQueryStrings map in config. Must map a string identifier to a string")
+		}
+		jqQueryStringsMap[key] = jqString
+	}
+	jqt.JQQueryStrings = jqQueryStringsMap
 	return nil
 }
 
-func getDataFromJQIterator(iter *gojq.Iter) (any, error) {
+func getDataFromJQIterator(iter *gojq.Iter) (map[string][]any, error) {
 	// getDataFromIterator is a helper function that will get the data from the iterator
 	// It returns the data and an error if the data cannot be retrieved
 	counter := 0
@@ -49,7 +59,23 @@ func getDataFromJQIterator(iter *gojq.Iter) (any, error) {
 	if data == nil {
 		return nil, errors.New("no data")
 	}
-	return data, nil
+	mapDataArray, ok := data.(map[string][]any)
+	if !ok {
+		mapData, ok := data.(map[string]any)
+		if !ok {
+			return nil, errors.New("data is not a map of strings to arrays")
+		}
+		mapDataArray := make(map[string][]any)
+		for key, value := range mapData {
+			arrayData, ok := value.([]any)
+			if !ok {
+				return nil, errors.New("data is not a map of strings to arrays")
+			}
+			mapDataArray[key] = arrayData
+		}
+		return mapDataArray, nil
+	}
+	return mapDataArray, nil
 }
 
 type JQTransformer struct {
@@ -81,19 +107,35 @@ func (jqt *JQTransformer) SendTo(data *Server.AppData) error {
 	if jqt.pushable == nil {
 		return errors.New("pushable not set")
 	}
-	handler, err := data.GetHandler()
+	dataToExtract, err := data.GetData()
 	if err != nil {
 		return err
 	}
-	iter := jqt.jqProgram.Run(data.GetData())
+	iter := jqt.jqProgram.Run(dataToExtract)
 	outData, err := getDataFromJQIterator(&iter)
 	if err != nil {
 		return err
 	}
-	appData := Server.NewAppData(outData, handler)
-	err = jqt.pushable.SendTo(appData)
-	if err != nil {
+	wg := &sync.WaitGroup{}
+	ctx, cancel := context.WithCancelCause(context.Background())
+	for key, value := range outData {
+		for _, val := range value {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				appData := Server.NewAppData(val, key)
+				err := jqt.pushable.SendTo(appData)
+				if err != nil {
+					cancel(err)
+				}
+			}()
+		}
+	}
+	wg.Wait()
+	if ctx.Err() != nil {
+		err = context.Cause(ctx)
 		return err
+
 	}
 	return nil
 }

@@ -136,7 +136,6 @@ func TestPushable(t *testing.T) {
 
 		appData := &AppData{
 			data:    "test data",
-			handler: &MockCompletionHandler{},
 		}
 		err := pushable.SendTo(appData)
 		if err != nil {
@@ -152,7 +151,6 @@ func TestPushable(t *testing.T) {
 		}
 		appData := AppData{
 			data:    "test data",
-			handler: &MockCompletionHandler{},
 		}
 
 		err := pushable.SendTo(&appData)
@@ -204,7 +202,6 @@ func TestPullable(t *testing.T) {
 		}
 		appData := &AppData{
 			data:    "test data",
-			handler: &MockCompletionHandlerForPullable{},
 		}
 		_ = pullable.Pushable.SendTo(appData)
 		if mockPushable.incomingData != appData {
@@ -284,7 +281,6 @@ func TestSourceServer(t *testing.T) {
 		}
 		appData := &AppData{
 			data:    "test data",
-			handler: &MockCompletionHandlerForPullable{},
 		}
 		err = sourceServer.Pushable.SendTo(appData)
 		if err != nil {
@@ -371,7 +367,6 @@ func TestSinkServer(t *testing.T) {
 
 		appData := &AppData{
 			data:    "test data",
-			handler: &MockCompletionHandlerForPullable{},
 		}
 		err = sinkServer.SendTo(appData)
 		if err != nil {
@@ -394,7 +389,6 @@ func TestSinkServer(t *testing.T) {
 
 		appData := AppData{
 			data:    "test data",
-			handler: &MockCompletionHandlerForPullable{},
 		}
 		err = sinkServer.SendTo(&appData)
 		if err == nil {
@@ -641,15 +635,12 @@ func (s *MockSinkServerForMapSinkServer) Serve() error {
 
 func (s *MockSinkServerForMapSinkServer) SendTo(data *AppData) error {
 	if s.isError {
-		_ = data.handler.Complete(nil, errors.New("test error"))
 		return errors.New("test error")
 	}
 	if s.isHandlerCompleteError {
-		_ = data.handler.Complete(data, errors.New("handler complete error"))
 		return nil
 	}
 	s.incomingData = data
-	_ = data.handler.Complete(data.GetData(), nil)
 	return nil
 }
 
@@ -705,135 +696,55 @@ func TestMapSinkServer(t *testing.T) {
 		mapSinkServer := MapSinkServer{
 			sinkServerMap: sinkServerMap,
 		}
+		// Tests success case
 		appData := &AppData{
-			data:    map[string]any{"test": "value", "test2": "value2"},
-			handler: &MockCompletionHandler{},
+			data:    "value",
+			routingKey: "test",
 		}
 		err := mapSinkServer.SendTo(appData)
 		if err != nil {
 			t.Errorf("Expected no error from SendTo, got %v", err)
 		}
-		if sinkServerMap["test"].(*MockSinkServerForMapSinkServer).incomingData.GetData() != "value" {
-			t.Errorf("Expected data to be sent to SinkServer, got %v", sinkServerMap["test"].(*MockSinkServer).incomingData.GetData())
+		sinkServerMapTestData, err := sinkServerMap["test"].(*MockSinkServerForMapSinkServer).incomingData.GetData()
+		if err != nil {
+			t.Errorf("Expected no error from GetData, got %v", err)
 		}
-		if sinkServerMap["test2"].(*MockSinkServerForMapSinkServer).incomingData.GetData() != "value2" {
-			t.Errorf("Expected data to be sent to SinkServer, got %v", sinkServerMap["test2"].(*MockSinkServer).incomingData.GetData())
+		if sinkServerMapTestData != "value" {
+			t.Errorf("Expected data to be sent to SinkServer, got %v", sinkServerMapTestData)
 		}
-		appDataMap, ok := appData.data.(map[string]any)
-		if !ok {
-			t.Errorf("Expected data to be a map, got %v", appData.data)
-		}
-		handlerDataMap, ok := appData.handler.(*MockCompletionHandler).DataReceived.(map[string]any)
-		if !ok {
-			t.Errorf("Expected data to be a map, got %v", appData.handler.(*MockCompletionHandler).DataReceived)
-		}
-		if appDataMap["test"] != handlerDataMap["test"] {
-			t.Errorf("Expected data to received by handler to be correct, got %v", handlerDataMap["test"])
-		}
-		if appDataMap["test2"] != handlerDataMap["test2"] {
-			t.Errorf("Expected data to received by handler to be correct, got %v", handlerDataMap["test2"])
-		}
-		if appData.handler.(*MockCompletionHandler).ErrorReceived != nil {
-			t.Errorf("Expected no error to be received by handler, got %v", appData.handler.(*MockCompletionHandler).ErrorReceived)
-		}
-		// tets error case where there is no CompletionHandler on incoming data
 		appData = &AppData{
-			data: map[string]any{"test": "value", "test2": "value2"},
+			data:    "value2",
+			routingKey: "test2",
 		}
 		err = mapSinkServer.SendTo(appData)
-		if err == nil {
-			t.Errorf("Expected error from SendTo, got nil")
+		if err != nil {
+			t.Errorf("Expected no error from SendTo, got %v", err)
 		}
-		// Tests error case where incoming data is not a map
-		appData = &AppData{
-			data:    "test",
-			handler: &MockCompletionHandler{},
+		sinkServerMapTestData, err = sinkServerMap["test2"].(*MockSinkServerForMapSinkServer).incomingData.GetData()
+		if err != nil {
+			t.Errorf("Expected no error from GetData, got %v", err)
 		}
-		err = mapSinkServer.SendTo(appData)
-		if err == nil {
-			t.Errorf("Expected error from SendTo, got nil")
-		}
-		if appData.handler.(*MockCompletionHandler).DataReceived != "test" {
-			t.Errorf("Expected data to be received by handler to be correct, got %v", appData.handler.(*MockCompletionHandler).DataReceived)
-		}
-		if appData.handler.(*MockCompletionHandler).ErrorReceived == nil {
-			t.Errorf("Expected error to be received by handler, got nil")
+		if sinkServerMapTestData != "value2" {
+			t.Errorf("Expected data to be sent to SinkServer, got %v", sinkServerMapTestData)
 		}
 		// Tests error case where incoming data map has a key not present in sinkServerMap
 		appData = &AppData{
-			data:    map[string]any{"test": "value", "test3": "value3"},
-			handler: &MockCompletionHandler{},
+			data:    "value3",
+			routingKey: "test3",
 		}
 		err = mapSinkServer.SendTo(appData)
 		if err == nil {
 			t.Errorf("Expected error from SendTo, got nil")
-		}
-		appDataMap, ok = appData.data.(map[string]any)
-		if !ok {
-			t.Errorf("Expected data to be a map, got %v", appData.data)
-		}
-		handlerDataMap, ok = appData.handler.(*MockCompletionHandler).DataReceived.(map[string]any)
-		if !ok {
-			t.Errorf("Expected data to be a map, got %v", appData.handler.(*MockCompletionHandler).DataReceived)
-		}
-		for key, value := range appDataMap {
-			if handlerDataMap[key] != value {
-				t.Errorf("Expected data to received by handler to be correct, got %v", handlerDataMap[key])
-			}
-		}
-		if appData.handler.(*MockCompletionHandler).ErrorReceived == nil {
-			t.Errorf("Expected error to be received by handler, got nil")
 		}
 		// Tests error case where one of the sinkServers fails
 		sinkServerMap["test2"] = &MockSinkServerForMapSinkServer{isError: true}
 		appData = &AppData{
-			data:    map[string]any{"test": "value", "test2": "value2"},
-			handler: &MockCompletionHandler{},
+			data:    "value2",
+			routingKey: "test2",
 		}
 		err = mapSinkServer.SendTo(appData)
 		if err == nil {
 			t.Errorf("Expected error from SendTo, got nil")
 		}
-		appDataMap, ok = appData.data.(map[string]any)
-		if !ok {
-			t.Errorf("Expected data to be a map, got %v", appData.data)
-		}
-		handlerDataMap, ok = appData.handler.(*MockCompletionHandler).DataReceived.(map[string]any)
-		if !ok {
-			t.Errorf("Expected data to be a map, got %v", appData.handler.(*MockCompletionHandler).DataReceived)
-		}
-		for key, value := range appDataMap {
-			if handlerDataMap[key] != value {
-				t.Errorf("Expected data to received by handler to be correct, got %v", handlerDataMap[key])
-			}
-		}
-		if appData.handler.(*MockCompletionHandler).ErrorReceived == nil {
-			t.Errorf("Expected error to be received by handler, got nil")
-		}
-		// Test error case where on of the internal waitGroupCompletionHandlers has an error
-		sinkServerMap["test2"] = &MockSinkServerForMapSinkServer{isHandlerCompleteError: true}
-		appData = &AppData{
-			data:    map[string]any{"test": "value", "test2": "value2"},
-			handler: &MockCompletionHandler{},
-		}
-		err = mapSinkServer.SendTo(appData)
-		if err == nil {
-			t.Errorf("Expected error from SendTo, got nil")
-		}
-		if err.Error() != "handler complete error" {
-			t.Errorf("Expected error to be received by handler, got %v", err)
-		}
-		// test panic case where handler.Complete returns an error
-		sinkServerMap["test2"] = &MockSinkServerForMapSinkServer{}
-		appData = &AppData{
-			data:    map[string]any{"test": "value", "test2": "value2"},
-			handler: &MockCompletionHandler{isError: true},
-		}
-		defer func() {
-			if r := recover(); r == nil {
-				t.Errorf("Expected panic from SendTo, got nil")
-			}
-		}()
-		_ = mapSinkServer.SendTo(appData)
 	})
 }

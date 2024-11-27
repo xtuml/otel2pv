@@ -144,13 +144,6 @@ func RunServers(
 The call graph for the RunServers function is as follows:
 ![RunServers Call Graph](./RunServers_callgraph.svg)
 
-##### WaitGroupCompletionHandler(struct methods)
-```go
-// Complete will handle the WaitGroup completion
-// It will provide an error if the method fails
-func (waitGroupCompletionHandler *WaitGroupCompletionHandler) Complete(any, error) error
-```
-
 ##### MapSinkServer(struct methods)
 ```go
 // Serve will start the all the SinkServers

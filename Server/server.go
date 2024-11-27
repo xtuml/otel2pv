@@ -2,7 +2,6 @@ package Server
 
 import (
 	"errors"
-	"sync"
 )
 
 // Config is an interface that represents a configuration
@@ -141,50 +140,22 @@ func (mss *MapSinkServer) Serve() error {
 // and return an error if any of them fail
 func (mss *MapSinkServer) SendTo(data *AppData) error {
 	var err error
-	inData := data.GetData()
-	handler, err := data.GetHandler()
+	inData, err := data.GetData()
 	if err != nil {
 		return err
 	}
-	defer func() {
-		errHandler := handler.Complete(inData, err)
-		if errHandler != nil {
-			panic(errHandler)
-		}
-	}()
-	// Ensure the inData is a map
-	dataMap, ok := inData.(map[string]any)
-	if !ok {
-		err = errors.New("data is not a map")
+	routingKey, err := data.GetRoutingKey()
+	if err != nil {
 		return err
 	}
-	wg := &sync.WaitGroup{}
-	var wgCompletionHandlerSlice []*WaitGroupCompletionHandler
-	for key, value := range dataMap {
-		sinkServer, ok := mss.sinkServerMap[key]
-		if !ok {
-			err = errors.New("sink server not found under key: " + key)
-			return err
-		}
-		wgCompletionHandler := NewWaitGroupCompletionHandler(wg)
-		wgCompletionHandlerSlice = append(wgCompletionHandlerSlice, wgCompletionHandler)
-		sendData := NewAppData(value, wgCompletionHandler)
-		err = sinkServer.SendTo(sendData)
-		if err != nil {
-			return err
-		}
+	sinkServer, ok := mss.sinkServerMap[routingKey]
+	if !ok {
+		return errors.New("sink server not found under key: " + routingKey)
 	}
-	wg.Wait()
-	for _, wgCompletionHandler := range wgCompletionHandlerSlice {
-		err, errGetError := wgCompletionHandler.GetError()
-		if errGetError != nil {
-			err = errGetError
-			return err
-		}
-		if err != nil {
-			return err
-		}
-	}
+	err = sinkServer.SendTo(&AppData{data: inData})
+	if err != nil {
+		return err
+	} 
 	return nil
 }
 

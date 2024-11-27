@@ -158,43 +158,6 @@ func (r *RabbitMQConsumerConfig) IngestConfig(config map[string]any) error {
 	return nil
 }
 
-// RabbitMQCompletionHandler is a struct that represents a RabbitMQ completion handler.
-// It has the following fields:
-//
-// 1. message: *rabbitmq.Delivery. The message to handle.
-type RabbitMQCompletionHandler struct {
-	message *rabbitmq.Delivery
-}
-
-// Complete is a method that will complete the message.
-//
-// Its args are:
-//
-// 1. data: any. The data to complete the message with.
-//
-// 2. err: error. An error to provide the completion process with (if any).
-//
-// It returns:
-//
-// 1. error. An error if the process fails.
-func (r *RabbitMQCompletionHandler) Complete(data any, err error) error {
-	if r.message == nil {
-		return errors.New("message not set")
-	}
-	if err != nil {
-		nackErr := r.message.Nack(false, false)
-		if nackErr != nil {
-			return nackErr
-		}
-		return nil
-	}
-	ackErr := r.message.Ack(false)
-	if ackErr != nil {
-		return ackErr
-	}
-	return nil
-}
-
 // RabbitMQChannel is an interface that represents a RabbitMQ channel.
 type RabbitMQChannel interface {
 	QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args rabbitmq.Table) (rabbitmq.Queue, error)
@@ -292,9 +255,7 @@ func (r *RabbitMQConsumer) AddPushable(p Pushable) error {
 //
 // 1. error. An error if the process fails.
 func sendRabbitMQMessageDataToPushable(msg *rabbitmq.Delivery, pushable Pushable) error {
-	completionHandler := &RabbitMQCompletionHandler{message: msg}
-
-	appData, err := convertBytesJSONDataToAppData(msg.Body, completionHandler)
+	appData, err := convertBytesJSONDataToAppData(msg.Body)
 	if err != nil {
 		return err
 	}
@@ -330,11 +291,15 @@ func sendChannelOfRabbitMQDeliveryToPushable(channel <-chan rabbitmq.Delivery, p
 			if err != nil {
 				cancel(err)
 			}
+			ackErr := msg.Ack(false)
+			if ackErr != nil {
+				cancel(ackErr)
+			}
 		}(&msg)
 	}
 	wg.Wait()
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return context.Cause(ctx)
 	}
 	return nil
 }

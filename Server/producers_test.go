@@ -150,42 +150,38 @@ func TestHTTPProducer(t *testing.T) {
 		}
 		appData := &AppData{
 			data:    map[string]any{"test": "data"},
-			handler: &MockCompletionHandler{},
 		}
 
 		err := producer.SendTo(appData)
 		if err != nil {
 			t.Errorf("Expected no error from SendTo, got %v", err)
 		}
-		dataComplete, ok := appData.handler.(*MockCompletionHandler).DataReceived.(map[string]any)
-		if !ok {
-			t.Errorf("Expected data to be a map, got %v", appData.handler.(*MockCompletionHandler).DataReceived)
-		}
-		expectedDataComplete := map[string]any{"test": "data"}
-		if !reflect.DeepEqual(dataComplete, expectedDataComplete) {
-			t.Errorf("Expected data to be '%v', got '%v'", expectedDataComplete, dataComplete)
-		}
-		// Error case in which data is not a map[string]any
-		appData = &AppData{
-			data:    "test",
-			handler: &MockCompletionHandler{},
-		}
+		// Error case in which GetData() returns an error
+		appData = &AppData{}
 		err = producer.SendTo(appData)
-		if err.Error() != "invalid data" {
+		if err == nil {
+			t.Errorf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "data is not set" {
 			t.Errorf("Expected specified error from SendTo, got '%v'", err)
 		}
-		// Error case in which appData.GetHandler() returns an error
+		// Error case in which data cannot be converted to JSON 
 		appData = &AppData{
-			data: map[string]any{"test": "data"},
+			data:    make(chan int),
 		}
 		err = producer.SendTo(appData)
-		if err.Error() != "handler not set" {
+		if err == nil {
+			t.Errorf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "json: unsupported type: chan int" {
 			t.Errorf("Expected specified error from SendTo, got '%v'", err)
 		}
 		// Error case in which url is not found (2 retries to test)
+		appData = &AppData{
+			data:    map[string]any{"test": "data"},
+		}
 		producer.config.URL = "invalid"
 		producer.config.numRetries = 2
-		appData.handler = &MockCompletionHandler{}
 		err = producer.SendTo(appData)
 		if err.Error() != "failed to send data" {
 			t.Errorf("Expected specified error from SendTo, got '%v'", err)
@@ -196,28 +192,6 @@ func TestHTTPProducer(t *testing.T) {
 		if err.Error() != "parse "+`"`+server.URL+`/%%": invalid URL escape "%%"` {
 			t.Errorf("Expected specified error from SendTo, got full '%v'", err)
 		}
-	})
-	t.Run("SendToPanic", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Errorf("Expected panic from SendTo, got nil")
-			}
-		}()
-		producer := &HTTPProducer{
-			config: &HTTPProducerConfig{
-				URL:        "/test",
-				numRetries: 0,
-				timeout:    0,
-			},
-			client: &http.Client{},
-		}
-		appData := &AppData{
-			data: map[string]any{"test": "data"},
-			handler: &MockCompletionHandler{
-				isError: true,
-			},
-		}
-		_ = producer.SendTo(appData)
 	})
 }
 
@@ -792,16 +766,10 @@ func TestRabbitMQProducer(t *testing.T) {
 		if err.Error() != "channel not set" {
 			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
 		}
-		// check error case when appData.GetHandler() returns an error
-		producer.channel = &MockRabbitMQProducerChannel{}
-		err = producer.SendTo(appData)
-		if err.Error() != "handler not set" {
-			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
-		}
 		// check error when the data cannot be marshalled to json
+		producer.channel = &MockRabbitMQProducerChannel{}
 		appData = &AppData{
 			data: make(chan int),
-			handler: &MockCompletionHandler{},
 		}
 		err = producer.SendTo(appData)
 		if err == nil {
@@ -813,7 +781,6 @@ func TestRabbitMQProducer(t *testing.T) {
 		// check error case when Publish() returns an error
 		appData = &AppData{
 			data: map[string]any{"test": "data"},
-			handler: &MockCompletionHandler{},
 		}
 		producer.channel = &MockRabbitMQProducerChannel{isPublishError: true}
 		err = producer.SendTo(appData)
@@ -837,7 +804,6 @@ func TestRabbitMQProducer(t *testing.T) {
 		}
 		appData = &AppData{
 			data: map[string]any{"test": "data"},
-			handler: &MockCompletionHandler{},
 		}
 		err = producer.SendTo(appData)
 		if err != nil {
@@ -857,26 +823,5 @@ func TestRabbitMQProducer(t *testing.T) {
 		if producer.ctx.Err() != nil {
 			t.Fatalf("Expected context to still be active, got %v", producer.ctx.Err())
 		}
-		// check case when there is an error in Complete method of the handler
-		appData = &AppData{
-			data: map[string]any{"test": "data"},
-			handler: &MockCompletionHandler{
-				isError: true,
-			},
-		}
-		err = producer.SendTo(appData)
-		if err == nil {
-			t.Fatalf("Expected error from SendTo, got nil")
-		}
-		if err.Error() != "error" {
-			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
-		}
-		<-producer.ctx.Done()
-		if context.Cause(producer.ctx).Error() != "error" {
-			t.Fatalf("Expected specified error from SendTo, got '%v'", context.Cause(producer.ctx).Error())
-		}
 	})
-
-
-
 }

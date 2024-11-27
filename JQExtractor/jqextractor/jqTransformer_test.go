@@ -2,6 +2,8 @@ package jqextractor
 
 import (
 	"errors"
+	"flag"
+	"os"
 	"strings"
 	"testing"
 
@@ -20,7 +22,7 @@ func TestJQTransformerConfig(t *testing.T) {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
 		// Test when the config is valid
-		err = jqtConfig.IngestConfig(map[string]interface{}{"JQQueryStrings": map[string]string{"key": ".key"}})
+		err = jqtConfig.IngestConfig(map[string]interface{}{"JQQueryStrings": map[string]any{"key": ".key"}})
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}
@@ -28,7 +30,7 @@ func TestJQTransformerConfig(t *testing.T) {
 			t.Errorf("Expected JQQueryStrings to be populated, got empty")
 		}
 		// Tests when the JQQueryStrings map is empty
-		err = jqtConfig.IngestConfig(map[string]interface{}{"JQQueryStrings": map[string]string{}})
+		err = jqtConfig.IngestConfig(map[string]interface{}{"JQQueryStrings": map[string]any{}})
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
@@ -47,23 +49,32 @@ func TestGetDataFromJQIterator(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error from getDataFromJQIterator, got nil")
 		}
-		// Test when there is data
+		// Test when there is data but it is not a map of string to array of any
 		iter = gojq.NewIter(1)
-		data, err = getDataFromJQIterator(&iter)
-		if data != 1 {
-			t.Errorf("Expected data to be 1, got %v", data)
+		_, err = getDataFromJQIterator(&iter)
+		if err == nil {
+			t.Errorf("Expected error from getDataFromJQIterator, got %v", err)
 		}
-		if err != nil {
-			t.Errorf("Expected no error from getDataFromJQIterator, got %v", err)
+		if err.Error() != "data is not a map of strings to arrays" {
+			t.Errorf("Expected error message to be \"data is not a map of strings to arrays\", got %v", err)
 		}
 		// Test when there is more than one data
 		iter = gojq.NewIter(1, 2)
-		data, err = getDataFromJQIterator(&iter)
-		if data != nil {
-			t.Errorf("Expected data to be nil, got %v", data)
-		}
+		_, err = getDataFromJQIterator(&iter)
 		if err == nil {
 			t.Errorf("Expected error from getDataFromJQIterator, got nil")
+		}
+		if err.Error() != "more than one data" {
+			t.Errorf("Expected error message to be \"more than one data\", got %v", err)
+		}
+		// Test when there is one data and it is a map of string to array of any
+		iter = gojq.NewIter(map[string][]any{"key": {1}})
+		data, err = getDataFromJQIterator(&iter)
+		if err != nil {
+			t.Errorf("Expected no error from getDataFromJQIterator, got %v", err)
+		}
+		if data["key"][0] != 1 {
+			t.Errorf("Expected data to be 1, got %v", data["key"][0])
 		}
 	})
 }
@@ -71,14 +82,14 @@ func TestGetDataFromJQIterator(t *testing.T) {
 // MockPushable is a mock implementation of the Pushable interface
 type MockPushable struct {
 	isSendToError bool
-	incomingData  *Server.AppData
+	incomingData  chan(*Server.AppData)
 }
 
 func (p *MockPushable) SendTo(data *Server.AppData) error {
 	if p.isSendToError {
 		return errors.New("test error")
 	}
-	p.incomingData = data
+	p.incomingData <- data
 	return nil
 }
 
@@ -90,7 +101,7 @@ func (mch *MockCompletionHandler) Complete(data interface{}, err error) error {
 	return nil
 }
 
-// NotJQTransformerConfig is a struct that does is not JQTransformerConfig struct
+// NotJQTransformerConfig is a struct that is not JQTransformerConfig struct
 type NotJQTransformerConfig struct{}
 
 func (s *NotJQTransformerConfig) IngestConfig(config map[string]any) error {
@@ -151,25 +162,56 @@ func TestJQTransformer(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error from SendTo, got nil")
 		}
-		// Test when jqProgram and pushable are set
+		// Tests when jqProgram and pushable are set but GetData returns an error
 		jqTransformer.pushable = &Pushable
-		completionHandler := &MockCompletionHandler{}
-		appData := Server.NewAppData(map[string]interface{}{"key": 1}, completionHandler)
+		err = jqTransformer.SendTo(&Server.AppData{})
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "data is not set" {
+			t.Errorf("Expected error message to be \"data is not set\", got %v", err)
+		}
+		// Test when jqProgram and pushable are set but the jqProgram does not return a map of string to an array
+		jqTransformer.pushable = &Pushable
+		appData := Server.NewAppData(map[string]interface{}{"key": 1}, "")
+		err = jqTransformer.SendTo(appData)
+		if err == nil {
+			t.Errorf("Expected error from SendTo, got nil")
+		}
+		// Test when the pushable SendTo method returns an error
+		Pushable.isSendToError = true
+		newjqQuery, err := gojq.Parse(`{"X": [(.key)]}`)
+		if err != nil {
+			t.Errorf("Error parsing JQ program: %v", err)
+		}
+		newjqProgram, err := gojq.Compile(newjqQuery)
+		if err != nil {
+			t.Errorf("Error compiling JQ program: %v", err)
+		}
+		jqTransformer.jqProgram = newjqProgram
+		err = jqTransformer.SendTo(appData)
+		if err == nil {
+			t.Errorf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "test error" {
+			t.Errorf("Expected error message to be \"test error\", got %v", err)
+		}
+		// Test when jqProgram and pushable are set and the jqProgram returns a map of string to an array
+		Pushable.isSendToError = false
+		incomingChannel := make(chan(*Server.AppData), 1)
+		Pushable.incomingData = incomingChannel
 		err = jqTransformer.SendTo(appData)
 		if err != nil {
 			t.Errorf("Expected no error from SendTo, got %v", err)
 		}
-		data := Pushable.incomingData
-		if data.GetData() != 1 {
-			t.Errorf("Expected data to be 1, got %v", data.GetData())
-		}
-		dataHandler, err := data.GetHandler()
+		data := <- Pushable.incomingData
+		close(incomingChannel)
+		gotData, err := data.GetData()
 		if err != nil {
-			t.Errorf("Expected no error from GetHandler, got %v", err)
+			t.Errorf("Expected no error from GetData, got %v", err)
 		}
-
-		if dataHandler != completionHandler {
-			t.Errorf("Expected handler to be %v, got %v", completionHandler, dataHandler)
+		if gotData != 1 {
+			t.Errorf("Expected data to be 1, got %v", gotData)
 		}
 	})
 	t.Run("Serve", func(t *testing.T) {
@@ -239,4 +281,146 @@ func TestJQTransformer(t *testing.T) {
 			t.Errorf("Expected JQTransformer to implement PipeServer interface")
 		}
 	})
+}
+
+// MockConfig is a mock implementation of the Config interface
+type MockConfig struct {}
+
+func (mc *MockConfig) IngestConfig(config map[string]any) error {
+	return nil
+}
+
+// MockSourceServer is a mock implementation of the SourceServer interface
+type MockSourceServer struct {
+	dataToSend []any
+	pushable  Server.Pushable
+}
+
+// AddPushable is a method that adds a pushable to the SourceServer
+func (mss *MockSourceServer) AddPushable(pushable Server.Pushable) error {
+	mss.pushable = pushable
+	return nil
+}
+
+// Serve is a method that serves the SourceServer
+func (mss *MockSourceServer) Serve() error {
+	for _, data := range mss.dataToSend {
+		err := mss.pushable.SendTo(Server.NewAppData(data, ""))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Setup is a method that sets up the SourceServer
+func (mss *MockSourceServer) Setup(config Server.Config) error {
+	return nil
+}
+
+// MockSinkServer is a mock implementation of the SinkServer interface
+type MockSinkServer struct {
+	dataReceived chan(any)
+}
+
+// SendTo is a method that sends data to the SinkServer
+func (mss *MockSinkServer) SendTo(data *Server.AppData) error {
+	if data == nil {
+		return errors.New("data is nil")
+	}
+	gotData, err := data.GetData()
+	if err != nil {
+		return err
+	}
+	mss.dataReceived <- gotData
+	return nil
+}
+
+// Serve is a method that serves the SinkServer
+func (mss *MockSinkServer) Serve() error {
+	return nil
+}
+
+// Setup is a method that sets up the SinkServer
+func (mss *MockSinkServer) Setup(config Server.Config) error {
+	return nil
+}
+
+
+
+// TestJQTransformer integrating with RunApp
+func TestJQTransformerRunApp(t *testing.T) {
+	// Setup
+	dataToSend := []any{}
+	for i := 0; i < 10; i++ {
+		dataToSend = append(dataToSend, map[string]interface{}{"key": i})
+	}
+	mockSourceServer := &MockSourceServer{
+		dataToSend: dataToSend,
+	}
+	chanForData := make(chan(any), 10)
+	mockSinkServer := &MockSinkServer{
+		dataReceived: chanForData,
+	}
+	jqTransformer := &JQTransformer{}
+	jqTransformerConfig := &JQTransformerConfig{}
+	producerConfigMap := map[string]func() Server.Config{
+		"MockSink": func() Server.Config {
+			return &MockConfig{}
+		},
+	}
+	consumerConfigMap := map[string]func() Server.Config{
+		"MockSource": func() Server.Config {
+			return &MockConfig{}
+		},
+	}
+	producerMap := map[string]func() Server.SinkServer{
+		"MockSink": func() Server.SinkServer {
+			return mockSinkServer
+		},
+	}
+	consumerMap := map[string]func() Server.SourceServer{
+		"MockSource": func() Server.SourceServer {
+			return mockSourceServer
+		},
+	}
+	// set config file
+	tmpFile, err := os.CreateTemp("", "config.json")
+	if err != nil {
+		t.Errorf("Error creating temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	data := []byte(
+		`{"AppConfig":{"JQQueryStrings":{"outData":".key"}},"ProducersSetup":{"ProducerConfigs":[{"Type":"MockSink","ProducerConfig":{}}]},"ConsumersSetup":{"ConsumerConfigs":[{"Type":"MockSource","ConsumerConfig":{}}]}}`,
+	)
+	err = os.WriteFile(tmpFile.Name(), data, 0644)
+	if err != nil {
+		t.Errorf("Error writing to temp file: %v", err)
+	}
+	err = flag.Set("config", tmpFile.Name())
+	if err != nil {
+		t.Errorf("Error setting flag: %v", err)
+	}
+	// Run the app
+	err = Server.RunApp(
+		jqTransformer, jqTransformerConfig,
+		producerConfigMap, consumerConfigMap,
+		producerMap, consumerMap,
+	)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	close(chanForData)
+	// Check if the data was transformed correctly
+	counter := 0
+	for data := range mockSinkServer.dataReceived {
+		if data != counter {
+			t.Errorf("Expected data to be %d, got %v", counter, data)
+		}
+		counter++
+	}
+	if counter != 10 {
+		t.Errorf("Expected 10 data points, got %d", counter)
+	}
+
 }
