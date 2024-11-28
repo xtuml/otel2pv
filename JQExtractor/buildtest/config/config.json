@@ -1,0 +1,30 @@
+{
+    "AppConfig": {
+        "JQQueryStrings": {
+            "Test": ".test"
+        }
+    },
+    "ProducersSetup": {
+        "IsMapping": false,
+        "ProducerConfigs": [
+            {
+                "Type": "RabbitMQ",
+                "ProducerConfig": {
+                    "Connection": "amqp://guest:guest@rabbitmq:5672",
+                    "Queue": "ProduceTest"
+                }
+            }
+        ]
+    },
+    "ConsumersSetup": {
+        "ConsumerConfigs": [
+            {
+                "Type": "RabbitMQ",
+                "ConsumerConfig": {
+                    "Connection": "amqp://guest:guest@rabbitmq:5672",
+                    "Queue": "ConsumeTest"
+                }
+            }
+        ]
+    }
+}

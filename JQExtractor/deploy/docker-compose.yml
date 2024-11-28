@@ -1,0 +1,10 @@
+services:
+  jqextractor:
+    image: jqextractor:latest
+    build:
+      context: ../../.
+      dockerfile: JQExtractor/Dockerfile.JQExtractor
+    container_name: jqextractor
+    volumes:
+      - ./config:/config
+    entrypoint: ["/jq-extractor", "--config", "/config/config.json"]

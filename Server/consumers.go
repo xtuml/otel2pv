@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	rabbitmq "github.com/rabbitmq/amqp091-go"
 )
@@ -280,22 +281,30 @@ func sendRabbitMQMessageDataToPushable(msg *rabbitmq.Delivery, pushable Pushable
 func sendChannelOfRabbitMQDeliveryToPushable(channel <-chan rabbitmq.Delivery, pushable Pushable) error {
 	wg := &sync.WaitGroup{}
 	ctx, cancel := context.WithCancelCause(context.Background())
-	for msg := range channel {
-		if ctx.Err() != nil {
-			break
+	BREAK:
+	for {
+		select {
+		case <-ctx.Done():
+			break BREAK
+		case msg, ok := <-channel:
+			if !ok {
+				break BREAK
+			}
+			wg.Add(1)
+			go func(msg *rabbitmq.Delivery) {
+				defer wg.Done()
+				err := sendRabbitMQMessageDataToPushable(msg, pushable)
+				if err != nil {
+					cancel(err)
+				}
+				ackErr := msg.Ack(false)
+				if ackErr != nil {
+					cancel(ackErr)
+				}
+			}(&msg)
+		default:
+			time.Sleep(100 * time.Millisecond)
 		}
-		wg.Add(1)
-		go func(msg *rabbitmq.Delivery) {
-			defer wg.Done()
-			err := sendRabbitMQMessageDataToPushable(msg, pushable)
-			if err != nil {
-				cancel(err)
-			}
-			ackErr := msg.Ack(false)
-			if ackErr != nil {
-				cancel(ackErr)
-			}
-		}(&msg)
 	}
 	wg.Wait()
 	if ctx.Err() != nil {

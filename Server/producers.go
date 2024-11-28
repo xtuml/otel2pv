@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -143,12 +145,18 @@ var PRODUCERMAP = map[string]func() SinkServer{
 	"HTTP": func() SinkServer {
 		return &HTTPProducer{}
 	},
+	"RabbitMQ": func() SinkServer {
+		return &RabbitMQProducer{}
+	},
 }
 
 // ProducerConfigMap is a map that contains functions to get ProducerConfigs.
 var PRODUCERCONFIGMAP = map[string]func() Config{
 	"HTTP": func() Config {
 		return &HTTPProducerConfig{}
+	},
+	"RabbitMQ": func() Config {
+		return &RabbitMQProducerConfig{}
 	},
 }
 
@@ -363,8 +371,8 @@ type RabbitMQProducer struct {
 	config  *RabbitMQProducerConfig
 	dial    RabbitMQProducerDial
 	channel RabbitMQProducerChannel
-	ctx    context.Context
-	cancel context.CancelCauseFunc
+	ctx     context.Context
+	cancel  context.CancelCauseFunc
 }
 
 // Setup is a method that will set up the RabbitMQProducer.
@@ -417,6 +425,11 @@ func (r *RabbitMQProducer) Serve() error {
 		return err
 	}
 	defer r.channel.Close()
+	_, err = r.channel.QueueDeclare(r.config.RoutingKey, true, false, false, false, nil)
+	if err != nil {
+		return err
+	}
+
 	<-r.ctx.Done()
 	if context.Cause(r.ctx) != nil {
 		if context.Cause(r.ctx).Error() == "context canceled" {
@@ -464,6 +477,7 @@ func (r *RabbitMQProducer) SendTo(data *AppData) error {
 		ContentType: "application/json",
 		Body:        jsonData,
 	})
+	slog.Info("Successfully sent message", "details", fmt.Sprintf("Sent data to exchange: %s, routing key: %s", r.config.Exchange, r.config.RoutingKey))
 	if err != nil {
 		r.cancel(err)
 		return err

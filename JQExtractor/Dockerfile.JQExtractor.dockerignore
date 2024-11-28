@@ -1,0 +1,6 @@
+# Ignore eveything
+*
+
+# Allow Server and JQExtractor Directories
+!Server/
+!JQExtractor/

@@ -176,7 +176,7 @@ func (jqt *JQTransformer) Setup(config Server.Config) error {
 		if err != nil {
 			return errors.New("The following JQ string for key \"" + key + "\" failed to be compiled correctly:\n" + jqString + "\n" + err.Error())
 		}
-		jqBuiltString += key + ": [( " + jqString + " )],\n"
+		jqBuiltString += key + ": [( " + jqString + " )//empty],\n"
 	}
 	jqBuiltString += "}"
 	jqQuery, err := gojq.Parse(jqBuiltString)
