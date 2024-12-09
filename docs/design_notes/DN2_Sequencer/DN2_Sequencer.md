@@ -42,17 +42,16 @@ The incoming data will be required have the following format:
 ```json
 [
     {
-        "<tree id field name>": "<string>",
-        "<node id field name>": "<string>",
-        "<timestamp field name>": "<specified timestamp format>",
-        "<parent id field name>": "<string>",
-        "<children field name>": ["<string>"],
-        <arbitrary non-conflicting fields>
+        "nodeId": "<string>",
+        "orderedChildIds": ["<string>"],
+        "appJSON": {
+            <arbitrary fields>
+        } 
     },
     ...
 ]
 ```
-The arbitrary fields can be set in the configuration and will be used to set fields in the output data.
+The appJSON is arbitrary JSON object that the previous node id field will be added to once sequencing is complete.
 
 ### Outgoing Data Format
 The outgoing data will be an array of JSON objects that follow the Protocol Verifier audit event sequences format as described in the Problem section (for now). However, it is envisaged that this format may develop in the future and therefore the configuration will allow for the mapping of the incoming data to the outgoing data. For now however the outgoing data will be in the following format as an array of JSON objects:
@@ -89,3 +88,8 @@ The Sequencer app will use the server library to provide the server running func
 The class diagram for the Sequencer is as follows:
 
 ![Class Diagram](./class_diagram.svg)
+
+### Implementation
+The implmentation of the Sequencer struct is as follows in the activity diagram:
+
+![Implementation](./implementation_Sequencer.svg)

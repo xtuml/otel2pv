@@ -13,16 +13,14 @@ interface Server.Pushable {
 }
 
 namespace Sequencer {
-    enum SequenceMethod {
-        TIMESTAMP
-        ORDEREDCHILDREN
-        COMBINATION
+    enum OutputAppFieldSequenceType {
+        Array
+        String
     }
     struct SequencerConfig {
-        -SequenceMethod sequenceMethod
-        -string inputSchema
-        -string outputSchema
-        -map[string]string inputToOutputMap
+        -string outputAppSequenceField
+        -string outputAppFieldSequenceIdMap
+        -OutputAppFieldSequenceType outputAppFieldSequenceType
         +error IngestConfig(map[string]any)
     }
     struct Sequencer {
@@ -33,11 +31,22 @@ namespace Sequencer {
         +error Serve()
         +error Setup(Server.Config)
     }
+    struct IncomingData {
+        -string NodeId
+        -[]string OrderedChildIds
+        -map[string]any AppJSON
+    }
+    struct StackIncomingData {
+        -*IncomingData data
+        -int currentChildIndex
+        +(string, error) NextChildId()
+    }
 }
 
 Server.PipeServer <|-- Sequencer.Sequencer
 Server.Pushable *-- Sequencer.Sequencer
 Server.Config <|-- Sequencer.SequencerConfig
 Sequencer.SequencerConfig *-- Sequencer.Sequencer
-Sequencer.SequenceMethod *-- Sequencer.SequencerConfig
+Sequencer.OutputAppFieldSequenceType *-- Sequencer.SequencerConfig
+Sequencer.IncomingData *-- Sequencer.StackIncomingData
 @enduml
