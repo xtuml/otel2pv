@@ -2,7 +2,10 @@ package sequencer
 
 import (
 	"errors"
+	"flag"
+	"os"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
@@ -973,4 +976,180 @@ func TestGetPrevIdData(t *testing.T) {
 			t.Errorf("Expected prevIdData to be '1', got %v", prevIdData)
 		}
 	})
+}
+
+// MockConfig is a mock implementation of the Config interface
+type MockConfig struct{}
+
+func (mc *MockConfig) IngestConfig(config map[string]any) error {
+	return nil
+}
+
+// MockSourceServer is a mock implementation of the SourceServer interface
+type MockSourceServer struct {
+	dataToSend []any
+	pushable   Server.Pushable
+}
+
+// AddPushable is a method that adds a pushable to the SourceServer
+func (mss *MockSourceServer) AddPushable(pushable Server.Pushable) error {
+	mss.pushable = pushable
+	return nil
+}
+
+// Serve is a method that serves the SourceServer
+func (mss *MockSourceServer) Serve() error {
+	for _, data := range mss.dataToSend {
+		err := mss.pushable.SendTo(Server.NewAppData(data, ""))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Setup is a method that sets up the SourceServer
+func (mss *MockSourceServer) Setup(config Server.Config) error {
+	return nil
+}
+
+// MockSinkServer is a mock implementation of the SinkServer interface
+type MockSinkServer struct {
+	dataReceived chan (any)
+}
+
+// SendTo is a method that sends data to the SinkServer
+func (mss *MockSinkServer) SendTo(data *Server.AppData) error {
+	if data == nil {
+		return errors.New("data is nil")
+	}
+	gotData, err := data.GetData()
+	if err != nil {
+		return err
+	}
+	mss.dataReceived <- gotData
+	return nil
+}
+
+// Serve is a method that serves the SinkServer
+func (mss *MockSinkServer) Serve() error {
+	return nil
+}
+
+// Setup is a method that sets up the SinkServer
+func (mss *MockSinkServer) Setup(config Server.Config) error {
+	return nil
+}
+
+// Test Sequencer integrating with RunApp
+func TestSeqeuncerRunApp(t *testing.T) {
+	// Setup
+	dataArray := []map[string]any{}
+	for i := 0; i < 10; i++ {
+		dataToAppend := map[string]any{
+			"nodeId":          strconv.Itoa(i),
+			"appJSON":         map[string]any{"key": strconv.Itoa(i)},
+		}
+		if i != 9 {
+			dataToAppend["orderedChildIds"] = []any{strconv.Itoa(i + 1)}
+		} else {
+			dataToAppend["orderedChildIds"] = []any{}
+		}
+		dataArray = append(dataArray, dataToAppend)
+	}
+	dataToSend := []any{
+		dataArray,
+	}
+	mockSourceServer := &MockSourceServer{
+		dataToSend: dataToSend,
+	}
+	chanForData := make(chan (any), 10)
+	mockSinkServer := &MockSinkServer{
+		dataReceived: chanForData,
+	}
+	sequencer := &Sequencer{}
+	sequencerConfig := &SequencerConfig{}
+	producerConfigMap := map[string]func() Server.Config{
+		"MockSink": func() Server.Config {
+			return &MockConfig{}
+		},
+	}
+	consumerConfigMap := map[string]func() Server.Config{
+		"MockSource": func() Server.Config {
+			return &MockConfig{}
+		},
+	}
+	producerMap := map[string]func() Server.SinkServer{
+		"MockSink": func() Server.SinkServer {
+			return mockSinkServer
+		},
+	}
+	consumerMap := map[string]func() Server.SourceServer{
+		"MockSource": func() Server.SourceServer {
+			return mockSourceServer
+		},
+	}
+	// set config file
+	tmpFile, err := os.CreateTemp("", "config.json")
+	if err != nil {
+		t.Errorf("Error creating temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	data := []byte(
+		`{"AppConfig":{"outputAppSequenceField":"seqField", "outputAppFieldSequenceType":"string"},"ProducersSetup":{"ProducerConfigs":[{"Type":"MockSink","ProducerConfig":{}}]},"ConsumersSetup":{"ConsumerConfigs":[{"Type":"MockSource","ConsumerConfig":{}}]}}`,
+	)
+	err = os.WriteFile(tmpFile.Name(), data, 0644)
+	if err != nil {
+		t.Errorf("Error writing to temp file: %v", err)
+	}
+	err = flag.Set("config", tmpFile.Name())
+	if err != nil {
+		t.Errorf("Error setting flag: %v", err)
+	}
+	// Run the app
+	err = Server.RunApp(
+		sequencer, sequencerConfig,
+		producerConfigMap, consumerConfigMap,
+		producerMap, consumerMap,
+	)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	close(chanForData)
+	// Check if the data was transformed correctly
+	counter := 0
+	for data := range mockSinkServer.dataReceived {
+		dataAsArray, ok := data.([]map[string]any)
+		if !ok {
+			t.Fatalf("Expected data to be an array of maps")
+		}
+		if len(dataAsArray) != 10 {
+			t.Fatalf("Expected data to have 10 elements, got %v", len(dataAsArray))
+		}
+		for i, appJSON := range dataAsArray {
+			if i == 0 {
+				if !reflect.DeepEqual(appJSON, map[string]any{
+					"key":      "9",
+				}) {
+					t.Errorf("Expected appJSON to be %v, got %v", map[string]any{
+						"key":      "9",
+					}, appJSON)
+				}
+			} else {
+				if !reflect.DeepEqual(appJSON, map[string]any{
+					"seqField": strconv.Itoa(10 - i),
+					"key":      strconv.Itoa(9 - i),
+				}) {
+					t.Errorf("Expected appJSON to be %v, got %v", map[string]any{
+						"seqField": strconv.Itoa(10 - i),
+						"key":      strconv.Itoa(9 - i),
+					}, appJSON)
+				}
+			}
+		}
+		counter++
+	}
+	if counter != 1 {
+		t.Errorf("Expected 1 data points, got %d", counter)
+	}
 }
