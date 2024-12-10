@@ -1,0 +1,10 @@
+services:
+  jqextractor:
+    image: sequencer:latest
+    build:
+      context: ../../.
+      dockerfile: Sequencer/Dockerfile.Sequencer
+    container_name: sequencer
+    volumes:
+      - ./config:/config
+    entrypoint: ["/sequencer", "--config", "/config/config.json"]

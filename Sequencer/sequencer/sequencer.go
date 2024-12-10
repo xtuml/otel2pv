@@ -322,20 +322,24 @@ func convertRawDataMapToIncomingData(rawDataMap map[string]any) (*incomingData, 
 //
 // 3. error. The error if the conversion fails
 func convertToIncomingDataMapAndRootNodes(rawData any) (map[string]*incomingData, map[string]*incomingData, error) {
-	rawDataArray, ok := rawData.([]map[string]any)
+	rawDataArray, ok := rawData.([]any)
 	if !ok {
 		return nil, nil, errors.New("data must be an array of maps")
-	}
+	}	
 	nodeIdToIncomingDataMap := make(map[string]*incomingData)
 	nodeIdToNoForwardRefMap := make(map[string]*incomingData)
 	nodeIdToForwardRefMap := make(map[string]bool)
-	for _, rawDataMap := range rawDataArray {
+	for _, rawDataAny := range rawDataArray {
+		rawDataMap, ok := rawDataAny.(map[string]any)
+		if !ok {
+			return nil, nil, errors.New("data must be an array of maps")
+		}
 		incomingData, err := convertRawDataMapToIncomingData(rawDataMap)
 		if err != nil {
 			return nil, nil, err
 		}
 		nodeIdToIncomingDataMap[incomingData.nodeId] = incomingData
-		_, ok := nodeIdToForwardRefMap[incomingData.nodeId]
+		_, ok = nodeIdToForwardRefMap[incomingData.nodeId]
 		if !ok {
 			nodeIdToNoForwardRefMap[incomingData.nodeId] = incomingData
 		}

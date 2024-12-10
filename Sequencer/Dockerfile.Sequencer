@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1
+
+# Use the golang alpine image
+FROM golang:alpine AS copyanddownload
+
+
+# Copy Server files
+RUN mkdir -p /Server
+COPY ./Server/ /Server
+
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the current directory contents into the container at /app
+COPY ./Sequencer/ .
+
+# Download all dependencies
+RUN go mod download
+
+# Build the Go app
+FROM copyanddownload AS builder
+
+# Build the Go app
+RUN CGO_ENABLED=0 GOOS=linux go build -o /sequencer .
+
+# Use the alpine image
+FROM alpine
+
+# Copy the sequencer binary from the builder stage
+COPY --from=builder /sequencer /sequencer
+
+# Command to run the executable
+ENTRYPOINT ["/sequencer"]
+
+

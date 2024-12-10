@@ -1,0 +1,40 @@
+# docker compose file to run the sequencer service
+# and setup a rabbitmq service for testing
+
+# Define the services
+services:
+  # Define the sequencer service
+  sequencer:
+    # Use the sequencer image
+    image: ${SEQUENCER_IMAGE}
+    # Build the image from the Dockerfile
+    build:
+      # Use the root directory as the context
+      context: ../../.
+      # Use the sequencer Dockerfile
+      dockerfile: sequencer/Dockerfile.sequencer
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    # Set the container name
+    container_name: sequencer
+    # Mount the config directory to the container
+    volumes:
+      - ./config:/config
+    # Set the entrypoint
+    entrypoint: ["/sequencer", "--config", "/config/config.json"]
+  # Define the rabbitmq service
+  rabbitmq:
+    # Use the rabbitmq:4.0-management image
+    image: rabbitmq:4.0-management
+    # Set the container name
+    container_name: rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Expose the ports
+    ports:
+      - "5672:5672"
+      - "15672:15672"

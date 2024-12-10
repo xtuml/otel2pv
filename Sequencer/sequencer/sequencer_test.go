@@ -311,7 +311,7 @@ func TestSequencer(t *testing.T) {
 			// check error case where there are no root nodes
 			sequencer.config = &SequencerConfig{}
 			err = sequencer.SendTo(Server.NewAppData(
-				[]map[string]any{}, "",
+				[]any{}, "",
 			))
 			if err == nil {
 				t.Fatalf("Expected error from SendTo, got nil")
@@ -322,8 +322,8 @@ func TestSequencer(t *testing.T) {
 			// check error case where sequenceWithStack returns an error
 			sequencer.config = &SequencerConfig{}
 			err = sequencer.SendTo(Server.NewAppData(
-				[]map[string]any{
-					{
+				[]any{
+					map[string]any{
 						"nodeId":          "1",
 						"orderedChildIds": []any{"2"},
 						"appJSON":         map[string]any{},
@@ -340,13 +340,13 @@ func TestSequencer(t *testing.T) {
 			// check error case where getPrevIdData returns an error
 			sequencer.config = &SequencerConfig{}
 			appData := Server.NewAppData(
-				[]map[string]any{
-					{
+				[]any{
+					map[string]any{
 						"nodeId":          "1",
 						"orderedChildIds": []any{"2"},
 						"appJSON":         map[string]any{},
 					},
-					{
+					map[string]any{
 						"nodeId":          "2",
 						"orderedChildIds": []any{},
 						"appJSON":         map[string]any{},
@@ -387,13 +387,13 @@ func TestSequencer(t *testing.T) {
 				},
 			}
 			appData := Server.NewAppData(
-				[]map[string]any{
-					{
+				[]any{
+					map[string]any{
 						"nodeId":          "1",
 						"orderedChildIds": []any{"2"},
 						"appJSON":         map[string]any{},
 					},
-					{
+					map[string]any{
 						"nodeId":          "2",
 						"orderedChildIds": []any{},
 						"appJSON":         map[string]any{},
@@ -433,23 +433,23 @@ func TestSequencer(t *testing.T) {
 				},
 			}
 			appData = Server.NewAppData(
-				[]map[string]any{
-					{
+				[]any{
+					map[string]any{
 						"nodeId":          "1",
 						"orderedChildIds": []any{"2"},
 						"appJSON":         map[string]any{},
 					},
-					{
+					map[string]any{
 						"nodeId":          "2",
 						"orderedChildIds": []any{},
 						"appJSON":         map[string]any{"field": "2"},
 					},
-					{
+					map[string]any{
 						"nodeId":          "3",
 						"orderedChildIds": []any{"4"},
 						"appJSON":         map[string]any{},
 					},
-					{
+					map[string]any{
 						"nodeId":          "4",
 						"orderedChildIds": []any{},
 						"appJSON":         map[string]any{"field": "4"},
@@ -803,8 +803,8 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 			t.Errorf("Expected error message 'data must be an array of maps', got %v", err.Error())
 		}
 		// check error case where convertRawDataMapToIncomingData returns an error
-		_, _, err = convertToIncomingDataMapAndRootNodes([]map[string]any{
-			{},
+		_, _, err = convertToIncomingDataMapAndRootNodes([]any{
+			map[string]any{},
 		})
 		if err == nil {
 			t.Fatalf("Expected error from convertAppDataToIncomingDataMapAndRootNodes, got nil")
@@ -815,18 +815,18 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 	})
 	t.Run("valid", func(t *testing.T) {
 		// check valid case
-		nodes := []map[string]any{
-			{
+		nodes := []any{
+			map[string]any{
 				"nodeId":          "1",
 				"orderedChildIds": []any{"2", "3"},
 				"appJSON":         map[string]any{},
 			},
-			{
+			map[string]any{
 				"nodeId":          "2",
 				"orderedChildIds": []any{},
 				"appJSON":         map[string]any{},
 			},
-			{
+			map[string]any{
 				"nodeId":          "3",
 				"orderedChildIds": []any{},
 				"appJSON":         map[string]any{},
@@ -842,7 +842,8 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 		if len(rootNodes) != 1 {
 			t.Errorf("Expected rootNodes to have 1 element, got %v", len(rootNodes))
 		}
-		for _, inputMap := range nodes {
+		for _, inputMapAny := range nodes {
+			inputMap := inputMapAny.(map[string]any)
 			incomingData, ok := incomingDataMap[inputMap["nodeId"].(string)]
 			if !ok {
 				t.Errorf("Expected incomingDataMap to have key %v", inputMap["nodeId"])
@@ -1044,7 +1045,7 @@ func (mss *MockSinkServer) Setup(config Server.Config) error {
 // Test Sequencer integrating with RunApp
 func TestSeqeuncerRunApp(t *testing.T) {
 	// Setup
-	dataArray := []map[string]any{}
+	dataArray := []any{}
 	for i := 0; i < 10; i++ {
 		dataToAppend := map[string]any{
 			"nodeId":          strconv.Itoa(i),
