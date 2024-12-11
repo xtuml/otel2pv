@@ -22,6 +22,7 @@ namespace GroupAndVerify {
     struct GroupAndVerifyConfig {
         -bool orderChildrenByTimestamp
         -map[string]GroupApply groupApplies
+        -map[string]bool parentVerifySet
         +error IngestConfig(map[string]any)
     }
     struct GroupAndVerify {
