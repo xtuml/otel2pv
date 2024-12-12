@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	amqp "github.com/Azure/go-amqp"
 	rabbitmq "github.com/rabbitmq/amqp091-go"
 )
 
@@ -889,6 +890,335 @@ func TestAMQPOneProducerConfig(t *testing.T) {
 		}
 		if config.Queue != "test" {
 			t.Errorf("Expected Queue to be 'test', got '%v'", config.Queue)
+		}
+	})
+}
+
+// MockAMQPOneProducerSender is a mock implementation of the AMQPOneProducerSender interface
+type MockAMQPOneProducerSender struct {
+	isSendError bool
+	isCloseError bool
+	incomingData *amqp.Message
+}
+
+func (s *MockAMQPOneProducerSender) Send(ctx context.Context, msg *amqp.Message, opts *amqp.SendOptions) error {
+	if s.isSendError {
+		return errors.New("error sending message")
+	}
+	s.incomingData = msg
+	return nil
+}
+
+func (s *MockAMQPOneProducerSender) Close(ctx context.Context) error {
+	if s.isCloseError {
+		return errors.New("error closing sender")
+	}
+	return nil
+}
+
+// MockAMQPOneProducerSession is a mock implementation of the AMQPOneProducerSession interface
+type MockAMQPOneProducerSession struct {
+	isSenderError bool
+	isCloseError bool
+	sender        *MockAMQPOneProducerSender
+}
+
+func (s *MockAMQPOneProducerSession) NewSender(ctx context.Context, target string, opts *amqp.SenderOptions) (AMQPOneProducerSender, error) {
+	if s.isSenderError {
+		return nil, errors.New("error getting sender")
+	}
+	if s.sender == nil {
+		return nil, errors.New("sender not set")
+	}
+	return s.sender, nil
+}
+
+func (s *MockAMQPOneProducerSession) Close(ctx context.Context) error {
+	if s.isCloseError {
+		return errors.New("error closing session")
+	}
+	return nil
+}
+
+// MockAMQPOneProducerConn is a mock implementation of the AMQPOneProducerConn interface
+type MockAMQPOneProducerConnection struct {
+	isNewSessionError bool
+	isCloseError bool
+	session *MockAMQPOneProducerSession
+}
+
+func (c *MockAMQPOneProducerConnection) NewSession(ctx context.Context, opts *amqp.SessionOptions) (AMQPOneProducerSession, error) {
+	if c.isNewSessionError {
+		return nil, errors.New("error getting session")
+	}
+	if c.session == nil {
+		return nil, errors.New("session not set")
+	}
+	return c.session, nil
+}
+
+func (c *MockAMQPOneProducerConnection) Close() error {
+	if c.isCloseError {
+		return errors.New("error closing connection")
+	}
+	return nil
+}
+
+// MockAMQPOneProducerDialWrapper
+func MockAMQPOneProducerDialWrapper(mockAMQPOneProducerConn *MockAMQPOneProducerConnection, isError bool) func(ctx context.Context, addr string, opts *amqp.ConnOptions) (AMQPOneProducerConnection, error) {
+	return func(ctx context.Context, addr string, opts *amqp.ConnOptions) (AMQPOneProducerConnection, error) {
+		if isError {
+			return nil, errors.New("error dialing")
+		}
+		return mockAMQPOneProducerConn, nil
+	}
+}
+
+
+
+
+
+
+// Test AMQPOneProducer
+func TestAMQPOneProducer(t *testing.T) {
+	t.Run("ImplementsSinkServer", func(t *testing.T) {
+		producer := &AMQPOneProducer{}
+		_, ok := interface{}(producer).(SinkServer)
+		if !ok {
+			t.Errorf("Expected producer to implement SinkServer interface")
+		}
+	})
+	t.Run("Setup", func(t *testing.T) {
+		producer := &AMQPOneProducer{}
+		config := &AMQPOneProducerConfig{
+			Connection: "test",
+			Queue: "test",
+		}
+		// Test valid config
+		err := producer.Setup(config)
+		if err != nil {
+			t.Errorf("Expected no error from Setup, got %v", err)
+		}
+		if producer.config != config {
+			t.Errorf("Expected producer.config to be equal to config")
+		}
+		if producer.dial == nil {
+			t.Errorf("Expected dial to be set, got nil")
+		}
+		if producer.ctx == nil {
+			t.Errorf("Expected context to be set, got nil")
+		}
+		if producer.cancel == nil {
+			t.Errorf("Expected cancel to be set, got nil")
+		}
+		// Test error case with invalid config
+		err = producer.Setup(&MockConfig{})
+		if err.Error() != "config is not an AMQPOneProducerConfig" {
+			t.Errorf("Expected specified error from Setup, got '%v'", err)
+		}
+	})
+	t.Run("Serve", func(t *testing.T) {
+		producer := &AMQPOneProducer{}
+		err := producer.Serve()
+		// check error case when config is not set
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "config not set" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check error case when dial is not set
+		producer.config = &AMQPOneProducerConfig{}
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "dial not set" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check error case when ctx is not set
+		producer.dial = MockAMQPOneProducerDialWrapper(&MockAMQPOneProducerConnection{}, false)
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "context not set" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check error case when cancel not set
+		ctx, cancel := context.WithCancelCause(context.Background())
+		producer.ctx = ctx
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "context cancel not set" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check error case when dial returns an error
+		producer.cancel = cancel
+		producer.dial = MockAMQPOneProducerDialWrapper(&MockAMQPOneProducerConnection{}, true)
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "error dialing" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check error case when NewSession() returns an error
+		producer.dial = MockAMQPOneProducerDialWrapper(&MockAMQPOneProducerConnection{isNewSessionError: true}, false)
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "error getting session" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check case when NewSender() returns an error
+		producer.dial = MockAMQPOneProducerDialWrapper(&MockAMQPOneProducerConnection{
+			session: &MockAMQPOneProducerSession{isSenderError: true},
+		}, false)
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "error getting sender" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check error case when the context is cancelled but with an error
+		producer.dial = MockAMQPOneProducerDialWrapper(&MockAMQPOneProducerConnection{
+			session: &MockAMQPOneProducerSession{
+				sender: &MockAMQPOneProducerSender{},
+			},
+		}, false)
+		producer.cancel(errors.New("check context with error"))
+		err = producer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		if err.Error() != "check context with error" {
+			t.Errorf("Expected specified error from Serve, got '%v'", err)
+		}
+		// check case when everything is set correctly
+		sender := &MockAMQPOneProducerSender{}
+		producer = &AMQPOneProducer{
+			config: &AMQPOneProducerConfig{
+				Connection: "test",
+				Queue: "test",
+			},
+			dial: MockAMQPOneProducerDialWrapper(&MockAMQPOneProducerConnection{
+				session: &MockAMQPOneProducerSession{
+					sender: sender,
+				},
+			}, false),
+		}
+		ctx, cancel = context.WithCancelCause(context.Background())
+		producer.ctx = ctx
+		producer.cancel = cancel
+		producer.cancel(nil)
+		err = producer.Serve()
+		if err != nil {
+			t.Errorf("Expected no error from Serve, got %v", err)
+		}
+		if producer.sender != sender {
+			t.Errorf("Expected producer.sender to be equal to sender")
+		}
+	})
+	t.Run("SendTo", func(t *testing.T) {
+		producer := &AMQPOneProducer{}
+		appData := &AppData{
+			data: map[string]any{"test": "data"},
+		}
+		// check error case when config is not set
+		err := producer.SendTo(appData)
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "config not set" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		// check error case when context is not set 
+		producer.config = &AMQPOneProducerConfig{}
+		err = producer.SendTo(appData)
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "context not set" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		// check error case when cancel not set
+		ctx, cancel := context.WithCancelCause(context.Background())
+		producer.ctx = ctx
+		err = producer.SendTo(appData)
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "context cancel not set" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		// check error case when sender is not set
+		producer.cancel = cancel
+		err = producer.SendTo(appData)
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "sender not set" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		// check error when the data cannot be marshalled to json
+		producer.sender = &MockAMQPOneProducerSender{}
+		appData = &AppData{
+			data: make(chan int),
+		}
+		err = producer.SendTo(appData)
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got nil")
+		}
+		if err.Error() != "json: unsupported type: chan int" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		// check error case when Send() returns an error
+		appData = &AppData{
+			data: map[string]any{"test": "data"},
+		}
+		producer.sender = &MockAMQPOneProducerSender{isSendError: true}
+		err = producer.SendTo(appData)
+		if err.Error() != "error sending message" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
+		}
+		<-producer.ctx.Done()
+		if context.Cause(producer.ctx).Error() != "error sending message" {
+			t.Fatalf("Expected specified error from SendTo, got '%v'", context.Cause(producer.ctx).Error())
+		}
+		// check case when everything is set correctly
+		ctx, cancel = context.WithCancelCause(context.Background())
+		producer = &AMQPOneProducer{
+			config: &AMQPOneProducerConfig{
+				Connection: "test",
+				Queue: "test",
+			},
+			ctx:    ctx,
+			cancel: cancel,
+			sender: &MockAMQPOneProducerSender{},
+		}
+		appData = &AppData{
+			data: map[string]any{"test": "data"},
+		}
+		err = producer.SendTo(appData)
+		if err != nil {
+			t.Fatalf("Expected no error from SendTo, got %v", err)
+		}
+		producerSender := producer.sender.(*MockAMQPOneProducerSender)
+		unmarshalledData := map[string]any{}
+		err = json.Unmarshal(producerSender.incomingData.GetData(), &unmarshalledData)
+		if err != nil {
+			t.Fatalf("Expected no error from json.Unmarshal, got %v", err)
+		}
+		if !reflect.DeepEqual(unmarshalledData, appData.data) {
+			t.Fatalf("Expected incomingData to be '%v', got '%v'", appData.data, unmarshalledData)
+		}
+		if producer.ctx.Err() != nil {
+			t.Fatalf("Expected context to still be active, got %v", producer.ctx.Err())
 		}
 	})
 }

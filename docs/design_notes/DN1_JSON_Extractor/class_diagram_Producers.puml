@@ -27,6 +27,16 @@ namespace Producer {
         +error Serve()
         +error Setup(Config)
     }
+    struct AMQPOneProducer {
+        -AMQPOneProducerConfig config
+        -AMQPOneProducerSender sender
+        -AMQPOneProdcuerDial dial
+        -context.Context ctx
+        -context.CancelCauseFunc cancel
+        +error SendTo(*AppData)
+        +error Serve()
+        +error Setup(Config)
+    }
     struct HTTPProducerConfig {
         +string URL
         +int NumRetries
@@ -49,10 +59,12 @@ namespace Producer {
 
 Server.SinkServer <|-- Producer.HTTPProducer
 Server.SinkServer <|-- Producer.RabbitMQProducer
+Server.SinkServer <|-- Producer.AMQPOneProducer
 
 Server.Config <|-- Producer.HTTPProducerConfig
 Server.Config <|-- Producer.RabbitMQProducerConfig
 Server.Config <|-- Producer.AMQPOneProducerConfig
 Producer.HTTPProducerConfig *-- Producer.HTTPProducer
 Producer.RabbitMQProducerConfig *-- Producer.RabbitMQProducer
+Producer.AMQPOneProducerConfig *-- Producer.AMQPOneProducer
 @enduml

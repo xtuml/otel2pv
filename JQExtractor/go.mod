@@ -10,6 +10,7 @@ require (
 )
 
 require (
+	github.com/Azure/go-amqp v1.3.0 // indirect
 	github.com/itchyny/timefmt-go v0.1.6 // indirect
 	github.com/rabbitmq/amqp091-go v1.10.0 // indirect
 )

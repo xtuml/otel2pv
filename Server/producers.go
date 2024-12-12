@@ -11,6 +11,8 @@ import (
 	"time"
 
 	rabbitmq "github.com/rabbitmq/amqp091-go"
+
+	amqp "github.com/Azure/go-amqp"
 )
 
 // HTTPProducerConfig is a struct that represents the configuration
@@ -148,6 +150,9 @@ var PRODUCERMAP = map[string]func() SinkServer{
 	"RabbitMQ": func() SinkServer {
 		return &RabbitMQProducer{}
 	},
+	"AMQPOne": func() SinkServer {
+		return &AMQPOneProducer{}
+	},
 }
 
 // ProducerConfigMap is a map that contains functions to get ProducerConfigs.
@@ -157,6 +162,9 @@ var PRODUCERCONFIGMAP = map[string]func() Config{
 	},
 	"RabbitMQ": func() Config {
 		return &RabbitMQProducerConfig{}
+	},
+	"AMQPOne": func() Config {
+		return &AMQPOneProducerConfig{}
 	},
 }
 
@@ -518,5 +526,207 @@ func (a *AMQPOneProducerConfig) IngestConfig(config map[string]any) error {
 		return errors.New("invalid Queue - must be a string and must be set")
 	}
 	a.Queue = queue
+	return nil
+}
+
+// AMQPOneProducerSender is an interface that represents a sender for an AMQP producer.
+type AMQPOneProducerSender interface {
+	Close(ctx context.Context) error
+	Send(ctx context.Context, msg *amqp.Message, opts *amqp.SendOptions) error
+}
+
+// AMQPOneProducerSession is an interface that represents a session for an AMQP producer.
+type AMQPOneProducerSession interface {
+	Close(ctx context.Context) error
+	NewSender(ctx context.Context, target string, opts *amqp.SenderOptions) (AMQPOneProducerSender, error)
+}
+
+// AMQPOneProducerConnection is an interface that represents a connection for an AMQP producer.
+type AMQPOneProducerConnection interface {
+	Close() error
+	NewSession(ctx context.Context, opts *amqp.SessionOptions) (AMQPOneProducerSession, error)
+}
+
+// AMQPOneProducerDial is a function type that represents a dialer for an AMQP producer.
+type AMQPOneProducerDial func(ctx context.Context, addr string, opts *amqp.ConnOptions) (AMQPOneProducerConnection, error)
+
+// AMQPOneProducerDialWrapper is a function that wraps the AMQP dial function.
+// It takes in a context.Context, a string, and an *amqp.ConnOptions and returns
+// an AMQPOneProducerConnection and an error.
+func AMQPOneProducerDialWrapper(ctx context.Context, addr string, opts *amqp.ConnOptions) (AMQPOneProducerConnection, error) {
+	conn, err := amqp.Dial(ctx, addr, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &AMQPOneProducerConnectionWrapper{conn: conn}, nil
+}
+
+// AMQPOneProducerConnectionWrapper is a struct that wraps an AMQP connection.
+type AMQPOneProducerConnectionWrapper struct {
+	conn *amqp.Conn
+}
+
+// Close is a method that will close the AMQP connection.
+func (a AMQPOneProducerConnectionWrapper) Close() error {
+	return a.conn.Close()
+}
+
+// NewSession is a method that will return a new AMQP session.
+func (a AMQPOneProducerConnectionWrapper) NewSession(ctx context.Context, opts *amqp.SessionOptions) (AMQPOneProducerSession, error) {
+	session, err := a.conn.NewSession(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &AMQPOneProducerSessionWrapper{session: session}, nil
+}
+
+// AMQPOneProducerSessionWrapper is a struct that wraps an AMQP session.
+type AMQPOneProducerSessionWrapper struct {
+	session *amqp.Session
+}
+
+// Close is a method that will close the AMQP session.
+func (a AMQPOneProducerSessionWrapper) Close(ctx context.Context) error {
+	return a.session.Close(ctx)
+}
+
+// NewSender is a method that will return a new AMQP sender.
+func (a AMQPOneProducerSessionWrapper) NewSender(ctx context.Context, target string, opts *amqp.SenderOptions) (AMQPOneProducerSender, error) {
+	return a.session.NewSender(ctx, target, opts)
+}
+
+// AMQPOneProducer is a struct that represents an AMQP producer.
+// It has the following fields:
+//
+// 1. config: *AMQPOneProducerConfig. A pointer to the configuration for the producer.
+//
+// 2. sender: AMQPOneProducerSender. The sender for the AMQP producer.
+//
+// 3. dial: AMQPOneProducerDial. The dialer for the AMQP producer.
+//
+// 4. ctx: context.Context. The context for the AMQP producer. Gives an appropriate
+// way to cancel the producer.
+//
+// 5. cancel: context.CancelCauseFunc. The cancel function for the AMQP producer. Gives
+// an appropriate way to cancel the producer.
+type AMQPOneProducer struct {
+	config *AMQPOneProducerConfig
+	sender AMQPOneProducerSender
+	dial   AMQPOneProducerDial
+	ctx    context.Context
+	cancel context.CancelCauseFunc
+}
+
+// Setup is a method that will set up the AMQPOneProducer.
+//
+// Args:
+//
+// 1. config: Config. The configuration for the AMQP producer.
+//
+// Returns:
+//
+// 1. error. An error if the process fails.
+func (a *AMQPOneProducer) Setup(config Config) error {
+	c, ok := config.(*AMQPOneProducerConfig)
+	if !ok {
+		return errors.New("config is not an AMQPOneProducerConfig")
+	}
+	a.config = c
+	a.dial = AMQPOneProducerDialWrapper
+	ctx, cancel := context.WithCancelCause(context.Background())
+	a.ctx = ctx
+	a.cancel = cancel
+	return nil
+}
+
+// Serve is a method that will start the AMQPOneProducer.
+//
+// Returns:
+//
+// 1. error. An error if the producer fails to send the data.
+func (a *AMQPOneProducer) Serve() error {
+	if a.config == nil {
+		return errors.New("config not set")
+	}
+	if a.dial == nil {
+		return errors.New("dial not set")
+	}
+	if a.ctx == nil {
+		return errors.New("context not set")
+	}
+	if a.cancel == nil {
+		return errors.New("context cancel not set")
+	}
+	conn, err := a.dial(a.ctx, a.config.Connection, nil)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	session, err := conn.NewSession(a.ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer session.Close(a.ctx)
+	sender, err := session.NewSender(a.ctx, a.config.Queue, nil)
+	if err != nil {
+		return err
+	}
+	defer sender.Close(a.ctx)
+	a.sender = sender
+	<-a.ctx.Done()
+	if context.Cause(a.ctx) != nil {
+		if context.Cause(a.ctx).Error() == "context canceled" {
+			return nil
+		}
+		return context.Cause(a.ctx)
+	}
+	return nil
+}
+
+var contentType = "application/json"
+
+// SendTo is a method that will send data to the AMQPOneProducer to be sent
+// to the configured queue.
+//
+// Args:
+//
+// 1. data: *AppData. The data to send.
+//
+// Returns:
+//
+// 1. error. An error if the data is invalid.
+func (a *AMQPOneProducer) SendTo(data *AppData) error {
+	if a.config == nil {
+		return errors.New("config not set")
+	}
+	if a.ctx == nil {
+		return errors.New("context not set")
+	}
+	if a.cancel == nil {
+		return errors.New("context cancel not set")
+	}
+	if a.sender == nil {
+		return errors.New("sender not set")
+	}
+
+	var err error
+	gotData, err := data.GetData()
+	if err != nil {
+		return err
+	}
+	jsonData, err := json.Marshal(gotData)
+	if err != nil {
+		return err
+	}
+	msg := amqp.NewMessage(jsonData)
+	msg.Properties = &amqp.MessageProperties{
+		ContentType: &contentType,
+	}
+	err = a.sender.Send(a.ctx, msg, nil)
+	slog.Info("Successfully sent message", "details", fmt.Sprintf("Sent data to queue: %s", a.config.Queue))
+	if err != nil {
+		a.cancel(err)
+		return err
+	}
 	return nil
 }
