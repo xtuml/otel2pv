@@ -825,3 +825,70 @@ func TestRabbitMQProducer(t *testing.T) {
 		}
 	})
 }
+
+// Test AMQPOneProducerConfig
+func TestAMQPOneProducerConfig(t *testing.T) {
+	t.Run("ImplementConfig", func(t *testing.T) {
+		config := &AMQPOneProducerConfig{}
+		_, ok := interface{}(config).(Config)
+		if !ok {
+			t.Errorf("Expected config to implement Config interface")
+		}
+	})
+	t.Run("IngestConfig", func(t *testing.T) {
+		config := &AMQPOneProducerConfig{}
+		// Tests when nothing is set
+		err := config.IngestConfig(map[string]any{})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Connection - must be a string and must be set" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// Test when Connection is not a string
+		err = config.IngestConfig(map[string]any{
+			"Connection": 1,
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Connection - must be a string and must be set" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// Test when Connection is set correctly but Queue is not set
+		err = config.IngestConfig(map[string]any{
+			"Connection": "test",
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Queue - must be a string and must be set" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// Test when Connection is set correctly and Queue is set but not a string
+		err = config.IngestConfig(map[string]any{
+			"Connection": "test",
+			"Queue": 1,
+		})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Queue - must be a string and must be set" {
+			t.Errorf("Expected specified error from IngestConfig, got '%v'", err)
+		}
+		// Test valid config
+		err = config.IngestConfig(map[string]any{
+			"Connection": "test",
+			"Queue": "test",
+		})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if config.Connection != "test" {
+			t.Errorf("Expected Connection to be 'test', got '%v'", config.Connection)
+		}
+		if config.Queue != "test" {
+			t.Errorf("Expected Queue to be 'test', got '%v'", config.Queue)
+		}
+	})
+}

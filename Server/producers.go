@@ -484,3 +484,39 @@ func (r *RabbitMQProducer) SendTo(data *AppData) error {
 	}
 	return nil
 }
+
+// AMQPOneProducerConfig is a struct that represents the configuration
+// for an AMQPOneProducer.
+// It has the following fields:
+//
+// 1. Connection: string. The connection string for the AMQP server.
+//
+// 2. Queue: string. The name of the queue to send the data to.
+type AMQPOneProducerConfig struct {
+	Connection string
+	Queue      string
+}
+
+// IngestConfig is a method that will ingest the configuration for the
+// AMQPOneProducerConfig.
+//
+// Args:
+//
+// 1. config: map[string]any. The raw configuration for the producer.
+//
+// Returns:
+//
+// 1. error. An error if the process fails.
+func (a *AMQPOneProducerConfig) IngestConfig(config map[string]any) error {
+	connection, ok := config["Connection"].(string)
+	if !ok {
+		return errors.New("invalid Connection - must be a string and must be set")
+	}
+	a.Connection = connection
+	queue, ok := config["Queue"].(string)
+	if !ok {
+		return errors.New("invalid Queue - must be a string and must be set")
+	}
+	a.Queue = queue
+	return nil
+}
