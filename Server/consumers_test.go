@@ -639,3 +639,61 @@ func TestRabbitMQConsumer(t *testing.T) {
 		}
 	})
 }
+
+// Test AMQPOneConsumerConfig
+func TestAMQPOneConsumerConfig(t *testing.T) {
+	t.Run("ImplementsConfig", func(t *testing.T) {
+		ac := &AMQPOneConsumerConfig{}
+		// Type assertion to check if AMQPOneConsumerConfig implements Config
+		_, ok := interface{}(ac).(Config)
+		if !ok {
+			t.Errorf("Expected AMQPOneConsumerConfig to implement Config interface")
+		}
+	})
+	t.Run("IngestConfig", func(t *testing.T) {
+		ac := &AMQPOneConsumerConfig{}
+		// Test when the AMQPOneConsumerConfig has no fields
+		err := ac.IngestConfig(map[string]any{})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Connection - must be a string and must be set" {
+			t.Errorf("Expected error message to be 'invalid Connection - must be a string and must be set', got %v", err.Error())
+		}
+		// Test when the AMQPOneConsumerConfig has the Connection field set but it is not a string
+		err = ac.IngestConfig(map[string]any{"Connection": 1})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Connection - must be a string and must be set" {
+			t.Errorf("Expected error message to be 'invalid Connection - must be a string and must be set', got %v", err.Error())
+		}
+		// Test when the AMQPOneConsumerConfig has a valid Connection field but the Queue field is not set
+		err = ac.IngestConfig(map[string]any{"Connection": "test"})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Queue - must be a string and must be set" {
+			t.Errorf("Expected error message to be 'invalid Queue - must be a string and must be set', got %v", err.Error())
+		}
+		// Tests when the AMQPOneConsumerConfig has a valid Connection and Queue field is set but not a string
+		err = ac.IngestConfig(map[string]any{"Connection": "test", "Queue": 1})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid Queue - must be a string and must be set" {
+			t.Errorf("Expected error message to be 'invalid Queue - must be a string and must be set', got %v", err.Error())
+		}
+		// Test when the AMQPOneConsumerConfig has a valid Connection and Queue
+		err = ac.IngestConfig(map[string]any{"Connection": "test", "Queue": "test"})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if ac.Connection != "test" {
+			t.Errorf("Expected Connection to be 'test', got %v", ac.Connection)
+		}
+		if ac.Queue != "test" {
+			t.Errorf("Expected Queue to be 'test', got %v", ac.Queue)
+		}
+	})
+}

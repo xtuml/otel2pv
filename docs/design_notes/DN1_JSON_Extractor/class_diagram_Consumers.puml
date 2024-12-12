@@ -27,6 +27,11 @@ namespace Consumer {
         +string ConsumerTag
         +error IngestConfig(map[string]any)
     }
+    struct AMQPOneConsumerConfig {
+        +string Connection
+        +string Queue
+        +error IngestConfig(map[string]any)
+    }
 
 }
 
@@ -35,5 +40,6 @@ Server.Pushable *-- Consumer.RabbitMQConsumer
 
 
 Server.Config <|-- Consumer.RabbitMQConsumerConfig
+Server.Config <|-- Consumer.AMQPOneConsumerConfig
 Consumer.RabbitMQConsumerConfig *-- Consumer.RabbitMQConsumer
 @enduml

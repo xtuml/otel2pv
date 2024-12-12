@@ -17,6 +17,7 @@ var CONSUMERMAP = map[string]func() SourceServer{
 // CONSUMERCONFIGMAP is a map that maps a string to a Config.
 var CONSUMERCONFIGMAP = map[string]func() Config{
 	"RabbitMQ": func() Config { return &RabbitMQConsumerConfig{} },
+	"AMQPOne": func() Config { return &AMQPOneConsumerConfig{} },
 }
 
 // SelectConsumerConfig is a struct that represents the configuration
@@ -347,4 +348,40 @@ func (r *RabbitMQConsumer) Serve() error {
 		return err
 	}
 	return sendChannelOfRabbitMQDeliveryToPushable(msgs, r.pushable)
+}
+
+// AMQPOneConsumerConfig is a struct that represents the configuration
+// for an AMQP one consumer.
+// It has the following fields:
+//
+// 1. Connection: string. The connection string for the AMQP server.
+//
+// 2. Queue: string. The name of the queue to consume from.
+type AMQPOneConsumerConfig struct {
+	Connection string
+	Queue      string
+}
+
+// IngestConfig is a method that will ingest the configuration
+// for the AMQPOneConsumerConfig.
+//
+// Args:
+//
+// 1. config: map[string]any. The raw configuration for the AMQP one consumer.
+//
+// Returns:
+//
+// 1. error. An error if the process fails.
+func (a *AMQPOneConsumerConfig) IngestConfig(config map[string]any) error {
+	connection, ok := config["Connection"].(string)
+	if !ok {
+		return errors.New("invalid Connection - must be a string and must be set")
+	}
+	a.Connection = connection
+	queue, ok := config["Queue"].(string)
+	if !ok {
+		return errors.New("invalid Queue - must be a string and must be set")
+	}
+	a.Queue = queue
+	return nil
 }
