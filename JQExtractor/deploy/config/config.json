@@ -8,7 +8,7 @@
         "IsMapping": false,
         "ProducerConfigs": [
             {
-                "Type": "RabbitMQ",
+                "Type": "AMQPOne",
                 "ProducerConfig": {
                     "Connection": "amqp://guest:guest@host.docker.internal:5672",
                     "Queue": "ProduceTest"
@@ -19,7 +19,7 @@
     "ConsumersSetup": {
         "ConsumerConfigs": [
             {
-                "Type": "RabbitMQ",
+                "Type": "AMQPOne",
                 "ConsumerConfig": {
                     "Connection": "amqp://guest:guest@host.docker.internal:5672",
                     "Queue": "ConsumeTest"

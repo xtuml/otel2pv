@@ -21,6 +21,14 @@ namespace Consumer {
         +error Serve()
         +error Setup(Config)
     }
+    struct AMQPOneConsumer {
+        -AMQPOneConsumerConfig config
+        -Pushable pushable
+        -AMQPOneConsumerDial dial
+        +error AddPushable(Pushable) 
+        +error Serve()
+        +error Setup(Config)
+    }
     struct RabbitMQConsumerConfig {
         +string Connection
         +string Queue
@@ -36,10 +44,14 @@ namespace Consumer {
 }
 
 Server.SourceServer <|-- Consumer.RabbitMQConsumer
+Server.SourceServer <|-- Consumer.AMQPOneConsumer
 Server.Pushable *-- Consumer.RabbitMQConsumer
+Server.Pushable *-- Consumer.AMQPOneConsumer
+
 
 
 Server.Config <|-- Consumer.RabbitMQConsumerConfig
 Server.Config <|-- Consumer.AMQPOneConsumerConfig
 Consumer.RabbitMQConsumerConfig *-- Consumer.RabbitMQConsumer
+Consumer.AMQPOneConsumerConfig *-- Consumer.AMQPOneConsumer
 @enduml

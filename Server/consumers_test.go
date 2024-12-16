@@ -1,6 +1,7 @@
 package Server
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"sort"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Azure/go-amqp"
 	rabbitmq "github.com/rabbitmq/amqp091-go"
 )
 
@@ -695,5 +697,347 @@ func TestAMQPOneConsumerConfig(t *testing.T) {
 		if ac.Queue != "test" {
 			t.Errorf("Expected Queue to be 'test', got %v", ac.Queue)
 		}
+	})
+}
+
+// MockPushableForAMQPOneConsumer is a mock implementation of the Pushable interface
+type MockPushableForAMQPOneConsumer struct {
+	incomingData  chan *AppData
+	isSendToError bool
+}
+
+func (p *MockPushableForAMQPOneConsumer) SendTo(data *AppData) error {
+	if p.isSendToError {
+		return errors.New("test error")
+	}
+	p.incomingData <- data
+	return nil
+}
+
+// MockAMQPOneReceiver is a mock implementation of the AMQPOneReceiver interface
+type MockAMQPOneReceiver struct {
+	isReceiveError bool
+	isAcceptError  bool
+	receiveData   chan *amqp.Message
+	cancel     context.CancelFunc
+}
+
+func (r *MockAMQPOneReceiver) Receive(ctx context.Context, opts *amqp.ReceiveOptions) (*amqp.Message, error) {
+	if r.isReceiveError {
+		return nil, errors.New("receive error")
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case data, ok := <-r.receiveData:
+			if !ok {
+				r.cancel()
+				continue
+			}
+			return data, nil
+		}
+	}
+}
+
+func (r *MockAMQPOneReceiver) Close(ctx context.Context) error {
+	return nil
+}
+
+func (r *MockAMQPOneReceiver) AcceptMessage(ctx context.Context, msg *amqp.Message) error {
+	if r.isAcceptError {
+		return errors.New("accept error")
+	}
+	return nil
+}
+
+// MockAMQPOneSession is a mock implementation of the AMQPOneSession interface
+type MockAMQPOneConsumerSession struct {
+	isNewReceiverError bool
+	receiver *MockAMQPOneReceiver
+}
+
+func (s *MockAMQPOneConsumerSession) Close(ctx context.Context) error {
+	return nil
+}
+
+func (s *MockAMQPOneConsumerSession) NewReceiver(ctx context.Context, source string, opts *amqp.ReceiverOptions) (AMQPOneConsumerReceiver, error) {
+	if s.isNewReceiverError {
+		return nil, errors.New("new receiver error")
+	}
+	return s.receiver, nil
+}
+
+// MockAMQPOneConsumerConnection is a mock implementation of the AMQPOneConsumerConnection interface
+type MockAMQPOneConsumerConnection struct {
+	isNewSessionError bool
+	session *MockAMQPOneConsumerSession
+}
+
+func (c *MockAMQPOneConsumerConnection) Close() error {
+	return nil
+}
+
+func (c *MockAMQPOneConsumerConnection) NewSession(ctx context.Context, opts *amqp.SessionOptions) (AMQPOneConsumerSession, error) {
+	if c.isNewSessionError {
+		return nil, errors.New("new session error")
+	}
+	return c.session, nil
+}
+
+// MockAMQPOneDialWrapper is a mock implementation of the AMQPOneDialWrapper interface
+func MockAMQPOneDialWrapper(mockAMQPOneConsumerConnection *MockAMQPOneConsumerConnection, isError bool) func(ctx context.Context, addr string, opts *amqp.ConnOptions) (AMQPOneConsumerConnection, error) {
+	return func(ctx context.Context, addr string, opts *amqp.ConnOptions) (AMQPOneConsumerConnection, error) {
+		if isError {
+			return nil, errors.New("dial error")
+		}
+		return mockAMQPOneConsumerConnection, nil
+	}
+}
+
+
+// Tests AMQPOneConsumer
+func TestAMQPOneConsumer(t *testing.T) {
+	t.Run("ImplementsSourceServer", func(t *testing.T) {
+		ac := &AMQPOneConsumer{}
+		// Type assertion to check if AMQPOneConsumer implements SourceServer
+		_, ok := interface{}(ac).(SourceServer)
+		if !ok {
+			t.Errorf("Expected AMQPOneConsumer to implement SourceServer interface")
+		}
+	})
+	t.Run("Setup", func(t *testing.T) {
+		ac := &AMQPOneConsumer{}
+		// Test when the config is not a AMQPOneConsumerConfig
+		err := ac.Setup(&MockConfig{})
+		if err == nil {
+			t.Errorf("Expected error from Setup, got nil")
+		}
+		if err.Error() != "config is not an AMQPOneConsumerConfig" {
+			t.Errorf("Expected error message to be 'config is not an AMQPOneConsumerConfig', got %v", err.Error())
+		}
+		// Test when the config is a AMQPOneConsumerConfig
+		config := &AMQPOneConsumerConfig{}
+		err = ac.Setup(config)
+		if err != nil {
+			t.Errorf("Expected no error from Setup, got %v", err)
+		}
+		if ac.config != config {
+			t.Errorf("Expected config to be %v, got %v", config, ac.config)
+		}
+		if ac.dial == nil {
+			t.Errorf("Expected dial to be set, got nil")
+		}
+	})
+	t.Run("AddPushable", func(t *testing.T) {
+		ac := &AMQPOneConsumer{}
+		mockPushable := &MockPushable{}
+		err := ac.AddPushable(mockPushable)
+		if err != nil {
+			t.Errorf("Expected no error from AddPushable, got %v", err)
+		}
+		if ac.pushable != mockPushable {
+			t.Errorf("Expected AddPushable to set the Pushable, got %v", ac.pushable)
+		}
+		// Test when the Pushable is already set
+		err = ac.AddPushable(mockPushable)
+		if err == nil {
+			t.Errorf("Expected error from AddPushable, got nil")
+		}
+	})
+	t.Run("Serve", func(t *testing.T) {
+		t.Run("sendAMQPDatatoPushable", func(t *testing.T) {
+			pushable := &MockPushable{}
+			// check case message is nil
+			err := sendAMQPDataToPushable(nil, pushable)
+			if err == nil {
+				t.Errorf("Expected error from sendAMQPDatatoPushable, got nil")
+			}
+			if err.Error() != "message is nil" {
+				t.Errorf("Expected error message to be 'message is nil', got %v", err.Error())
+			}
+			// check case message is not nil but there is an error in sendBytesJSONDataToPushable
+			amqpMessage := amqp.NewMessage([]byte(`{"key":"value"}`))
+			pushable = &MockPushable{isSendToError: true}
+			err = sendAMQPDataToPushable(amqpMessage, pushable)
+			if err == nil {
+				t.Errorf("Expected error from sendAMQPDatatoPushable, got nil")
+			}
+			if err.Error() != "test error" {
+				t.Errorf("Expected error message to be 'test error', got %v", err.Error())
+			}
+			// check case message is not nil and there is no error
+			pushable = &MockPushable{}
+			err = sendAMQPDataToPushable(amqpMessage, pushable)
+			if err != nil {
+				t.Errorf("Expected no error from sendAMQPDatatoPushable, got %v", err)
+			}
+			if pushable.incomingData == nil {
+				t.Errorf("Expected incomingData to be set, got nil")
+			}
+			gotAppData, err := pushable.incomingData.GetData()
+			if err != nil {
+				t.Errorf("Expected no error from GetData, got %v", err)
+			}
+			if dataMap, ok := gotAppData.(map[string]any); !ok {
+				t.Errorf("Expected data to be a map, got %T", gotAppData)
+			} else {
+				if !reflect.DeepEqual(dataMap, map[string]any{"key": "value"}) {
+					t.Errorf("Expected data to be %v, got %v", map[string]any{"key": "value"}, dataMap)
+				}
+			}
+		})
+		t.Run("Serve", func(t *testing.T) {
+			ac := &AMQPOneConsumer{}
+			// Test when the pushable is not set
+			err := ac.Serve()
+			if err == nil {
+				t.Fatalf("Expected error from Serve, got nil")
+			}
+			if err.Error() != "Pushable not set" {
+				t.Fatalf("Expected error message to be 'Pushable not set', got %v", err.Error())
+			}
+			// Test when the pushable is set but config is not set
+			ac.pushable = &MockPushable{}
+			err = ac.Serve()
+			if err == nil {
+				t.Fatalf("Expected error from Serve, got nil")
+			}
+			if err.Error() != "Config not set" {
+				t.Fatalf("Expected error message to be 'Config not set', got %v", err.Error())
+			}
+			// Test when the pushable and config are set but the dial is not set
+			ac.config = &AMQPOneConsumerConfig{}
+			err = ac.Serve()
+			if err == nil {
+				t.Fatalf("Expected error from Serve, got nil")
+			}
+			if err.Error() != "Dialer not set" {
+				t.Fatalf("Expected error message to be 'Dialer not set', got %v", err.Error())
+			}
+			// Test when the pushable, config, and dial are set but there is an error in dial
+			ac.dial = MockAMQPOneDialWrapper(nil, true)
+			err = ac.Serve()
+			if err == nil {
+				t.Fatalf("Expected error from Serve, got nil")
+			}
+			if err.Error() != "dial error" {
+				t.Fatalf("Expected error message to be 'dial error', got %v", err.Error())
+			}
+			// Test when the pushable, config, and dial are set but there is an error in NewSession
+			ac.dial = MockAMQPOneDialWrapper(&MockAMQPOneConsumerConnection{isNewSessionError: true}, false)
+			err = ac.Serve()
+			if err == nil {
+				t.Fatalf("Expected error from Serve, got nil")
+			}
+			if err.Error() != "new session error" {
+				t.Fatalf("Expected error message to be 'new session error', got %v", err.Error())
+			}
+			// Test when the pushable, config, and dial are set but there is an error in NewReceiver
+			ac.dial = MockAMQPOneDialWrapper(&MockAMQPOneConsumerConnection{session: &MockAMQPOneConsumerSession{isNewReceiverError: true}}, false)
+			err = ac.Serve()
+			if err == nil {
+				t.Fatalf("Expected error from Serve, got nil")
+			}
+			if err.Error() != "new receiver error" {
+				t.Fatalf("Expected error message to be 'new receiver error', got %v", err.Error())
+			}
+			// Test when there is an error in Receive
+			ac.dial = MockAMQPOneDialWrapper(&MockAMQPOneConsumerConnection{session: &MockAMQPOneConsumerSession{receiver: &MockAMQPOneReceiver{isReceiveError: true}}}, false)
+			err = ac.Serve()
+			if err == nil {
+				t.Fatalf("Expected error from Serve, got nil")
+			}
+			if err.Error() != "receive error" {
+				t.Fatalf("Expected error message to be 'test error', got %v", err.Error())
+			}
+			// Test when there is an error in sendAMQPDataToPushable
+			pushable := &MockPushable{isSendToError: true}
+			receiverSendChan := make(chan *amqp.Message, 1)
+			ac.dial = MockAMQPOneDialWrapper(&MockAMQPOneConsumerConnection{session: &MockAMQPOneConsumerSession{receiver: &MockAMQPOneReceiver{receiveData: receiverSendChan}}}, false)
+			ac.pushable = pushable
+			ac.config = &AMQPOneConsumerConfig{}
+			receiverSendChan <- amqp.NewMessage([]byte(`{"key":"value"}`))
+			err = ac.Serve()
+			if err == nil {
+				t.Fatalf("Expected error from Serve, got nil")
+			}
+			if err.Error() != "test error" {
+				t.Fatalf("Expected error message to be 'test error', got %v", err.Error())
+			}
+			close(receiverSendChan)
+			hangingData := <-receiverSendChan
+			if hangingData != nil {
+				t.Fatalf("Expected hangingData to be nil, got %v", hangingData)
+			}
+			// Test when there is an error in AcceptMessage
+			pushable = &MockPushable{}
+			receiverSendChan = make(chan *amqp.Message, 1)
+			receiverSendChan <- amqp.NewMessage([]byte(`{"key":"value"}`))
+			ac.dial = MockAMQPOneDialWrapper(&MockAMQPOneConsumerConnection{session: &MockAMQPOneConsumerSession{receiver: &MockAMQPOneReceiver{isAcceptError: true, receiveData: receiverSendChan}},}, false)
+			ac.pushable = pushable
+			err = ac.Serve()
+			if err == nil {
+				t.Fatalf("Expected error from Serve, got nil")
+			}
+			if err.Error() != "accept error" {
+				t.Fatalf("Expected error message to be 'accept error', got %v", err.Error())
+			}
+			if pushable.incomingData == nil {
+				t.Fatalf("Expected incomingData to be set, got nil")
+			}
+			gotAppData, err := pushable.incomingData.GetData()
+			if err != nil {
+				t.Fatalf("Expected no error from GetData, got %v", err)
+			}
+			if dataMap, ok := gotAppData.(map[string]any); !ok {
+				t.Fatalf("Expected data to be a map, got %T", gotAppData)
+			} else {
+				if !reflect.DeepEqual(dataMap, map[string]any{"key": "value"}) {
+					t.Fatalf("Expected data to be %v, got %v", map[string]any{"key": "value"}, dataMap)
+				}
+			}
+			close(receiverSendChan)
+			dataGone := <-receiverSendChan
+			if dataGone != nil {
+				t.Fatalf("Expected dataGone to be nil, got %v", dataGone)
+			}
+			// Test when everything is set correctly
+			pushableAMQPOneConsumer := &MockPushableForAMQPOneConsumer{
+				incomingData: make(chan *AppData, 2),
+			}
+			receiverSendChan = make(chan *amqp.Message, 2)
+			finishCtx, cancel := context.WithCancel(context.Background())
+			ac.finishCtx = finishCtx
+			ac.dial = MockAMQPOneDialWrapper(&MockAMQPOneConsumerConnection{session: &MockAMQPOneConsumerSession{receiver: &MockAMQPOneReceiver{receiveData: receiverSendChan, cancel: cancel}},}, false)
+			ac.pushable = pushableAMQPOneConsumer
+			ac.config = &AMQPOneConsumerConfig{}
+			receiverSendChan <- amqp.NewMessage([]byte(`{"key":"value1"}`))
+			receiverSendChan <- amqp.NewMessage([]byte(`{"key":"value2"}`))
+			close(receiverSendChan)
+			err = ac.Serve()
+			if err != nil {
+				t.Fatalf("Expected no error from Serve, got %v", err)
+			}
+			close(pushableAMQPOneConsumer.incomingData)
+			counter := 0
+			for data := range pushableAMQPOneConsumer.incomingData {
+				if data == nil {
+					t.Fatalf("Expected data to be non-nil")
+				}
+				gotAppData, err := data.GetData()
+				if err != nil {
+					t.Fatalf("Expected no error from GetData, got %v", err)
+				}
+				if dataMap, ok := gotAppData.(map[string]any); !ok {
+					t.Fatalf("Expected data to be a map, got %T", gotAppData)
+				} else {
+					if !reflect.DeepEqual(dataMap, map[string]any{"key": "value" + strconv.Itoa(counter+1)}) {
+						t.Fatalf("Expected data to be %v, got %v", map[string]any{"key": "value" + strconv.Itoa(counter+1)}, dataMap)
+					}
+				}
+				counter++
+			}
+		})
 	})
 }

@@ -6,18 +6,20 @@ import (
 	"sync"
 	"time"
 
+	amqp "github.com/Azure/go-amqp"
 	rabbitmq "github.com/rabbitmq/amqp091-go"
 )
 
 // CONSUMERMAP is a map that maps a string to a Consumer.
 var CONSUMERMAP = map[string]func() SourceServer{
 	"RabbitMQ": func() SourceServer { return &RabbitMQConsumer{} },
+    "AMQPOne":  func() SourceServer { return &AMQPOneConsumer{} },
 }
 
 // CONSUMERCONFIGMAP is a map that maps a string to a Config.
 var CONSUMERCONFIGMAP = map[string]func() Config{
 	"RabbitMQ": func() Config { return &RabbitMQConsumerConfig{} },
-	"AMQPOne": func() Config { return &AMQPOneConsumerConfig{} },
+	"AMQPOne":  func() Config { return &AMQPOneConsumerConfig{} },
 }
 
 // SelectConsumerConfig is a struct that represents the configuration
@@ -245,6 +247,29 @@ func (r *RabbitMQConsumer) AddPushable(p Pushable) error {
 	return nil
 }
 
+// sendBytesJSONDataToPushable is a function that sends bytes JSON data to an AppData.
+//
+// Args:
+//
+// 1. data: []byte. The data to send.
+//
+// 2. pushable: Pushable. The Pushable to send to.
+//
+// Returns:
+//
+// 1. error. An error if the process fails.
+func sendBytesJSONDataToPushable(data []byte, pushable Pushable) error {
+	appData, err := convertBytesJSONDataToAppData(data)
+	if err != nil {
+		return err
+	}
+	err = pushable.SendTo(appData)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // sendRabbitMQMessageDataToPushable is a function that sends RabbitMQ message data to a Pushable.
 //
 // Its args are:
@@ -257,15 +282,7 @@ func (r *RabbitMQConsumer) AddPushable(p Pushable) error {
 //
 // 1. error. An error if the process fails.
 func sendRabbitMQMessageDataToPushable(msg *rabbitmq.Delivery, pushable Pushable) error {
-	appData, err := convertBytesJSONDataToAppData(msg.Body)
-	if err != nil {
-		return err
-	}
-	err = pushable.SendTo(appData)
-	if err != nil {
-		return err
-	}
-	return nil
+	return sendBytesJSONDataToPushable(msg.Body, pushable)
 }
 
 // sendChannelOfRabbitMQDeliveryToPushable is a function that sends a channel of RabbitMQ deliveries to a Pushable.
@@ -282,7 +299,7 @@ func sendRabbitMQMessageDataToPushable(msg *rabbitmq.Delivery, pushable Pushable
 func sendChannelOfRabbitMQDeliveryToPushable(channel <-chan rabbitmq.Delivery, pushable Pushable) error {
 	wg := &sync.WaitGroup{}
 	ctx, cancel := context.WithCancelCause(context.Background())
-	BREAK:
+BREAK:
 	for {
 		select {
 		case <-ctx.Done():
@@ -384,4 +401,223 @@ func (a *AMQPOneConsumerConfig) IngestConfig(config map[string]any) error {
 	}
 	a.Queue = queue
 	return nil
+}
+
+// AMQPOneConsumerReceiver is an interface that represents a receiver for an AMQP one consumer.
+type AMQPOneConsumerReceiver interface {
+	Receive(ctx context.Context, opts *amqp.ReceiveOptions) (*amqp.Message, error)
+	Close(ctx context.Context) error
+	AcceptMessage(ctx context.Context, msg *amqp.Message) error
+}
+
+// AMQPOneConsumerSession is an interface that represents a session for an AMQP producer.
+type AMQPOneConsumerSession interface {
+	Close(ctx context.Context) error
+	NewReceiver(ctx context.Context, source string, opts *amqp.ReceiverOptions) (AMQPOneConsumerReceiver, error)
+}
+
+// AMQPOneConsumerConnection is an interface that represents a connection for an AMQP producer.
+type AMQPOneConsumerConnection interface {
+	Close() error
+	NewSession(ctx context.Context, opts *amqp.SessionOptions) (AMQPOneConsumerSession, error)
+}
+
+// AMQPOneConsumerDial is a function type that represents a dialer for an AMQP producer.
+type AMQPOneConsumerDial func(ctx context.Context, addr string, opts *amqp.ConnOptions) (AMQPOneConsumerConnection, error)
+
+// AMQPOneConsumerDialWrapper is a function that wraps the AMQP dial function.
+// It takes in a context.Context, a string, and an *amqp.ConnOptions and returns
+// an AMQPOneConsumerConnection and an error.
+func AMQPOneConsumerDialWrapper(ctx context.Context, addr string, opts *amqp.ConnOptions) (AMQPOneConsumerConnection, error) {
+	conn, err := amqp.Dial(ctx, addr, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &AMQPOneConsumerConnectionWrapper{conn: conn}, nil
+}
+
+// AMQPOneConsumerConnectionWrapper is a struct that wraps an AMQP connection.
+type AMQPOneConsumerConnectionWrapper struct {
+	conn *amqp.Conn
+}
+
+// Close is a method that will close the AMQP connection.
+func (a AMQPOneConsumerConnectionWrapper) Close() error {
+	return a.conn.Close()
+}
+
+// NewSession is a method that will return a new AMQP session.
+func (a AMQPOneConsumerConnectionWrapper) NewSession(ctx context.Context, opts *amqp.SessionOptions) (AMQPOneConsumerSession, error) {
+	session, err := a.conn.NewSession(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &AMQPOneConsumerSessionWrapper{session: session}, nil
+}
+
+// AMQPOneConsumerSessionWrapper is a struct that wraps an AMQP session.
+type AMQPOneConsumerSessionWrapper struct {
+	session *amqp.Session
+}
+
+// Close is a method that will close the AMQP session.
+func (a AMQPOneConsumerSessionWrapper) Close(ctx context.Context) error {
+	return a.session.Close(ctx)
+}
+
+// NewReceiver is a method that will return a new AMQP receiver.
+func (a AMQPOneConsumerSessionWrapper) NewReceiver(ctx context.Context, source string, opts *amqp.ReceiverOptions) (AMQPOneConsumerReceiver, error) {
+	return a.session.NewReceiver(ctx, source, opts)
+}
+
+// AMQPOneConsumer is a struct that represents an AMQP one consumer.
+// It has the following fields:
+//
+// 1. config: *AMQPOneConsumerConfig. The configuration for the AMQP one consumer.
+//
+// 2. pushable: Pushable. The pushable to push data to.
+//
+// 3. dial: AMQPOneConsumerDial. The dialer for the AMQP one consumer.
+//
+// 4. finishCtx: context.Context. The context for finishing the AMQP one consumer.
+type AMQPOneConsumer struct {
+	config   *AMQPOneConsumerConfig
+	pushable Pushable
+	dial     AMQPOneConsumerDial
+    finishCtx context.Context
+}
+
+// Setup is a method that will set up the AMQP one consumer.
+//
+// Args:
+//
+// 1. config: Config. The configuration for the AMQP one consumer.
+//
+// Returns:
+//
+// 1. error. An error if the process fails.
+func (a *AMQPOneConsumer) Setup(config Config) error {
+	c, ok := config.(*AMQPOneConsumerConfig)
+	if !ok {
+		return errors.New("config is not an AMQPOneConsumerConfig")
+	}
+	a.config = c
+	a.dial = AMQPOneConsumerDialWrapper
+	return nil
+}
+
+// AddPushable is a method that will add a Pushable to the AMQP one consumer.
+//
+// Args:
+//
+// 1. pushable: Pushable. The Pushable to add.
+//
+// Returns:
+//
+// 1. error. An error if the process fails.
+func (a *AMQPOneConsumer) AddPushable(pushable Pushable) error {
+	if a.pushable != nil {
+		return errors.New("Pushable already set")
+	}
+	a.pushable = pushable
+	return nil
+}
+
+// Serve is a method that will start the AMQP one consumer and begin consuming messages.
+// and sending them to the pushable, after which confirmation will be sent.
+//
+// Returns:
+//
+// 1. error. An error if the process fails.
+func (a *AMQPOneConsumer) Serve() error {
+	if a.pushable == nil {
+		return errors.New("Pushable not set")
+	}
+	if a.config == nil {
+		return errors.New("Config not set")
+	}
+	if a.dial == nil {
+		return errors.New("Dialer not set")
+	}
+	if a.finishCtx == nil {
+        a.finishCtx = context.Background()
+    }
+	ctx := context.Background()
+	conn, err := a.dial(ctx, a.config.Connection, nil)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	session, err := conn.NewSession(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer session.Close(ctx)
+	receiver, err := session.NewReceiver(ctx, a.config.Queue, nil)
+	if err != nil {
+		return err
+	}
+	defer receiver.Close(ctx)
+	sendOnErr, sendOnCancel := context.WithCancelCause(ctx)
+	defer sendOnCancel(nil)
+	wg := &sync.WaitGroup{}
+	BREAK:
+	for {
+		select {
+		case <-a.finishCtx.Done():
+			break BREAK
+		case <-sendOnErr.Done():
+			return context.Cause(sendOnErr)
+		default:
+			timeoutCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+			msg, err := receiver.Receive(timeoutCtx, nil)
+			cancel()
+			if err != nil {
+                if err == context.DeadlineExceeded {
+                    continue
+                }
+				return err 
+			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				err := sendAMQPDataToPushable(msg, a.pushable)
+				if err != nil {
+					sendOnCancel(err)
+				}
+				err = receiver.AcceptMessage(ctx, msg)
+				if err != nil {
+					sendOnCancel(err)
+				}	
+			}()
+
+		}
+	}
+	wg.Wait()
+    sendOnCancel(nil)
+    // check if there was an error in the sendOnErr context
+    // that occurred between receiving a finished signal and sending the message
+    <- sendOnErr.Done()
+    if context.Cause(sendOnErr) != context.Canceled {
+        return context.Cause(sendOnErr)
+    }
+	return nil
+}
+
+// sendAMQPDataToPushable is a function that sends data to a Pushable.
+//
+// Args:
+//
+// 1. msg: *amqp.Message. The message to send.
+//
+// 2. pushable: Pushable. The Pushable to send to.
+//
+// Returns:
+//
+// 1. error. An error if the process fails.
+func sendAMQPDataToPushable(msg *amqp.Message, pushable Pushable) error {
+	if msg == nil {
+		return errors.New("message is nil")
+	}
+	return sendBytesJSONDataToPushable(msg.GetData(), pushable)
 }
