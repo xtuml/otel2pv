@@ -14,6 +14,82 @@ import (
 
 // TestJQTransformerConfig tests the IngestConfig method of the JQTransformerConfig struct
 func TestJQTransformerConfig(t *testing.T) {
+	t.Run("getJQStringFromInput", func(t *testing.T) {
+		// Test when the input is not a map
+		_, err := getJQStringFromInput(1)
+		if err == nil {
+			t.Errorf("Expected error from getJQStringFromInput, got nil")
+		}
+		if err.Error() != "invalid JQQueryStrings map in config. Must map a string identifier to a string" {
+			t.Errorf("Expected error message to be \"invalid JQQueryStrings map in config. Must map a string identifier to a string\", got %v", err)
+		}
+		// Test when the input is a map but the jq field is not present
+		_, err = getJQStringFromInput(map[string]any{"key": "value"})
+		if err == nil {
+			t.Errorf("Expected error from getJQStringFromInput, got nil")
+		}
+		if err.Error() != "invalid JQQueryStrings map in config. Must include field: \"jq\" and this field must be a string" {
+			t.Errorf("Expected error message to be \"invalid JQQueryStrings map in config. Must include field: \"jq\" and this field must be a string\", got %v", err)
+		}
+		// Test when the input is a map and jq field is not a string
+		_, err = getJQStringFromInput(map[string]any{"jq": 1})
+		if err == nil {
+			t.Errorf("Expected error from getJQStringFromInput, got nil")
+		}
+		if err.Error() != "invalid JQQueryStrings map in config. Must include field: \"jq\" and this field must be a string" {
+			t.Errorf("Expected error message to be \"invalid JQQueryStrings map in config. Must include field: \"jq\" and this field must be a string\", got %v", err)
+		}
+		// Test when the input is a map and jq field is a string but type field is not correct type
+		_, err = getJQStringFromInput(map[string]any{"jq": "value", "type": 1})
+		if err == nil {
+			t.Errorf("Expected error from getJQStringFromInput, got nil")
+		}
+		if err.Error() != "invalid JQQueryStrings map in config. If field: \"type\" is present it must be a string" {
+			t.Errorf("Expected error message to be \"invalid JQQueryStrings map in config. If field: \"type\" is present it must be a string\", got %v", err)
+		}
+		// Test when the input is a map and jq field is a string but type field is not a valid type
+		_, err = getJQStringFromInput(map[string]any{"jq": "value", "type": "invalid"})
+		if err == nil {
+			t.Errorf("Expected error from getJQStringFromInput, got nil")
+		}
+		if err.Error() != "invalid JQQueryStrings map in config. Invalid field \"type\": invalid" {
+			t.Errorf("Expected error message to be \"invalid JQQueryStrings map in config. Invalid field \"type\": invalid\", got %v", err)
+		}
+		// Test when the input is a map and jq field is a string and type field is "file" but there is an error reading the file
+		_, err = getJQStringFromInput(map[string]any{"jq": "value", "type": "file"})
+		if err == nil {
+			t.Errorf("Expected error from getJQStringFromInput, got nil")
+		}
+		if err.Error() != "invalid JQQueryStrings map in config. open value: no such file or directory" {
+			t.Errorf("Expected error message to be \"invalid JQQueryStrings map in config. open value: no such file or directory\", got %v", err)
+		}
+		// Test when the input is a map and jq field is a string and type field is "file" and the file is read correctly
+		tmpFile, err := os.CreateTemp("", "testfile")
+		if err != nil {
+			t.Errorf("Error creating temp file: %v", err)
+		}
+		defer os.Remove(tmpFile.Name())
+		data := []byte("value")
+		err = os.WriteFile(tmpFile.Name(), data, 0644)
+		if err != nil {
+			t.Errorf("Error writing to temp file: %v", err)
+		}
+		jqString, err := getJQStringFromInput(map[string]any{"jq": tmpFile.Name(), "type": "file"})
+		if err != nil {
+			t.Errorf("Expected no error from getJQStringFromInput, got %v", err)
+		}
+		if jqString != "value" {
+			t.Errorf("Expected jqString to be \"value\", got %v", jqString)
+		}
+		// Test when the input is a map and jq field is a string and type field is not present
+		jqString, err = getJQStringFromInput(map[string]any{"jq": "value"})
+		if err != nil {
+			t.Errorf("Expected no error from getJQStringFromInput, got %v", err)
+		}
+		if jqString != "value" {
+			t.Errorf("Expected jqString to be \"value\", got %v", jqString)
+		}
+	})
 	t.Run("IngestConfig", func(t *testing.T) {
 		jqtConfig := JQTransformerConfig{}
 		// Test when the config is invalid
@@ -21,8 +97,16 @@ func TestJQTransformerConfig(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
+		// Test when there is an error from getJQStringFromInput
+		err = jqtConfig.IngestConfig(map[string]interface{}{"JQQueryStrings": map[string]any{"key": map[string]any{"jq": ".key", "type": 1}}})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid JQQueryStrings map in config. If field: \"type\" is present it must be a string. Key: key" {
+			t.Errorf("Expected error message to be \"invalid JQQueryStrings map in config. If field: \"type\" is present it must be a string. Key: key\", got %v", err)
+		}
 		// Test when the config is valid
-		err = jqtConfig.IngestConfig(map[string]interface{}{"JQQueryStrings": map[string]any{"key": ".key"}})
+		err = jqtConfig.IngestConfig(map[string]interface{}{"JQQueryStrings": map[string]any{"key": map[string]any{"jq": ".key"}}})
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}
@@ -110,7 +194,7 @@ func (s *NotJQTransformerConfig) IngestConfig(config map[string]any) error {
 
 // TestJQTransformer tests the JQTransformer struct and its methods
 func TestJQTransformer(t *testing.T) {
-	jqQuery, err := gojq.Parse(".key")
+	jqQuery, err := gojq.Parse(". |\n\n .key")
 	if err != nil {
 		t.Errorf("Error parsing JQ program: %v", err)
 	}
@@ -180,7 +264,9 @@ func TestJQTransformer(t *testing.T) {
 		}
 		// Test when the pushable SendTo method returns an error
 		Pushable.isSendToError = true
-		newjqQuery, err := gojq.Parse(`{"X": [(.key)]}`)
+		// this provides a test that the gojq parser can handle comments and new lines 
+		// i.e. such as in a file
+		newjqQuery, err := gojq.Parse("{\"X\": [(.|###\n .key)]}")
 		if err != nil {
 			t.Errorf("Error parsing JQ program: %v", err)
 		}
@@ -391,7 +477,7 @@ func TestJQTransformerRunApp(t *testing.T) {
 	}
 	defer os.Remove(tmpFile.Name())
 	data := []byte(
-		`{"AppConfig":{"JQQueryStrings":{"outData":".key"}},"ProducersSetup":{"ProducerConfigs":[{"Type":"MockSink","ProducerConfig":{}}]},"ConsumersSetup":{"ConsumerConfigs":[{"Type":"MockSource","ConsumerConfig":{}}]}}`,
+		`{"AppConfig":{"JQQueryStrings":{"outData":{"jq":".key"}}},"ProducersSetup":{"ProducerConfigs":[{"Type":"MockSink","ProducerConfig":{}}]},"ConsumersSetup":{"ConsumerConfigs":[{"Type":"MockSource","ConsumerConfig":{}}]}}`,
 	)
 	err = os.WriteFile(tmpFile.Name(), data, 0644)
 	if err != nil {

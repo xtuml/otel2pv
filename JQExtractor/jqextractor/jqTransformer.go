@@ -3,11 +3,26 @@ package jqextractor
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"sync"
 
 	"github.com/itchyny/gojq"
 
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
+)
+
+// jqQueryInputType is a type that is used to define the input type for the JQTransformer
+// It has the following values:
+//
+// 1. jqQueryInputTypeString: jqQueryInputType. A string that is used to define the input type as a string
+//
+// 2. jqQueryInputTypeFile: jqQueryInputType. A string that is used to define the input type as a file
+type jqQueryInputType string
+
+const (
+	jqQueryInputTypeString jqQueryInputType = "string"
+	jqQueryInputTypeFile   jqQueryInputType = "file"
 )
 
 type JQTransformerConfig struct {
@@ -16,6 +31,51 @@ type JQTransformerConfig struct {
 	// 1. JQQueryStrings: map[string]string. A map that contains the JQ programs
 	JQQueryStrings map[string]string
 }
+
+// getJQStringFromInput is a helper function that will handle the input type for the JQTransformer
+//
+// Args:
+//
+// 1. jqStringDataMapRaw: any. A map that contains the JQ program and the input type
+//
+// Returns:
+//
+// 1. string. The JQ program
+//
+// 2. error. An error if the input type is invalid
+func getJQStringFromInput(jqStringDataMapRaw any) (string, error) {
+	jqStringDataMap, ok := jqStringDataMapRaw.(map[string]any)
+	if !ok {
+		return "", errors.New("invalid JQQueryStrings map in config. Must map a string identifier to a string")
+	}
+	jqString, ok := jqStringDataMap["jq"].(string)
+	if !ok {
+		return "", errors.New("invalid JQQueryStrings map in config. Must include field: \"jq\" and this field must be a string")
+	}
+	jqStringTypeRaw, ok := jqStringDataMap["type"]
+	var jqStringType string
+	if ok {
+		jqStringType, ok = jqStringTypeRaw.(string)
+		if !ok {
+			return "", errors.New("invalid JQQueryStrings map in config. If field: \"type\" is present it must be a string")
+		}
+	} else {
+		jqStringType = string(jqQueryInputTypeString)
+	}
+	switch jqQueryInputType(jqStringType) {
+	case jqQueryInputTypeString:
+		return jqString, nil
+	case jqQueryInputTypeFile:
+		jqStringBytes, err := os.ReadFile(jqString)
+		if err != nil {
+			return "", fmt.Errorf("invalid JQQueryStrings map in config. %s", err.Error())
+		}
+		return string(jqStringBytes), nil
+	default:
+		return "", fmt.Errorf("invalid JQQueryStrings map in config. Invalid field \"type\": %s", jqStringType)
+	}
+}
+
 
 func (jqt *JQTransformerConfig) IngestConfig(config map[string]any) error {
 	// IngestConfig is a method that will ingest the configuration for the JQTransformer
@@ -29,9 +89,9 @@ func (jqt *JQTransformerConfig) IngestConfig(config map[string]any) error {
 	}
 	jqQueryStringsMap := make(map[string]string)
 	for key, value := range jqQueryStrings {
-		jqString, ok := value.(string)
-		if !ok {
-			return errors.New("invalid JQQueryStrings map in config. Must map a string identifier to a string")
+		jqString, err := getJQStringFromInput(value)
+		if err != nil {
+			return fmt.Errorf("%s. Key: %s", err.Error(), key)
 		}
 		jqQueryStringsMap[key] = jqString
 	}

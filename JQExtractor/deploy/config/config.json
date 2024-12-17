@@ -1,7 +1,9 @@
 {
     "AppConfig": {
         "JQQueryStrings": {
-            "Test": ".test"
+            "Test": {
+                "jq": ".test"
+            }
         }
     },
     "ProducersSetup": {

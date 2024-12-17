@@ -1,17 +1,32 @@
 {
     "AppConfig": {
         "JQQueryStrings": {
-            "Test": ".test"
+            "Test": {
+                "jq": ".test"
+            },
+            "Test2": {
+                "jq": "/config/jqtestfile.jq",
+                "type": "file"
+            }
         }
     },
     "ProducersSetup": {
-        "IsMapping": false,
+        "IsMapping": true,
         "ProducerConfigs": [
             {
                 "Type": "AMQPOne",
+                "Map": "Test",
                 "ProducerConfig": {
                     "Connection": "amqp://guest:guest@rabbitmq:5672",
                     "Queue": "ProduceTest"
+                }
+            },
+            {
+                "Type": "AMQPOne",
+                "Map": "Test2",
+                "ProducerConfig": {
+                    "Connection": "amqp://guest:guest@rabbitmq:5672",
+                    "Queue": "ProduceTest2"
                 }
             }
         ]
