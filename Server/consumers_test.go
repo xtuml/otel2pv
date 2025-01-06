@@ -686,7 +686,15 @@ func TestAMQPOneConsumerConfig(t *testing.T) {
 		if err.Error() != "invalid Queue - must be a string and must be set" {
 			t.Errorf("Expected error message to be 'invalid Queue - must be a string and must be set', got %v", err.Error())
 		}
-		// Test when the AMQPOneConsumerConfig has a valid Connection and Queue
+		// Tests when the AMQPOneConsumerConfig has a valid Connection and Queue field is set but OnValue is not a boolean
+		err = ac.IngestConfig(map[string]any{"Connection": "test", "Queue": "test", "OnValue": 1})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid OnValue - must be a boolean" {
+			t.Errorf("Expected error message to be 'invalid OnValue - must be a boolean', got %v", err.Error())
+		}
+		// Test when the AMQPOneConsumerConfig has a valid Connection and Queue and OnValue is not set
 		err = ac.IngestConfig(map[string]any{"Connection": "test", "Queue": "test"})
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
@@ -696,6 +704,23 @@ func TestAMQPOneConsumerConfig(t *testing.T) {
 		}
 		if ac.Queue != "test" {
 			t.Errorf("Expected Queue to be 'test', got %v", ac.Queue)
+		}
+		if ac.OnValue {
+			t.Errorf("Expected OnValue to be false, got true")
+		}
+		// Test when the AMQPOneConsumerConfig has a valid Connection, Queue, and OnValue field set
+		err = ac.IngestConfig(map[string]any{"Connection": "test", "Queue": "test", "OnValue": true})
+		if err != nil {
+			t.Errorf("Expected no error from IngestConfig, got %v", err)
+		}
+		if ac.Connection != "test" {
+			t.Errorf("Expected Connection to be 'test', got %v", ac.Connection)
+		}
+		if ac.Queue != "test" {
+			t.Errorf("Expected Queue to be 'test', got %v", ac.Queue)
+		}
+		if !ac.OnValue {
+			t.Errorf("Expected OnValue to be true, got false")
 		}
 	})
 }
@@ -846,47 +871,6 @@ func TestAMQPOneConsumer(t *testing.T) {
 		}
 	})
 	t.Run("Serve", func(t *testing.T) {
-		t.Run("sendAMQPDatatoPushable", func(t *testing.T) {
-			pushable := &MockPushable{}
-			// check case message is nil
-			err := sendAMQPDataToPushable(nil, pushable)
-			if err == nil {
-				t.Errorf("Expected error from sendAMQPDatatoPushable, got nil")
-			}
-			if err.Error() != "message is nil" {
-				t.Errorf("Expected error message to be 'message is nil', got %v", err.Error())
-			}
-			// check case message is not nil but there is an error in sendBytesJSONDataToPushable
-			amqpMessage := amqp.NewMessage([]byte(`{"key":"value"}`))
-			pushable = &MockPushable{isSendToError: true}
-			err = sendAMQPDataToPushable(amqpMessage, pushable)
-			if err == nil {
-				t.Errorf("Expected error from sendAMQPDatatoPushable, got nil")
-			}
-			if err.Error() != "test error" {
-				t.Errorf("Expected error message to be 'test error', got %v", err.Error())
-			}
-			// check case message is not nil and there is no error
-			pushable = &MockPushable{}
-			err = sendAMQPDataToPushable(amqpMessage, pushable)
-			if err != nil {
-				t.Errorf("Expected no error from sendAMQPDatatoPushable, got %v", err)
-			}
-			if pushable.incomingData == nil {
-				t.Errorf("Expected incomingData to be set, got nil")
-			}
-			gotAppData, err := pushable.incomingData.GetData()
-			if err != nil {
-				t.Errorf("Expected no error from GetData, got %v", err)
-			}
-			if dataMap, ok := gotAppData.(map[string]any); !ok {
-				t.Errorf("Expected data to be a map, got %T", gotAppData)
-			} else {
-				if !reflect.DeepEqual(dataMap, map[string]any{"key": "value"}) {
-					t.Errorf("Expected data to be %v, got %v", map[string]any{"key": "value"}, dataMap)
-				}
-			}
-		})
 		t.Run("Serve", func(t *testing.T) {
 			ac := &AMQPOneConsumer{}
 			// Test when the pushable is not set
@@ -951,7 +935,7 @@ func TestAMQPOneConsumer(t *testing.T) {
 			if err.Error() != "receive error" {
 				t.Fatalf("Expected error message to be 'test error', got %v", err.Error())
 			}
-			// Test when there is an error in sendAMQPDataToPushable
+			// Test when there is an error in convertAndSendAMQPMessageToPushable 
 			pushable := &MockPushable{isSendToError: true}
 			receiverSendChan := make(chan *amqp.Message, 1)
 			ac.dial = MockAMQPOneDialWrapper(&MockAMQPOneConsumerConnection{session: &MockAMQPOneConsumerSession{receiver: &MockAMQPOneReceiver{receiveData: receiverSendChan}}}, false)
@@ -1038,6 +1022,195 @@ func TestAMQPOneConsumer(t *testing.T) {
 				}
 				counter++
 			}
+			if counter != 2 {
+				t.Fatalf("Expected counter to be 2, got %v", counter)
+			}
+			// Test when config indicates to extraxt data from Value field of AMQP message
+			pushableAMQPOneConsumer = &MockPushableForAMQPOneConsumer{
+				incomingData: make(chan *AppData, 2),
+			}
+			receiverSendChan = make(chan *amqp.Message, 2)
+			finishCtx, cancel = context.WithCancel(context.Background())
+			ac.finishCtx = finishCtx
+			ac.dial = MockAMQPOneDialWrapper(&MockAMQPOneConsumerConnection{session: &MockAMQPOneConsumerSession{receiver: &MockAMQPOneReceiver{receiveData: receiverSendChan, cancel: cancel}},}, false)
+			ac.pushable = pushableAMQPOneConsumer
+			ac.config = &AMQPOneConsumerConfig{OnValue: true}
+			msg1 := &amqp.Message{Value: `{"key":"value1"}`}
+			msg2 := &amqp.Message{Value: `{"key":"value2"}`}
+			receiverSendChan <- msg1
+			receiverSendChan <- msg2
+			close(receiverSendChan)
+			err = ac.Serve()
+			if err != nil {
+				t.Fatalf("Expected no error from Serve, got %v", err)
+			}
+			close(pushableAMQPOneConsumer.incomingData)
+			counter = 0
+			for data := range pushableAMQPOneConsumer.incomingData {
+				if data == nil {
+					t.Fatalf("Expected data to be non-nil")
+				}
+				gotAppData, err := data.GetData()
+				if err != nil {
+					t.Fatalf("Expected no error from GetData, got %v", err)
+				}
+				if dataMap, ok := gotAppData.(map[string]any); !ok {
+					t.Fatalf("Expected data to be a map, got %T", gotAppData)
+				} else {
+					if !reflect.DeepEqual(dataMap, map[string]any{"key": "value" + strconv.Itoa(counter+1)}) {
+						t.Fatalf("Expected data to be %v, got %v", map[string]any{"key": "value" + strconv.Itoa(counter+1)}, dataMap)
+					}
+				}
+				counter++
+			}
+			if counter != 2 {
+				t.Fatalf("Expected counter to be 2, got %v", counter)
+			}
 		})
 	})
+}
+
+// Tests amqpBytesDataConverter
+func TestAMQPBytesDataConverter(t *testing.T) {
+	// Test when message is nil
+	_, err := amqpBytesDataConverter(nil)
+	if err == nil {
+		t.Errorf("Expected error from amqpBytesDataConverter, got nil")
+	}
+	if err.Error() != "message is nil" {
+		t.Errorf("Expected error message to be 'message is nil', got %v", err.Error())
+	}
+	// Test when there is an error from convertBytesJSONDataToAppData
+	msg := amqp.NewMessage([]byte(`{"key":"value"`))
+	_, err = amqpBytesDataConverter(msg)
+	if err == nil {
+		t.Errorf("Expected error from amqpBytesDataConverter, got nil")
+	}
+	if err.Error() != "Bytes data is not a JSON map or an array" {
+		t.Errorf("Expected error message to be 'Bytes data is not a JSON map or an array', got %v", err.Error())
+	}
+	// Test when there is no error
+	msg = amqp.NewMessage([]byte(`{"key":"value"}`))
+	appData, err := amqpBytesDataConverter(msg)
+	if err != nil {
+		t.Errorf("Expected no error from amqpBytesDataConverter, got %v", err)
+	}
+	if dataMap, ok := appData.data.(map[string]any); !ok {
+		t.Errorf("Expected data to be a map, got %T", appData.data)
+	} else {
+		if !reflect.DeepEqual(dataMap, map[string]any{"key": "value"}) {
+			t.Errorf("Expected data to be %v, got %v", map[string]any{"key": "value"}, dataMap)
+		}
+	}
+}
+
+// Tests amqpStringValueConverter
+func TestAMQPStringValueConverter(t *testing.T) {
+	// Test when message is nil
+	_, err := amqpStringValueConverter(nil)
+	if err == nil {
+		t.Errorf("Expected error from amqpStringValueConverter, got nil")
+	}
+	if err.Error() != "message is nil" {
+		t.Errorf("Expected error message to be 'message is nil', got %v", err.Error())
+	}
+	// Test when the value is nil
+	msg := &amqp.Message{}
+	_, err = amqpStringValueConverter(msg)
+	if err == nil {
+		t.Errorf("Expected error from amqpStringValueConverter, got nil")
+	}
+	if err.Error() != "value is nil" {
+		t.Errorf("Expected error message to be 'value is nil', got %v", err.Error())
+	}
+	// Test when the value is not a string
+	msg = &amqp.Message{Value: 1}
+	_, err = amqpStringValueConverter(msg)
+	if err == nil {
+		t.Errorf("Expected error from amqpStringValueConverter, got nil")
+	}
+	if err.Error() != "value is not a string" {
+		t.Errorf("Expected error message to be 'value is not a string', got %v", err.Error())
+	}
+	// Test when there is an error in convertStringJSONDataToAppData
+	msg = &amqp.Message{Value: "test"}
+	_, err = amqpStringValueConverter(msg)
+	if err == nil {
+		t.Errorf("Expected no error from amqpStringValueConverter, got %v", err)
+	}
+	if err.Error() != "String data is not a JSON map or an array" {
+		t.Errorf("Expected error message to be 'String data is not a JSON map or an array', got %v", err.Error())
+	}
+	// Test when there is no error
+	msg = &amqp.Message{Value: `{"key":"value"}`}
+	appData, err := amqpStringValueConverter(msg)
+	if err != nil {
+		t.Errorf("Expected no error from amqpStringValueConverter, got %v", err)
+	}
+	if dataMap, ok := appData.data.(map[string]any); !ok {
+		t.Errorf("Expected data to be a map, got %T", appData.data)
+	} else {
+		if !reflect.DeepEqual(dataMap, map[string]any{"key": "value"}) {
+			t.Errorf("Expected data to be %v, got %v", map[string]any{"key": "value"}, dataMap)
+		}
+	}
+}
+
+// mockAMQPMessageConverter is a mock implementation of the AMQPMessageConverter function type
+type mockAMQPMessageConverter struct {
+	isError bool
+}
+
+func (c *mockAMQPMessageConverter) Convert(msg *amqp.Message) (*AppData, error) {
+	if c.isError {
+		return nil, errors.New("convert error")
+	}
+	return &AppData{data: map[string]any{"key": "value"}}, nil
+}
+
+
+
+// Tests convertAndSendAMQPDataToPushable
+func TestConvertAndSendAMQPMessageToPushable(t *testing.T) {
+	pushable := &MockPushable{}
+	// Test when converter returns an error
+	converter := &mockAMQPMessageConverter{isError: true}
+	msg := &amqp.Message{}
+	err := convertAndSendAMQPMessageToPushable(msg, pushable, converter.Convert)
+	if err == nil {
+		t.Errorf("Expected error from convertAndSendAMQPDataToPushable, got nil")
+	}
+	if err.Error() != "convert error" {
+		t.Errorf("Expected error message to be 'convert error', got %v", err.Error())
+	}
+	// Tests when SendTo returns an error
+	converter = &mockAMQPMessageConverter{}
+	pushable = &MockPushable{isSendToError: true}
+	err = convertAndSendAMQPMessageToPushable(msg, pushable, converter.Convert)
+	if err == nil {
+		t.Errorf("Expected error from convertAndSendAMQPDataToPushable, got nil")
+	}
+	if err.Error() != "test error" {
+		t.Errorf("Expected error message to be 'test error', got %v", err.Error())
+	}
+	// Test when everything is set correctly
+	pushable = &MockPushable{}
+	err = convertAndSendAMQPMessageToPushable(msg, pushable, converter.Convert)
+	if err != nil {
+		t.Errorf("Expected no error from convertAndSendAMQPDataToPushable, got %v", err)
+	}
+	if pushable.incomingData == nil {
+		t.Errorf("Expected incomingData to be set, got nil")
+	}
+	gotAppData, err := pushable.incomingData.GetData()
+	if err != nil {
+		t.Errorf("Expected no error from GetData, got %v", err)
+	}
+	if dataMap, ok := gotAppData.(map[string]any); !ok {
+		t.Errorf("Expected data to be a map, got %T", gotAppData)
+	} else {
+		if !reflect.DeepEqual(dataMap, map[string]any{"key": "value"}) {
+			t.Errorf("Expected data to be %v, got %v", map[string]any{"key": "value"}, dataMap)
+		}
+	}
 }

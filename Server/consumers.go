@@ -270,6 +270,7 @@ func sendBytesJSONDataToPushable(data []byte, pushable Pushable) error {
 	return nil
 }
 
+
 // sendRabbitMQMessageDataToPushable is a function that sends RabbitMQ message data to a Pushable.
 //
 // Its args are:
@@ -299,6 +300,7 @@ func sendRabbitMQMessageDataToPushable(msg *rabbitmq.Delivery, pushable Pushable
 func sendChannelOfRabbitMQDeliveryToPushable(channel <-chan rabbitmq.Delivery, pushable Pushable) error {
 	wg := &sync.WaitGroup{}
 	ctx, cancel := context.WithCancelCause(context.Background())
+    defer cancel(nil)
 BREAK:
 	for {
 		select {
@@ -377,6 +379,7 @@ func (r *RabbitMQConsumer) Serve() error {
 type AMQPOneConsumerConfig struct {
 	Connection string
 	Queue      string
+	OnValue bool
 }
 
 // IngestConfig is a method that will ingest the configuration
@@ -400,6 +403,14 @@ func (a *AMQPOneConsumerConfig) IngestConfig(config map[string]any) error {
 		return errors.New("invalid Queue - must be a string and must be set")
 	}
 	a.Queue = queue
+	onValue, ok := config["OnValue"]
+	if ok {
+		if onValue, ok := onValue.(bool); !ok {
+			return errors.New("invalid OnValue - must be a boolean")
+		} else {
+			a.OnValue = onValue
+		}
+	}
 	return nil
 }
 
@@ -539,6 +550,13 @@ func (a *AMQPOneConsumer) Serve() error {
 	if a.dial == nil {
 		return errors.New("Dialer not set")
 	}
+	var msgConvert amqpMessageConverter
+	if a.config.OnValue {
+		msgConvert = amqpConverters["StringValue"]
+	} else {
+		msgConvert = amqpConverters["BytesData"]
+	}
+
 	if a.finishCtx == nil {
         a.finishCtx = context.Background()
     }
@@ -581,7 +599,7 @@ func (a *AMQPOneConsumer) Serve() error {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				err := sendAMQPDataToPushable(msg, a.pushable)
+				err := convertAndSendAMQPMessageToPushable(msg, a.pushable, msgConvert)
 				if err != nil {
 					sendOnCancel(err)
 				}
@@ -604,20 +622,99 @@ func (a *AMQPOneConsumer) Serve() error {
 	return nil
 }
 
-// sendAMQPDataToPushable is a function that sends data to a Pushable.
+// amqpMessageConverter is a function type that converts an AMQP message to an AppData.
 //
 // Args:
 //
-// 1. msg: *amqp.Message. The message to send.
+// 1. msg: *amqp.Message. The message to convert.
+//
+// Returns:
+//
+// 1. *AppData. The AppData that was converted.
+//
+// 2. error. An error if the process fails.
+type amqpMessageConverter func(msg *amqp.Message) (*AppData, error)
+
+// amqpBytesDataConverter is a function that converts an AMQP message to an AppData.
+//
+// Args:
+//
+// 1. msg: *amqp.Message. The message to convert.
+//
+// Returns:
+//
+// 1. *AppData. The AppData that was converted.
+//
+// 2. error. An error if the process fails.
+func amqpBytesDataConverter(msg *amqp.Message) (*AppData, error) {
+	if msg == nil {
+		return nil, errors.New("message is nil")
+	}
+	appData, err := convertBytesJSONDataToAppData(msg.GetData())
+	if err != nil {
+		return nil, err
+	}
+	return appData, nil
+}
+
+// amqpStringValueConverter is a function that converts the Value field of an AMQP message to an AppData.
+//
+// Args:
+//
+// 1. msg: *amqp.Message. The message to convert.
+//
+// Returns:
+//
+// 1. *AppData. The AppData that was converted.
+//
+// 2. error. An error if the process fails.
+func amqpStringValueConverter(msg *amqp.Message) (*AppData, error) {
+	if msg == nil {
+		return nil, errors.New("message is nil")
+	}
+	rawValue := msg.Value
+	if rawValue == nil {
+		return nil, errors.New("value is nil")
+	}
+	value, ok := rawValue.(string)
+	if !ok {
+		return nil, errors.New("value is not a string")
+	}
+	appData, err := convertStringJSONDataToAppData(value)
+	if err != nil {
+		return nil, err
+	}
+	return appData, nil
+}
+
+// amqpConverters is a map that maps a string to an amqpMessageConverter.
+var amqpConverters = map[string]amqpMessageConverter{
+	"BytesData": amqpBytesDataConverter,
+	"StringValue": amqpStringValueConverter,
+}
+
+// convertAndSendAMQPMessageToPushable is a function that converts an AMQP message to an AppData
+// and sends it to a Pushable.
+//
+// Args:
+//
+// 1. msg: *amqp.Message. The message to convert.
 //
 // 2. pushable: Pushable. The Pushable to send to.
+//
+// 3. converter: amqpMessageConverter. The converter to use.
 //
 // Returns:
 //
 // 1. error. An error if the process fails.
-func sendAMQPDataToPushable(msg *amqp.Message, pushable Pushable) error {
-	if msg == nil {
-		return errors.New("message is nil")
+func convertAndSendAMQPMessageToPushable(msg *amqp.Message, pushable Pushable, converter amqpMessageConverter) error {
+	appData, err := converter(msg)
+	if err != nil {
+		return err
 	}
-	return sendBytesJSONDataToPushable(msg.GetData(), pushable)
+	err = pushable.SendTo(appData)
+	if err != nil {
+		return err
+	}
+	return nil
 }

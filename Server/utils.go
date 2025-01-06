@@ -3,6 +3,7 @@ package Server
 import (
 	"encoding/json"
 	"os"
+	"strings"
 )
 
 // convertBytesToMap is a function that converts a byte slice to a map.
@@ -21,6 +22,28 @@ func convertBytesToMap(data []byte) (map[string]any, error) {
 func convertBytesToArray(data []byte) ([]any, error) {
 	var jsonData = []any{}
 	err := json.Unmarshal(data, &jsonData)
+	if err != nil {
+		return nil, err
+	}
+	return jsonData, nil
+}
+
+// convertStringToMap is a function that converts a string to a map.
+// It takes in a string and returns a map[string]any and an error.
+func convertStringToMap(data string) (map[string]any, error) {
+	var jsonData = map[string]any{}
+	err := json.NewDecoder(strings.NewReader(data)).Decode(&jsonData)
+	if err != nil {
+		return nil, err
+	}
+	return jsonData, nil
+}
+
+// convertStringToArray is a function that converts a string to an array.
+// It takes in a string and returns an array of any and an error.
+func convertStringToArray(data string) ([]any, error) {
+	var jsonData = []any{}
+	err := json.NewDecoder(strings.NewReader(data)).Decode(&jsonData)
 	if err != nil {
 		return nil, err
 	}

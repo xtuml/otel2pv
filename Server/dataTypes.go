@@ -83,3 +83,30 @@ func convertBytesJSONDataToAppData(message []byte) (*AppData, error) {
 	}
 	return nil, errors.New("Bytes data is not a JSON map or an array")
 }
+
+// convertStringJSONDataToAppData is a function that converts a string to an AppData struct.
+//
+// Args:
+//
+// 1. message: string. The string to convert.
+//
+// Returns:
+//
+// 1. *AppData. A pointer to the AppData struct.
+//
+// 2. error. An error if the conversion fails.
+func convertStringJSONDataToAppData(message string) (*AppData, error) {
+	if jsonDataMap, err := convertStringToMap(message); err == nil {
+		appData := &AppData{
+			data:    jsonDataMap,
+		}
+		return appData, nil
+	}
+	if jsonDataArray, err := convertStringToArray(message); err == nil {
+		appData := &AppData{
+			data:    jsonDataArray,
+		}
+		return appData, nil
+	}
+	return nil, errors.New("String data is not a JSON map or an array")
+}

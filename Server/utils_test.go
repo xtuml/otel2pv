@@ -56,6 +56,56 @@ func TestConvertBytesToArray(t *testing.T) {
 	}
 }
 
+// TestConvertStringToMap is a function that tests the convertStringToMap function.
+func TestConvertStringToMap(t *testing.T) {
+	data := `{"key":"value"}`
+	expected := map[string]any{"key": "value"}
+	actual, err := convertStringToMap(data)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Errorf("Expected: %v, Actual: %v", expected, actual)
+	}
+	// Tests case where JSON is not a map
+	data = `["value"]`
+	_, err = convertStringToMap(data)
+	if err == nil {
+		t.Errorf("Expected error")
+	}
+	// Tests case where JSON is not valid
+	data = `{"key":"value"`
+	_, err = convertStringToMap(data)
+	if err == nil {
+		t.Errorf("Expected error")
+	}
+}
+
+// TestConvertStringToArray is a function that tests the convertStringToArray function.
+func TestConvertStringToArray(t *testing.T) {
+	data := `["value"]`
+	expected := []any{"value"}
+	actual, err := convertStringToArray(data)
+	if err != nil {
+		t.Errorf("Error: %s", err)
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		t.Errorf("Expected: %v, Actual: %v", expected, actual)
+	}
+	// Tests case where JSON is not an array
+	data = `{"key":"value"}`
+	_, err = convertStringToArray(data)
+	if err == nil {
+		t.Errorf("Expected error")
+	}
+	// Tests case where JSON is not valid
+	data = `["value"`
+	_, err = convertStringToArray(data)
+	if err == nil {
+		t.Errorf("Expected error")
+	}
+}
+
 // TestReadConfigJSON is a function that tests the ReadConfigJSON function.
 func TestReadConfigJSON(t *testing.T) {
 	// Tests case where file is read successfully
