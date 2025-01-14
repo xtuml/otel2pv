@@ -694,7 +694,15 @@ func TestAMQPOneConsumerConfig(t *testing.T) {
 		if err.Error() != "invalid OnValue - must be a boolean" {
 			t.Errorf("Expected error message to be 'invalid OnValue - must be a boolean', got %v", err.Error())
 		}
-		// Test when the AMQPOneConsumerConfig has a valid Connection and Queue and OnValue is not set
+		// Test when the AMQPOneConsumerConfig has a valid Connection and Queue field set but MaxConcurrentMessages is not an int
+		err = ac.IngestConfig(map[string]any{"Connection": "test", "Queue": "test", "MaxConcurrentMessages": "test"})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid MaxConcurrentMessages - must be an integer" {
+			t.Errorf("Expected error message to be 'invalid MaxConcurrentMessages - must be an integer', got %v", err.Error())
+		}
+		// Test when the AMQPOneConsumerConfig has a valid Connection and Queue and OnValue is not set and MaxConcurrentMessages is not set
 		err = ac.IngestConfig(map[string]any{"Connection": "test", "Queue": "test"})
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
@@ -708,8 +716,11 @@ func TestAMQPOneConsumerConfig(t *testing.T) {
 		if ac.OnValue {
 			t.Errorf("Expected OnValue to be false, got true")
 		}
-		// Test when the AMQPOneConsumerConfig has a valid Connection, Queue, and OnValue field set
-		err = ac.IngestConfig(map[string]any{"Connection": "test", "Queue": "test", "OnValue": true})
+		if ac.MaxConcurrentMessages != 1 {
+			t.Errorf("Expected MaxConcurrentMessages to be 1, got %v", ac.MaxConcurrentMessages)
+		}
+		// Test when the AMQPOneConsumerConfig has a valid Connection, Queue, and OnValue field set and MaxConcurrentMessages is set
+		err = ac.IngestConfig(map[string]any{"Connection": "test", "Queue": "test", "OnValue": true, "MaxConcurrentMessages": 2})
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}
@@ -721,6 +732,9 @@ func TestAMQPOneConsumerConfig(t *testing.T) {
 		}
 		if !ac.OnValue {
 			t.Errorf("Expected OnValue to be true, got false")
+		}
+		if ac.MaxConcurrentMessages != 2 {
+			t.Errorf("Expected MaxConcurrentMessages to be 2, got %v", ac.MaxConcurrentMessages)
 		}
 	})
 }
@@ -745,6 +759,7 @@ type MockAMQPOneReceiver struct {
 	isAcceptError  bool
 	receiveData   chan *amqp.Message
 	cancel     context.CancelFunc
+	receiverOptions *amqp.ReceiverOptions
 }
 
 func (r *MockAMQPOneReceiver) Receive(ctx context.Context, opts *amqp.ReceiveOptions) (*amqp.Message, error) {
@@ -790,6 +805,7 @@ func (s *MockAMQPOneConsumerSession) NewReceiver(ctx context.Context, source str
 	if s.isNewReceiverError {
 		return nil, errors.New("new receiver error")
 	}
+	s.receiver.receiverOptions = opts
 	return s.receiver, nil
 }
 
@@ -993,9 +1009,10 @@ func TestAMQPOneConsumer(t *testing.T) {
 			receiverSendChan = make(chan *amqp.Message, 2)
 			finishCtx, cancel := context.WithCancel(context.Background())
 			ac.finishCtx = finishCtx
-			ac.dial = MockAMQPOneDialWrapper(&MockAMQPOneConsumerConnection{session: &MockAMQPOneConsumerSession{receiver: &MockAMQPOneReceiver{receiveData: receiverSendChan, cancel: cancel}},}, false)
+			receiver := &MockAMQPOneReceiver{receiveData: receiverSendChan, cancel: cancel} 
+			ac.dial = MockAMQPOneDialWrapper(&MockAMQPOneConsumerConnection{session: &MockAMQPOneConsumerSession{receiver: receiver},}, false)
 			ac.pushable = pushableAMQPOneConsumer
-			ac.config = &AMQPOneConsumerConfig{}
+			ac.config = &AMQPOneConsumerConfig{MaxConcurrentMessages: 2}
 			receiverSendChan <- amqp.NewMessage([]byte(`{"key":"value1"}`))
 			receiverSendChan <- amqp.NewMessage([]byte(`{"key":"value2"}`))
 			close(receiverSendChan)
@@ -1025,6 +1042,9 @@ func TestAMQPOneConsumer(t *testing.T) {
 			if counter != 2 {
 				t.Fatalf("Expected counter to be 2, got %v", counter)
 			}
+			if receiver.receiverOptions.Credit != 2 {
+				t.Fatalf("Expected MaxConcurrentMessages to be 2, got %v", receiver.receiverOptions.Credit)
+			}
 			// Test when config indicates to extraxt data from Value field of AMQP message
 			pushableAMQPOneConsumer = &MockPushableForAMQPOneConsumer{
 				incomingData: make(chan *AppData, 2),
@@ -1032,7 +1052,8 @@ func TestAMQPOneConsumer(t *testing.T) {
 			receiverSendChan = make(chan *amqp.Message, 2)
 			finishCtx, cancel = context.WithCancel(context.Background())
 			ac.finishCtx = finishCtx
-			ac.dial = MockAMQPOneDialWrapper(&MockAMQPOneConsumerConnection{session: &MockAMQPOneConsumerSession{receiver: &MockAMQPOneReceiver{receiveData: receiverSendChan, cancel: cancel}},}, false)
+			receiver = &MockAMQPOneReceiver{receiveData: receiverSendChan, cancel: cancel}
+			ac.dial = MockAMQPOneDialWrapper(&MockAMQPOneConsumerConnection{session: &MockAMQPOneConsumerSession{receiver: receiver},}, false)
 			ac.pushable = pushableAMQPOneConsumer
 			ac.config = &AMQPOneConsumerConfig{OnValue: true}
 			msg1 := &amqp.Message{Value: `{"key":"value1"}`}
@@ -1065,6 +1086,10 @@ func TestAMQPOneConsumer(t *testing.T) {
 			}
 			if counter != 2 {
 				t.Fatalf("Expected counter to be 2, got %v", counter)
+			}
+			expectedReceiverOptions := &amqp.ReceiverOptions{}
+			if !reflect.DeepEqual(*receiver.receiverOptions, *expectedReceiverOptions) {
+				t.Fatalf("Expected receiverOptions to be %v, got %v", *expectedReceiverOptions, *receiver.receiverOptions)
 			}
 		})
 	})

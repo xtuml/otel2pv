@@ -376,10 +376,15 @@ func (r *RabbitMQConsumer) Serve() error {
 // 1. Connection: string. The connection string for the AMQP server.
 //
 // 2. Queue: string. The name of the queue to consume from.
+//
+// 3. OnValue: bool. Whether to use the Value field of the AMQP message. Defaults to false.
+//
+// 4. MaxConcurrentMessages: int. The maximum number of concurrent messages to process. Defaults to 1.
 type AMQPOneConsumerConfig struct {
 	Connection string
 	Queue      string
 	OnValue bool
+	MaxConcurrentMessages int
 }
 
 // IngestConfig is a method that will ingest the configuration
@@ -410,6 +415,16 @@ func (a *AMQPOneConsumerConfig) IngestConfig(config map[string]any) error {
 		} else {
 			a.OnValue = onValue
 		}
+	}
+	maxConcurrentMessages, ok := config["MaxConcurrentMessages"]
+	if ok {
+		if maxConcurrentMessages, ok := maxConcurrentMessages.(int); !ok {
+			return errors.New("invalid MaxConcurrentMessages - must be an integer")
+		} else {
+			a.MaxConcurrentMessages = maxConcurrentMessages
+		}
+	} else {
+		a.MaxConcurrentMessages = 1
 	}
 	return nil
 }
@@ -571,7 +586,10 @@ func (a *AMQPOneConsumer) Serve() error {
 		return err
 	}
 	defer session.Close(ctx)
-	receiver, err := session.NewReceiver(ctx, a.config.Queue, nil)
+	receiverOptions := &amqp.ReceiverOptions{
+		Credit: int32(a.config.MaxConcurrentMessages),
+	}
+	receiver, err := session.NewReceiver(ctx, a.config.Queue, receiverOptions)
 	if err != nil {
 		return err
 	}
