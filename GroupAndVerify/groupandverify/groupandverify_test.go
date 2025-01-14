@@ -242,6 +242,54 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 				t.Fatalf("expected 0, got %d", len(gavc.parentVerifySet))
 			}
 		})
+		t.Run("updateTimeout", func(t *testing.T) {
+			// test error case when timeout is not an int
+			config := map[string]any{
+				"Timeout": "not an int",
+			}
+			gavc := GroupAndVerifyConfig{}
+			err := gavc.updateTimeout(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "Timeout must be a positive integer" {
+				t.Errorf("expected Timeout must be a positive integer, got %v", err)
+			}
+			// test error case when timeout is not a positive integer
+			config = map[string]any{
+				"Timeout": -1,
+			}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.updateTimeout(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "Timeout must be a positive integer" {
+				t.Errorf("expected Timeout must be a positive integer, got %v", err)
+			}
+			// test case when timeout is a positive integer
+			config = map[string]any{
+				"Timeout": 1,
+			}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.updateTimeout(config)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if gavc.Timeout != 1 {
+				t.Errorf("expected 1, got %d", gavc.Timeout)
+			}
+			// test default case when timeout is not present
+			config = map[string]any{}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.updateTimeout(config)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if gavc.Timeout != 2 {
+				t.Errorf("expected 2, got %d", gavc.Timeout)
+			}
+		})
 		t.Run("IngestConfig", func(t *testing.T) {
 			// test error case when config is nil
 			gavc := GroupAndVerifyConfig{}
@@ -279,6 +327,15 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}
+			// test error case when updateTimeout returns an error
+			config = map[string]any{
+				"Timeout": "not an int",
+			}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.IngestConfig(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
 			// test case when all update functions return no error
 			config = map[string]any{
 				"orderChildrenByTimestamp": true,
@@ -290,6 +347,7 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 					},
 				},
 				"parentVerifySet": []any{"string"},
+				"Timeout":          1,
 			}
 			gavc = GroupAndVerifyConfig{}
 			err = gavc.IngestConfig(config)
@@ -318,6 +376,9 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 			}
 			if _, ok := gavc.parentVerifySet["string"]; !ok {
 				t.Errorf("expected string to be map key, got %v", gavc.parentVerifySet)
+			}
+			if gavc.Timeout != 1 {
+				t.Errorf("expected 1, got %d", gavc.Timeout)
 			}
 		})
 	})
@@ -1343,7 +1404,8 @@ func TestTreeHandler(t *testing.T) {
 	taskChan := make(chan *Task, 1)
 	taskChan <- &Task{IncomingData: &IncomingData{NodeId: "node", NodeType: "type", ChildIds: []string{"child"}}}
 	close(taskChan)
-	_, err := treeHandler(taskChan, map[string]bool{"type": true}, &MockPushable{})
+	config := &GroupAndVerifyConfig{parentVerifySet: map[string]bool{"type": true}, Timeout: 10}
+	_, err := treeHandler(taskChan, config, &MockPushable{})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -1356,7 +1418,7 @@ func TestTreeHandler(t *testing.T) {
 	taskChan <- &Task{IncomingData: &IncomingData{NodeId: "child2", ParentId: "node"}}
 	taskChan <- &Task{IncomingData: &IncomingData{NodeId: "node", NodeType: "type"}}
 	close(taskChan)
-	_, err = treeHandler(taskChan, map[string]bool{"type": true}, &MockPushable{})
+	_, err = treeHandler(taskChan, config, &MockPushable{})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -1367,7 +1429,8 @@ func TestTreeHandler(t *testing.T) {
 	taskChan = make(chan *Task, 1)
 	taskChan <- &Task{IncomingData: &IncomingData{NodeId: "node"}}
 	close(taskChan)
-	_, err = treeHandler(taskChan, map[string]bool{}, &MockPushable{isSendToError: true})
+	config = &GroupAndVerifyConfig{parentVerifySet: map[string]bool{}, Timeout: 10}
+	_, err = treeHandler(taskChan, config, &MockPushable{isSendToError: true})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -1380,7 +1443,7 @@ func TestTreeHandler(t *testing.T) {
 	taskChan <- task
 	close(taskChan)
 	pushable := &MockPushable{}
-	tasks, err := treeHandler(taskChan, map[string]bool{}, pushable)
+	tasks, err := treeHandler(taskChan, config, pushable)
 	if err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
@@ -1428,7 +1491,8 @@ func TestTasksHandler(t *testing.T) {
 	taskChan <- task2
 	close(taskChan)
 	pushable := &MockChanPushable{appDataChan: make(chan *Server.AppData, 2)}
-	tasksHandler(taskChan, map[string]bool{}, pushable)
+	config := &GroupAndVerifyConfig{parentVerifySet: map[string]bool{}, Timeout: 10}
+	tasksHandler(taskChan, config, pushable)
 	close(pushable.appDataChan)
 	seenNodes := map[string]bool{}
 	for appData := range pushable.appDataChan {
@@ -1486,7 +1550,7 @@ func TestTasksHandler(t *testing.T) {
 	taskChan <- task
 	close(taskChan)
 	pushable = &MockChanPushable{isSendToError: true, appDataChan: make(chan *Server.AppData, 1)}
-	tasksHandler(taskChan, map[string]bool{}, pushable)
+	tasksHandler(taskChan, config, pushable)
 	close(pushable.appDataChan)
 	appData := <-pushable.appDataChan
 	if appData != nil {

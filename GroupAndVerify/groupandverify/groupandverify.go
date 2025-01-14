@@ -94,10 +94,13 @@ type Task struct {
 //
 // 3. parentVerifySet: map[string]bool. It is a map that holds the identifiers of the nodes (NodeTypes)
 // that do not require bidirectional confirmation.
+//
+// 4. Timeout: int. It is the time out for the processing of the tree.
 type GroupAndVerifyConfig struct {
 	orderChildrenByTimestamp bool
 	groupApplies             map[string]GroupApply
 	parentVerifySet          map[string]bool
+	Timeout 				int
 }
 
 // updateOrderChildrenByTimestamp is a method that is used to update the orderChildrenByTimestamp field
@@ -202,6 +205,33 @@ func (gavc *GroupAndVerifyConfig) updateParentVerifySet(config map[string]any) e
 	return nil
 }
 
+// updateTimeout is a method that is used to update the Timeout field of the GroupAndVerifyConfig
+// struct from config.
+//
+// Args:
+//
+// 1. config: map[string]any. It is a map that holds the raw configuration.
+//
+// Returns:
+//
+// 1. error. It returns an error if the configuration is invalid in any way.
+func (gavc *GroupAndVerifyConfig) updateTimeout(config map[string]any) error {
+	timeoutRaw, ok := config["Timeout"]
+	if ok {
+		timeout, ok := timeoutRaw.(int)
+		if !ok {
+			return errors.New("Timeout must be a positive integer")
+		}
+		if timeout < 0 {
+			return errors.New("Timeout must be a positive integer")
+		}
+		gavc.Timeout = timeout
+	} else {
+		gavc.Timeout = 2
+	}
+	return nil
+}
+
 // IngestConfig is a method that is used to set the fields of the GroupAndVerifyConfig struct.
 //
 // Args:
@@ -225,6 +255,10 @@ func (gavc *GroupAndVerifyConfig) IngestConfig(config map[string]any) error {
 		return err
 	}
 	err = gavc.updateParentVerifySet(config)
+	if err != nil {
+		return err
+	}
+	err = gavc.updateTimeout(config)
 	if err != nil {
 		return err
 	}
@@ -307,7 +341,7 @@ func (gav *GroupAndVerify) Serve() error {
 	if gav.config.parentVerifySet == nil {
 		return errors.New("parentVerifySet not set")
 	}
-	tasksHandler(gav.taskChan, gav.config.parentVerifySet, gav.pushable)
+	tasksHandler(gav.taskChan, gav.config, gav.pushable)
 	return nil
 }
 
@@ -317,11 +351,10 @@ func (gav *GroupAndVerify) Serve() error {
 //
 // 1. taskChan: chan *Task. It is the channel that holds the incoming tasks.
 //
-// 2. parentVerifySet: map[string]bool. It is the map that holds the identifiers of the nodes (NodeTypes)
-// that do not require bidirectional confirmation.
+// 2. config: *GroupAndVerifyConfig. It is the configuration for the GroupAndVerify component.
 //
 // 3. pushable: Server.Pushable. It is the pushable that is used to send data to the next stage.
-func tasksHandler(taskChan chan *Task, parentVerifySet map[string]bool, pushable Server.Pushable) {
+func tasksHandler(taskChan chan *Task, config *GroupAndVerifyConfig, pushable Server.Pushable) {
 	treeToTaskChannelMap := make(map[string]chan *Task)
 	treeCompletionChannel := make(chan string)
 	wg := sync.WaitGroup{}
@@ -342,7 +375,7 @@ WORK:
 				wg.Add(1)
 				go func(treeChan chan *Task, treeId string) {
 					defer wg.Done()
-					tasks, err := treeHandler(treeChan, parentVerifySet, pushable)
+					tasks, err := treeHandler(treeChan, config, pushable)
 					// defer to send errors to all tasks and remove the tree from the map
 					for _, task := range tasks {
 						task.errChan <- err
@@ -391,8 +424,7 @@ LOOPBREAK:
 //
 // 1. taskChan: chan *Task. It is the channel that holds the incoming tasks.
 //
-// 2. parentVerifySet: map[string]bool. It is the map that holds the identifiers of the nodes (NodeTypes)
-// that do not require bidirectional confirmation.
+// 2. config: *GroupAndVerifyConfig. It is the configuration for the GroupAndVerify component.
 //
 // 3. pushable: Server.Pushable. It is the pushable that is used to send data to the next stage.
 //
@@ -401,14 +433,14 @@ LOOPBREAK:
 // 1. []*Task. It returns the tasks that were processed.
 //
 // 2. error. It returns an error if the processing of the tree fails.
-func treeHandler(taskChan chan *Task, parentVerifySet map[string]bool, pushable Server.Pushable) ([]*Task, error) {
-	verifiedNodes, tasks, _, err := processTasks(taskChan, 10, parentVerifySet)
+func treeHandler(taskChan chan *Task, config *GroupAndVerifyConfig, pushable Server.Pushable) ([]*Task, error) {
+	verifiedNodes, tasks, _, err := processTasks(taskChan, config.Timeout, config.parentVerifySet)
 	if err != nil {
 		return tasks, err
 	}
 	var outgoingData []*OutgoingData
 	for _, node := range verifiedNodes {
-		outgoingNode, err := outgoingDataFromIncomingDataHolder(node, parentVerifySet)
+		outgoingNode, err := outgoingDataFromIncomingDataHolder(node, config.parentVerifySet)
 		if err != nil {
 			return tasks, err
 		}
