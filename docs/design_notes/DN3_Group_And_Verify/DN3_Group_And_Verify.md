@@ -52,6 +52,7 @@ Covered in [Design Note 1](/docs/design_notes/DN1_JSON_Extractor/DN1_JSON_Extrac
 The incoming data will be required have the following format:
 ```json
 {
+    "treeId": "<string>",
     "nodeId": "<string>",
     "parentNodeId": "<string>",
     "childIds": ["<string>"],
@@ -99,3 +100,8 @@ The Group and Verify app will use the server library to provide the server runni
 The class diagram for the Group and Verify component is as follows:
 
 ![Class Diagram](./class_diagram.svg)
+
+### Implementation
+The implmentation of the GroupAndVerify struct is as follows in the activity diagram:
+
+![Implementation](./implementation_GroupAndVerify.svg)

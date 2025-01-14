@@ -1,0 +1,59 @@
+@startuml
+    partition GroupAndVerify {
+        split
+        -[hidden]->
+        package main {
+            group main() {
+                :Call Server.RunApp;
+                detach
+            }
+        }
+        split again
+        -[hidden]->
+        package groupandverify {
+            split
+            -[hidden]->
+            group AddPushable(*GroupAndVerify, Pushable) error {
+                :Add Pushable to GroupAndVerify instance;
+                detach
+            }
+            group Setup(*GroupAndVerify, Config) error {
+                :check if config is of GroupAndVerifyConfig type;
+                :add config to GroupAndVerify instance;
+                detach
+            }
+            group Serve(*GroupAndVerify) error {
+                :create tree completion channel;
+                :create map of tree id to channel for sending and receiving work;
+                repeat
+                    switch ()
+                        case (task channel is not empty)
+                        :see if tree id is in map;
+                        if (tree id is not in map)
+                            :create channel for tree;
+                            :add channel to map under tree id;
+                            :create go routine to process tree;
+                        endif
+                        :get channel for tree id;
+                        :send task to tree channel;
+
+                        case (tree completion channel is not empty)
+                        :process tree completion;
+                        :check for any remaining tasks in tree channel not completed;
+                        if (check for remaining tasks) then (no remaining tasks)
+                            :close tree channel;
+                            :delete tree channel from map;
+                        else (remaining tasks)
+                            :send remaining tasks back to task channel;
+                        endif
+                        case (default)
+                        :continue;
+                    endswitch
+                repeat while (true)
+                detach
+            }
+            end split
+        }
+        end split
+    }
+@enduml

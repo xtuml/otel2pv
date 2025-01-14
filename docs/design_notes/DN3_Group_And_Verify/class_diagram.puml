@@ -28,12 +28,18 @@ namespace GroupAndVerify {
     struct GroupAndVerify {
         -GroupAndVerifyConfig config
         -Server.Pushable pushable
+        -chan *Task taskChan
         +error AddPushable(Server.Pushable)
         +error SendTo(*Server.AppData)
         +error Serve()
         +error Setup(Server.Config)
     }
+    struct Task {
+        +IncomingData Node
+        +chan error ErrorChan
+    }
     struct IncomingData {
+        +string TreeId
         +string NodeId
         +string ParentId
         +[]string ChildIds
@@ -53,4 +59,6 @@ Server.Pushable *-- GroupAndVerify.GroupAndVerify
 Server.Config <|-- GroupAndVerify.GroupAndVerifyConfig
 GroupAndVerify.GroupApply *-- GroupAndVerify.GroupAndVerifyConfig
 GroupAndVerify.GroupAndVerifyConfig *-- GroupAndVerify.GroupAndVerify
+GroupAndVerify.Task *-- GroupAndVerify.IncomingData
+GroupAndVerify.GroupAndVerify *-- GroupAndVerify.Task
 @enduml
