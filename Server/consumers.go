@@ -418,10 +418,14 @@ func (a *AMQPOneConsumerConfig) IngestConfig(config map[string]any) error {
 	}
 	maxConcurrentMessages, ok := config["MaxConcurrentMessages"]
 	if ok {
-		if maxConcurrentMessages, ok := maxConcurrentMessages.(int); !ok {
-			return errors.New("invalid MaxConcurrentMessages - must be an integer")
+		if maxConcurrentMessagesFloat, ok := maxConcurrentMessages.(float64); ok {
+			a.MaxConcurrentMessages = int(maxConcurrentMessagesFloat)
 		} else {
-			a.MaxConcurrentMessages = maxConcurrentMessages
+			if maxConcurrentMessages, ok := maxConcurrentMessages.(int); !ok {
+				return errors.New("invalid MaxConcurrentMessages - must be a number")
+			} else {
+				a.MaxConcurrentMessages = maxConcurrentMessages
+			}
 		}
 	} else {
 		a.MaxConcurrentMessages = 1
@@ -620,10 +624,12 @@ func (a *AMQPOneConsumer) Serve() error {
 				err := convertAndSendAMQPMessageToPushable(msg, a.pushable, msgConvert)
 				if err != nil {
 					sendOnCancel(err)
+					return
 				}
 				err = receiver.AcceptMessage(ctx, msg)
 				if err != nil {
 					sendOnCancel(err)
+					return
 				}	
 			}()
 

@@ -201,6 +201,8 @@ func (gavc *GroupAndVerifyConfig) updateParentVerifySet(config map[string]any) e
 			parentVerifySet[valueString] = true
 		}
 		gavc.parentVerifySet = parentVerifySet
+	} else {
+		gavc.parentVerifySet = make(map[string]bool)
 	}
 	return nil
 }
@@ -472,6 +474,7 @@ func outgoingDataFromIncomingDataHolder(incomingDataHolder *incomingDataHolder, 
 	outgoingNode := &OutgoingData{
 		NodeId:  incomingData.NodeId,
 		AppJSON: incomingData.AppJSON,
+		OrderedChildIds: make([]string, 0),
 	}
 	if _, ok := parentVerifySet[incomingData.NodeType]; ok {
 		if len(backwardsLinks) > 1 {
@@ -924,7 +927,15 @@ func incomingDataFromMap(incomingDataMap map[string]any) (*IncomingData, error) 
 	if !ok {
 		return nil, errors.New("NodeType does not exist or is not a string")
 	}
-	timestampRaw, ok := incomingDataMap["timestamp"].(int)
+	var timestamp int
+	if timestampFloat, ok := incomingDataMap["timestamp"].(float64); ok {
+		timestamp = int(timestampFloat)
+	} else {
+		timestamp, ok = incomingDataMap["timestamp"].(int)
+		if !ok {
+			return nil, errors.New("Timestamp does not exist or is not an int")
+		}
+	}
 	if !ok {
 		return nil, errors.New("Timestamp does not exist or is not an int")
 	}
@@ -938,7 +949,7 @@ func incomingDataFromMap(incomingDataMap map[string]any) (*IncomingData, error) 
 		ParentId:  parentId,
 		ChildIds:  childIds,
 		NodeType:  nodeType,
-		Timestamp: timestampRaw,
+		Timestamp: timestamp,
 		AppJSON:   appJSONRaw,
 	}, nil
 }

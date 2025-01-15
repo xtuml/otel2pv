@@ -699,8 +699,8 @@ func TestAMQPOneConsumerConfig(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
 		}
-		if err.Error() != "invalid MaxConcurrentMessages - must be an integer" {
-			t.Errorf("Expected error message to be 'invalid MaxConcurrentMessages - must be an integer', got %v", err.Error())
+		if err.Error() != "invalid MaxConcurrentMessages - must be a number" {
+			t.Errorf("Expected error message to be 'invalid MaxConcurrentMessages - must be a number', got %v", err.Error())
 		}
 		// Test when the AMQPOneConsumerConfig has a valid Connection and Queue and OnValue, MaxConcurrentMessages and Timeout are not set
 		err = ac.IngestConfig(map[string]any{"Connection": "test", "Queue": "test"})

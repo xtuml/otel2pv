@@ -1,0 +1,10 @@
+services:
+  jqextractor:
+    image: group-and-verify:latest
+    build:
+      context: ../../.
+      dockerfile: GroupAndVerify/Dockerfile.GroupAndVerify
+    container_name: group-and-verify
+    volumes:
+      - ./config:/config
+    entrypoint: ["/group-and-verify", "--config", "/config/config.json"]
