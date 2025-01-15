@@ -325,7 +325,7 @@ func TestSequencer(t *testing.T) {
 				[]any{
 					map[string]any{
 						"nodeId":          "1",
-						"orderedChildIds": []any{"2"},
+						"childIds": []any{"2"},
 						"appJSON":         map[string]any{},
 					},
 				},
@@ -343,12 +343,12 @@ func TestSequencer(t *testing.T) {
 				[]any{
 					map[string]any{
 						"nodeId":          "1",
-						"orderedChildIds": []any{"2"},
+						"childIds": []any{"2"},
 						"appJSON":         map[string]any{},
 					},
 					map[string]any{
 						"nodeId":          "2",
-						"orderedChildIds": []any{},
+						"childIds": []any{},
 						"appJSON":         map[string]any{},
 					},
 				},
@@ -390,12 +390,12 @@ func TestSequencer(t *testing.T) {
 				[]any{
 					map[string]any{
 						"nodeId":          "1",
-						"orderedChildIds": []any{"2"},
+						"childIds": []any{"2"},
 						"appJSON":         map[string]any{},
 					},
 					map[string]any{
 						"nodeId":          "2",
-						"orderedChildIds": []any{},
+						"childIds": []any{},
 						"appJSON":         map[string]any{},
 					},
 				},
@@ -436,22 +436,22 @@ func TestSequencer(t *testing.T) {
 				[]any{
 					map[string]any{
 						"nodeId":          "1",
-						"orderedChildIds": []any{"2"},
+						"childIds": []any{"2"},
 						"appJSON":         map[string]any{},
 					},
 					map[string]any{
 						"nodeId":          "2",
-						"orderedChildIds": []any{},
+						"childIds": []any{},
 						"appJSON":         map[string]any{"field": "2"},
 					},
 					map[string]any{
 						"nodeId":          "3",
-						"orderedChildIds": []any{"4"},
+						"childIds": []any{"4"},
 						"appJSON":         map[string]any{},
 					},
 					map[string]any{
 						"nodeId":          "4",
-						"orderedChildIds": []any{},
+						"childIds": []any{},
 						"appJSON":         map[string]any{"field": "4"},
 					},
 				},
@@ -504,7 +504,7 @@ func TestStackIncomingData(t *testing.T) {
 		sid := &stackIncomingData{}
 		// check error case when currentChildIdIndex is greater than or equal to len(incomingData)
 		sid.incomingData = &incomingData{
-			orderedChildIds: []string{},
+			ChildIds: []string{},
 		}
 		sid.currentChildIdIndex = 0
 		_, err := sid.nextChildId()
@@ -516,7 +516,7 @@ func TestStackIncomingData(t *testing.T) {
 		}
 		// check valid case
 		sid.incomingData = &incomingData{
-			orderedChildIds: []string{"1", "2"},
+			ChildIds: []string{"1", "2"},
 		}
 		childId, err := sid.nextChildId()
 		if err != nil {
@@ -589,7 +589,7 @@ func TestSequenceWithStack(t *testing.T) {
 		// check error case when child node is not found
 		nodeIdToIncomingDataMap := map[string]*incomingData{}
 		rootNode := &incomingData{
-			orderedChildIds: []string{"1"},
+			ChildIds: []string{"1"},
 		}
 		sequence := sequenceWithStack(rootNode, nodeIdToIncomingDataMap)
 		counter := 0
@@ -615,7 +615,7 @@ func TestSequenceWithStack(t *testing.T) {
 			"1": nil,
 		}
 		rootNode := &incomingData{
-			orderedChildIds: []string{"1"},
+			ChildIds: []string{"1"},
 		}
 		sequence := sequenceWithStack(rootNode, nodeIdToIncomingDataMap)
 		counter := 0
@@ -639,21 +639,21 @@ func TestSequenceWithStack(t *testing.T) {
 		// check valid case
 		nodeIdToIncomingDataMap := map[string]*incomingData{
 			"1": {
-				nodeId:          "1",
-				orderedChildIds: []string{"2", "3"},
+				NodeId:   "1",
+				ChildIds: []string{"2", "3"},
 			},
 			"2": {
-				nodeId:          "2",
-				orderedChildIds: []string{"4", "5"},
+				NodeId:   "2",
+				ChildIds: []string{"4", "5"},
 			},
 			"3": {
-				nodeId:          "3",
-				orderedChildIds: []string{"6", "7"},
+				NodeId:   "3",
+				ChildIds: []string{"6", "7"},
 			},
-			"4": {nodeId: "4"},
-			"5": {nodeId: "5"},
-			"6": {nodeId: "6"},
-			"7": {nodeId: "7"},
+			"4": {NodeId: "4"},
+			"5": {NodeId: "5"},
+			"6": {NodeId: "6"},
+			"7": {NodeId: "7"},
 		}
 		rootNode := nodeIdToIncomingDataMap["1"]
 		sequence := sequenceWithStack(rootNode, nodeIdToIncomingDataMap)
@@ -697,7 +697,7 @@ func TestConvertRawDataMapToIncomingData(t *testing.T) {
 		if err.Error() != "nodeId must be set and must be a string" {
 			t.Errorf("Expected error message 'nodeId must be set and must be a string', got %v", err.Error())
 		}
-		// check error case when orderedChildIds is not set
+		// check error case when childIds is not set
 		data = map[string]any{
 			"nodeId": "1",
 		}
@@ -705,37 +705,37 @@ func TestConvertRawDataMapToIncomingData(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Expected error from convertRawDataToIncomingData, got nil")
 		}
-		if err.Error() != "orderedChildIds must be set and must be an array of strings" {
-			t.Errorf("Expected error message 'orderedChildIds must be set and must be an array of strings', got %v", err.Error())
+		if err.Error() != "childIds must be set and must be an array of strings" {
+			t.Errorf("Expected error message 'childIds must be set and must be an array of strings', got %v", err.Error())
 		}
-		// check error case when orderedChildIds is not an array
+		// check error case when childIds is not an array
 		data = map[string]any{
 			"nodeId":          "1",
-			"orderedChildIds": 1,
+			"childIds": 1,
 		}
 		_, err = convertRawDataMapToIncomingData(data)
 		if err == nil {
 			t.Fatalf("Expected error from convertRawDataToIncomingData, got nil")
 		}
-		if err.Error() != "orderedChildIds must be set and must be an array of strings" {
-			t.Errorf("Expected error message 'orderedChildIds must be set and must be an array of strings', got %v", err.Error())
+		if err.Error() != "childIds must be set and must be an array of strings" {
+			t.Errorf("Expected error message 'childIds must be set and must be an array of strings', got %v", err.Error())
 		}
-		// check error case when orderedChildIds is not an array of strings
+		// check error case when childIds is not an array of strings
 		data = map[string]any{
 			"nodeId":          "1",
-			"orderedChildIds": []any{1},
+			"childIds": []any{1},
 		}
 		_, err = convertRawDataMapToIncomingData(data)
 		if err == nil {
 			t.Fatalf("Expected error from convertRawDataToIncomingData, got nil")
 		}
-		if err.Error() != "orderedChildIds must be set and must be an array of strings" {
-			t.Errorf("Expected error message 'orderedChildIds must be set and must be an array of strings', got %v", err.Error())
+		if err.Error() != "childIds must be set and must be an array of strings" {
+			t.Errorf("Expected error message 'childIds must be set and must be an array of strings', got %v", err.Error())
 		}
 		// check error case where appJSON is not set
 		data = map[string]any{
 			"nodeId":          "1",
-			"orderedChildIds": []any{"2"},
+			"childIds": []any{"2"},
 		}
 		_, err = convertRawDataMapToIncomingData(data)
 		if err == nil {
@@ -747,7 +747,7 @@ func TestConvertRawDataMapToIncomingData(t *testing.T) {
 		// check error case where appJSON is not a map
 		data = map[string]any{
 			"nodeId":          "1",
-			"orderedChildIds": []any{"2"},
+			"childIds": []any{"2"},
 			"appJSON":         1,
 		}
 		_, err = convertRawDataMapToIncomingData(data)
@@ -762,7 +762,7 @@ func TestConvertRawDataMapToIncomingData(t *testing.T) {
 		// check valid case
 		data := map[string]any{
 			"nodeId":          "1",
-			"orderedChildIds": []any{"2", "3"},
+			"childIds": []any{"2", "3"},
 			"appJSON": map[string]any{
 				"key": "value",
 			},
@@ -771,14 +771,14 @@ func TestConvertRawDataMapToIncomingData(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected no error from convertRawDataToIncomingData, got %v", err)
 		}
-		if incomingData.nodeId != "1" {
-			t.Errorf("Expected nodeId to be '1', got %v", incomingData.nodeId)
+		if incomingData.NodeId != "1" {
+			t.Errorf("Expected nodeId to be '1', got %v", incomingData.NodeId)
 		}
-		if !reflect.DeepEqual(incomingData.orderedChildIds, []string{"2", "3"}) {
-			t.Errorf("Expected orderedChildIds to be ['2', '3'], got %v", incomingData.orderedChildIds)
+		if !reflect.DeepEqual(incomingData.ChildIds, []string{"2", "3"}) {
+			t.Errorf("Expected childIds to be ['2', '3'], got %v", incomingData.ChildIds)
 		}
-		if !reflect.DeepEqual(incomingData.appJSON, map[string]any{"key": "value"}) {
-			t.Errorf("Expected appJSON to be {'key': 'value'}, got %v", incomingData.appJSON)
+		if !reflect.DeepEqual(incomingData.AppJSON, map[string]any{"key": "value"}) {
+			t.Errorf("Expected appJSON to be {'key': 'value'}, got %v", incomingData.AppJSON)
 		}
 	})
 }
@@ -818,17 +818,17 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 		nodes := []any{
 			map[string]any{
 				"nodeId":          "1",
-				"orderedChildIds": []any{"2", "3"},
+				"childIds": []any{"2", "3"},
 				"appJSON":         map[string]any{},
 			},
 			map[string]any{
 				"nodeId":          "2",
-				"orderedChildIds": []any{},
+				"childIds": []any{},
 				"appJSON":         map[string]any{},
 			},
 			map[string]any{
 				"nodeId":          "3",
-				"orderedChildIds": []any{},
+				"childIds": []any{},
 				"appJSON":         map[string]any{},
 			},
 		}
@@ -848,18 +848,18 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 			if !ok {
 				t.Errorf("Expected incomingDataMap to have key %v", inputMap["nodeId"])
 			}
-			if incomingData.nodeId != inputMap["nodeId"] {
-				t.Errorf("Expected nodeId to be %v, got %v", inputMap["nodeId"], incomingData.nodeId)
+			if incomingData.NodeId != inputMap["nodeId"] {
+				t.Errorf("Expected nodeId to be %v, got %v", inputMap["nodeId"], incomingData.NodeId)
 			}
 			expectedOrderedChildIds := []string{}
-			for _, childId := range inputMap["orderedChildIds"].([]any) {
+			for _, childId := range inputMap["childIds"].([]any) {
 				expectedOrderedChildIds = append(expectedOrderedChildIds, childId.(string))
 			}
-			if !reflect.DeepEqual(incomingData.orderedChildIds, expectedOrderedChildIds) {
-				t.Errorf("Expected orderedChildIds to be %v, got %v", inputMap["orderedChildIds"], incomingData.orderedChildIds)
+			if !reflect.DeepEqual(incomingData.ChildIds, expectedOrderedChildIds) {
+				t.Errorf("Expected childIds to be %v, got %v", inputMap["childIds"], incomingData.ChildIds)
 			}
-			if !reflect.DeepEqual(incomingData.appJSON, inputMap["appJSON"]) {
-				t.Errorf("Expected appJSON to be %v, got %v", inputMap["appJSON"], incomingData.appJSON)
+			if !reflect.DeepEqual(incomingData.AppJSON, inputMap["appJSON"]) {
+				t.Errorf("Expected appJSON to be %v, got %v", inputMap["appJSON"], incomingData.AppJSON)
 			}
 		}
 		rootNode, ok := rootNodes["1"]
@@ -878,7 +878,7 @@ func TestGetPrevIdFromPrevIncomingData(t *testing.T) {
 		// check error case outputAppFieldSequenceIdMap is not found
 		// in prevIncomingData appJSON
 		prevIncomingData := &incomingData{
-			appJSON: map[string]any{},
+			AppJSON: map[string]any{},
 		}
 		_, err := getPrevIdFromPrevIncomingData(prevIncomingData, "test")
 		if err == nil {
@@ -889,7 +889,7 @@ func TestGetPrevIdFromPrevIncomingData(t *testing.T) {
 		}
 		// check error case outputAppFieldSequenceIdMap is not a string
 		prevIncomingData = &incomingData{
-			appJSON: map[string]any{
+			AppJSON: map[string]any{
 				"test": 1,
 			},
 		}
@@ -904,8 +904,8 @@ func TestGetPrevIdFromPrevIncomingData(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		// check case where outputAppFieldSequenceIdMap is not set
 		prevIncomingData := &incomingData{
-			nodeId: "1",
-			appJSON: map[string]any{
+			NodeId: "1",
+			AppJSON: map[string]any{
 				"key": "value",
 			},
 		}
@@ -941,7 +941,7 @@ func TestGetPrevIdData(t *testing.T) {
 			t.Errorf("Expected error message 'outputAppFieldSequenceIdMap must be a string and must exist in the input JSON', got %v", err.Error())
 		}
 		// check when there the config field outputAppFieldSequenceType is not correct
-		prevIncomingData = &incomingData{nodeId: "1"}
+		prevIncomingData = &incomingData{NodeId: "1"}
 		config = &SequencerConfig{}
 		_, err = getPrevIdData(prevIncomingData, config)
 		if err == nil {
@@ -953,7 +953,7 @@ func TestGetPrevIdData(t *testing.T) {
 	})
 	t.Run("valid", func(t *testing.T) {
 		// check valid array case
-		prevIncomingData := &incomingData{nodeId: "1"}
+		prevIncomingData := &incomingData{NodeId: "1"}
 		config := &SequencerConfig{outputAppFieldSequenceType: Array}
 		prevIdData, err := getPrevIdData(prevIncomingData, config)
 		if err != nil {
@@ -967,7 +967,7 @@ func TestGetPrevIdData(t *testing.T) {
 			t.Errorf("Expected prevIdData to be ['1'], got %v", prevIdDataArray)
 		}
 		// check valid string case
-		prevIncomingData = &incomingData{nodeId: "1"}
+		prevIncomingData = &incomingData{NodeId: "1"}
 		config = &SequencerConfig{outputAppFieldSequenceType: String}
 		prevIdData, err = getPrevIdData(prevIncomingData, config)
 		if err != nil {
@@ -1048,13 +1048,13 @@ func TestSeqeuncerRunApp(t *testing.T) {
 	dataArray := []any{}
 	for i := 0; i < 10; i++ {
 		dataToAppend := map[string]any{
-			"nodeId":          strconv.Itoa(i),
-			"appJSON":         map[string]any{"key": strconv.Itoa(i)},
+			"nodeId":  strconv.Itoa(i),
+			"appJSON": map[string]any{"key": strconv.Itoa(i)},
 		}
 		if i != 9 {
-			dataToAppend["orderedChildIds"] = []any{strconv.Itoa(i + 1)}
+			dataToAppend["childIds"] = []any{strconv.Itoa(i + 1)}
 		} else {
-			dataToAppend["orderedChildIds"] = []any{}
+			dataToAppend["childIds"] = []any{}
 		}
 		dataArray = append(dataArray, dataToAppend)
 	}
@@ -1130,10 +1130,10 @@ func TestSeqeuncerRunApp(t *testing.T) {
 		for i, appJSON := range dataAsArray {
 			if i == 0 {
 				if !reflect.DeepEqual(appJSON, map[string]any{
-					"key":      "9",
+					"key": "9",
 				}) {
 					t.Errorf("Expected appJSON to be %v, got %v", map[string]any{
-						"key":      "9",
+						"key": "9",
 					}, appJSON)
 				}
 			} else {

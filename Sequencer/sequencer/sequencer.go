@@ -168,15 +168,24 @@ func (s *Sequencer) Setup(config Server.Config) error {
 // for the Sequencer
 // It has the following fields:
 //
-// 1. nodeId: string. The node id of the incoming data
+// 1. NodeId: string. The node id of the incoming data
 //
-// 2. orderedChildIds: []string. The ordered child ids of the incoming data (first to last)
+// 2. ParentId: string. The parent id of the incoming data
 //
-// 3. appJSON: map[string]any. The outgoing app JSON of the incoming data
+// 3. ChildIds: []string. The ordered child ids of the incoming data (first to last)
+//
+// 4. NodeType: string. The type of the incoming data
+//
+// 5. Timestamp: int. The timestamp of the incoming data
+//
+// 6. AppJSON: map[string]any. The outgoing app JSON of the incoming data
 type incomingData struct {
-	nodeId          string
-	orderedChildIds []string
-	appJSON         map[string]any
+	NodeId    string
+	ParentId  string
+	ChildIds  []string
+	NodeType  string
+	Timestamp int
+	AppJSON   map[string]any
 }
 
 // stackIncomingData is a single incomingData when it is used for sequencing
@@ -199,10 +208,10 @@ type stackIncomingData struct {
 //
 // 2. error. The error if the next child id is not found
 func (sid *stackIncomingData) nextChildId() (string, error) {
-	if sid.currentChildIdIndex >= len(sid.orderedChildIds) {
+	if sid.currentChildIdIndex >= len(sid.ChildIds) {
 		return "", errors.New("no more child ids")
 	}
-	childId := sid.orderedChildIds[sid.currentChildIdIndex]
+	childId := sid.ChildIds[sid.currentChildIdIndex]
 	sid.currentChildIdIndex++
 	return childId, nil
 }
@@ -282,15 +291,15 @@ func convertRawDataMapToIncomingData(rawDataMap map[string]any) (*incomingData, 
 	if !ok {
 		return nil, errors.New("nodeId must be set and must be a string")
 	}
-	rawOrderedChildIds, ok := rawDataMap["orderedChildIds"].([]any)
+	rawOrderedChildIds, ok := rawDataMap["childIds"].([]any)
 	if !ok {
-		return nil, errors.New("orderedChildIds must be set and must be an array of strings")
+		return nil, errors.New("childIds must be set and must be an array of strings")
 	}
 	orderedChildIds := []string{}
 	for _, rawOrderedChildId := range rawOrderedChildIds {
 		orderedChildId, ok := rawOrderedChildId.(string)
 		if !ok {
-			return nil, errors.New("orderedChildIds must be set and must be an array of strings")
+			return nil, errors.New("childIds must be set and must be an array of strings")
 		}
 		orderedChildIds = append(orderedChildIds, orderedChildId)
 	}
@@ -299,9 +308,9 @@ func convertRawDataMapToIncomingData(rawDataMap map[string]any) (*incomingData, 
 		return nil, errors.New("appJSON must be set and must be a map")
 	}
 	return &incomingData{
-		nodeId:          nodeId,
-		orderedChildIds: orderedChildIds,
-		appJSON:         appJSON,
+		NodeId:   nodeId,
+		ChildIds: orderedChildIds,
+		AppJSON:  appJSON,
 	}, nil
 }
 
@@ -325,7 +334,7 @@ func convertToIncomingDataMapAndRootNodes(rawData any) (map[string]*incomingData
 	rawDataArray, ok := rawData.([]any)
 	if !ok {
 		return nil, nil, errors.New("data must be an array of maps")
-	}	
+	}
 	nodeIdToIncomingDataMap := make(map[string]*incomingData)
 	nodeIdToNoForwardRefMap := make(map[string]*incomingData)
 	nodeIdToForwardRefMap := make(map[string]bool)
@@ -338,12 +347,12 @@ func convertToIncomingDataMapAndRootNodes(rawData any) (map[string]*incomingData
 		if err != nil {
 			return nil, nil, err
 		}
-		nodeIdToIncomingDataMap[incomingData.nodeId] = incomingData
-		_, ok = nodeIdToForwardRefMap[incomingData.nodeId]
+		nodeIdToIncomingDataMap[incomingData.NodeId] = incomingData
+		_, ok = nodeIdToForwardRefMap[incomingData.NodeId]
 		if !ok {
-			nodeIdToNoForwardRefMap[incomingData.nodeId] = incomingData
+			nodeIdToNoForwardRefMap[incomingData.NodeId] = incomingData
 		}
-		for _, childId := range incomingData.orderedChildIds {
+		for _, childId := range incomingData.ChildIds {
 			nodeIdToForwardRefMap[childId] = true
 			_, ok := nodeIdToNoForwardRefMap[childId]
 			if ok {
@@ -372,7 +381,7 @@ func convertToIncomingDataMapAndRootNodes(rawData any) (map[string]*incomingData
 // 2. error. The error if the previous id is not found
 func getPrevIdFromPrevIncomingData(prevIncomingData *incomingData, outputAppFieldSequenceIdMap string) (string, error) {
 	if outputAppFieldSequenceIdMap != "" {
-		prevIDUnTyped, ok := prevIncomingData.appJSON[outputAppFieldSequenceIdMap]
+		prevIDUnTyped, ok := prevIncomingData.AppJSON[outputAppFieldSequenceIdMap]
 		if !ok {
 			return "", errors.New(
 				"outputAppFieldSequenceIdMap must be a string and must exist in the input JSON",
@@ -386,7 +395,7 @@ func getPrevIdFromPrevIncomingData(prevIncomingData *incomingData, outputAppFiel
 		}
 		return prevID, nil
 	}
-	return prevIncomingData.nodeId, nil
+	return prevIncomingData.NodeId, nil
 }
 
 // getPrevIdData
@@ -457,7 +466,7 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 			if err != nil {
 				return err
 			}
-			appJSON := incomingData.appJSON
+			appJSON := incomingData.AppJSON
 			if prevIncomingData != nil {
 				prevID, err := getPrevIdData(prevIncomingData, s.config)
 				if err != nil {

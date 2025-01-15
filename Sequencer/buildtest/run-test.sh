@@ -11,7 +11,7 @@ docker compose -f docker-compose-buildtest.yml logs sequencer
 
 # Publish message to the ConsumeTest queue using management API
 echo "Publishing message to ConsumeTest queue..."
-curl -X POST -H "content-type:application/json" http://localhost:15672/api/exchanges/%2f/amq.default/publish -d '{"vhost":"/","name":"amq.default","properties":{"delivery_mode":1,"headers":{"Content-Type":"application/json"}},"routing_key":"ConsumeTest","delivery_mode":"1","payload":"[{\"nodeId\":\"1\",\"orderedChildIds\":[],\"appJSON\":{\"test\":\"rabbitmq\"}}]","payload_encoding":"string","headers":{"Content-Type":"application/json"},"props":{}}' -u guest:guest
+curl -X POST -H "content-type:application/json" http://localhost:15672/api/exchanges/%2f/amq.default/publish -d '{"vhost":"/","name":"amq.default","properties":{"delivery_mode":1,"headers":{"Content-Type":"application/json"}},"routing_key":"ConsumeTest","delivery_mode":"1","payload":"[{\"nodeId\":\"1\",\"parentId\":\"\",\"childIds\":[],\"nodeType\":\"\",\"timestamp\":1,\"appJSON\":{\"test\":\"rabbitmq\"}}]","payload_encoding":"string","headers":{"Content-Type":"application/json"},"props":{}}' -u guest:guest
 
 echo "Message published to ConsumeTest queue"
 

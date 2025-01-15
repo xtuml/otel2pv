@@ -12,7 +12,7 @@ services:
       # Use the root directory as the context
       context: ../../.
       # Use the sequencer Dockerfile
-      dockerfile: sequencer/Dockerfile.sequencer
+      dockerfile: Sequencer/Dockerfile.Sequencer
     depends_on:
       rabbitmq:
         condition: service_healthy
