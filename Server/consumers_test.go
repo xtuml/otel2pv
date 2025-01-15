@@ -1022,6 +1022,7 @@ func TestAMQPOneConsumer(t *testing.T) {
 			}
 			close(pushableAMQPOneConsumer.incomingData)
 			counter := 0
+			dataMaps := []map[string]any{}
 			for data := range pushableAMQPOneConsumer.incomingData {
 				if data == nil {
 					t.Fatalf("Expected data to be non-nil")
@@ -1033,9 +1034,7 @@ func TestAMQPOneConsumer(t *testing.T) {
 				if dataMap, ok := gotAppData.(map[string]any); !ok {
 					t.Fatalf("Expected data to be a map, got %T", gotAppData)
 				} else {
-					if !reflect.DeepEqual(dataMap, map[string]any{"key": "value" + strconv.Itoa(counter+1)}) {
-						t.Fatalf("Expected data to be %v, got %v", map[string]any{"key": "value" + strconv.Itoa(counter+1)}, dataMap)
-					}
+					dataMaps = append(dataMaps, dataMap)
 				}
 				counter++
 			}
@@ -1044,6 +1043,12 @@ func TestAMQPOneConsumer(t *testing.T) {
 			}
 			if receiver.receiverOptions.Credit != 2 {
 				t.Fatalf("Expected MaxConcurrentMessages to be 2, got %v", receiver.receiverOptions.Credit)
+			}
+			sort.Slice(dataMaps, func(i, j int) bool {
+				return dataMaps[i]["key"].(string) < dataMaps[j]["key"].(string)
+			})
+			if !reflect.DeepEqual(dataMaps, []map[string]any{{"key": "value1"}, {"key": "value2"}}) {
+				t.Fatalf("Expected dataMaps to be %v, got %v", []map[string]any{{"key": "value1"}, {"key": "value2"}}, dataMaps)
 			}
 			// Test when config indicates to extraxt data from Value field of AMQP message
 			pushableAMQPOneConsumer = &MockPushableForAMQPOneConsumer{
@@ -1067,6 +1072,7 @@ func TestAMQPOneConsumer(t *testing.T) {
 			}
 			close(pushableAMQPOneConsumer.incomingData)
 			counter = 0
+			dataMaps = []map[string]any{}
 			for data := range pushableAMQPOneConsumer.incomingData {
 				if data == nil {
 					t.Fatalf("Expected data to be non-nil")
@@ -1078,9 +1084,7 @@ func TestAMQPOneConsumer(t *testing.T) {
 				if dataMap, ok := gotAppData.(map[string]any); !ok {
 					t.Fatalf("Expected data to be a map, got %T", gotAppData)
 				} else {
-					if !reflect.DeepEqual(dataMap, map[string]any{"key": "value" + strconv.Itoa(counter+1)}) {
-						t.Fatalf("Expected data to be %v, got %v", map[string]any{"key": "value" + strconv.Itoa(counter+1)}, dataMap)
-					}
+					dataMaps = append(dataMaps, dataMap)
 				}
 				counter++
 			}
@@ -1090,6 +1094,12 @@ func TestAMQPOneConsumer(t *testing.T) {
 			expectedReceiverOptions := &amqp.ReceiverOptions{}
 			if !reflect.DeepEqual(*receiver.receiverOptions, *expectedReceiverOptions) {
 				t.Fatalf("Expected receiverOptions to be %v, got %v", *expectedReceiverOptions, *receiver.receiverOptions)
+			}
+			sort.Slice(dataMaps, func(i, j int) bool {
+				return dataMaps[i]["key"].(string) < dataMaps[j]["key"].(string)
+			})
+			if !reflect.DeepEqual(dataMaps, []map[string]any{{"key": "value1"}, {"key": "value2"}}) {
+				t.Fatalf("Expected dataMaps to be %v, got %v", []map[string]any{{"key": "value1"}, {"key": "value2"}}, dataMaps)
 			}
 		})
 	})

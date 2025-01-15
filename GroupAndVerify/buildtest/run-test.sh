@@ -21,8 +21,10 @@ sleep 5
 
 # Get the message from the ProduceTest queue using management API
 echo "Consuming message from ProduceTest queue..."
-curl -X POST -H "content-type:application/json" http://localhost:15672/api/queues/%2f/ProduceTest/get -d '{"vhost":"/","name":"ProduceTest","truncate":"50000","ackmode":"ack_requeue_false","encoding":"auto","count":"1"}' -u guest:guest| jq -r '.[].payload' >> /tmp/output.txt
-grep -q 'tree' /tmp/output.txt && grep -q 'node1' /tmp/output.txt && grep -q 'node2' /tmp/output.txt && grep -q '1' /tmp/output.txt && grep -q '2' /tmp/output.txt
+curl -X POST -H "content-type:application/json" http://localhost:15672/api/queues/%2f/ProduceTest/get -d '{"vhost":"/","name":"ProduceTest","truncate":"50000","ackmode":"ack_requeue_false","encoding":"auto","count":"1"}' -u guest:guest| jq -r '.[].payload' > /tmp/output.txt
+grep -q '"nodeId":"node1"' /tmp/output.txt && grep -q '"parentId":""' /tmp/output.txt && grep -q '"childIds":\["node2"\]' /tmp/output.txt && grep -q '"nodeType":""' /tmp/output.txt && grep -q '"timestamp":2' /tmp/output.txt && grep -q '"appJSON":{}' /tmp/output.txt
+grep -q '"nodeId":"node2"' /tmp/output.txt && grep -q '"parentId":"node1"' /tmp/output.txt && grep -q '"childIds":\[\]' /tmp/output.txt && grep -q '"nodeType":""' /tmp/output.txt && grep -q '"timestamp":1' /tmp/output.txt && grep -q '"appJSON":{}' /tmp/output.txt
+rm -r /tmp/output.txt
 
 echo "Message consumed and processed successfully"
 

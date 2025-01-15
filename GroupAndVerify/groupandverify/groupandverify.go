@@ -35,14 +35,23 @@ type GroupApply struct {
 //
 // 1. NodeId: string. It is the identifier of the node.
 //
-// 2. OrderedChildIds: []string. It is the list of identifiers of the children of the node, in order
-// of occurence.
+// 2. ParentId: string. It is the identifier of the parent of the node.
 //
-// 3. AppJSON: map[string]any. It is the JSON data that is to be sent to the next stage.
+// 3. ChildIds: []string. It is the list of identifiers of the children of the node
+//
+// 4. NodeType: string. It is the type of the node. This can be used to identify if
+// bidirectional confirmation is required. Optional.
+//
+// 5. Timestamp: int. It is the timestamp of the node. Optional.
+//
+// 6. AppJSON: map[string]any. It is the JSON data that is to be sent to the next stage.
 type OutgoingData struct {
-	NodeId          string         `json:"nodeId"`
-	OrderedChildIds []string       `json:"orderedChildIds"`
-	AppJSON         map[string]any `json:"appJSON"`
+	NodeId    string         `json:"nodeId"`
+	ParentId  string         `json:"parentId"`
+	ChildIds  []string       `json:"childIds"`
+	NodeType  string         `json:"nodeType"`
+	Timestamp int            `json:"timestamp"`
+	AppJSON   map[string]any `json:"appJSON"`
 }
 
 // IncomingData is a struct that is used to hold the incoming data from the previous stage
@@ -100,7 +109,7 @@ type GroupAndVerifyConfig struct {
 	orderChildrenByTimestamp bool
 	groupApplies             map[string]GroupApply
 	parentVerifySet          map[string]bool
-	Timeout 				int
+	Timeout                  int
 }
 
 // updateOrderChildrenByTimestamp is a method that is used to update the orderChildrenByTimestamp field
@@ -472,17 +481,20 @@ func outgoingDataFromIncomingDataHolder(incomingDataHolder *incomingDataHolder, 
 	}
 	backwardsLinks := incomingDataHolder.backwardsLinks
 	outgoingNode := &OutgoingData{
-		NodeId:  incomingData.NodeId,
-		AppJSON: incomingData.AppJSON,
-		OrderedChildIds: make([]string, 0),
+		NodeId:          incomingData.NodeId,
+		ParentId:        incomingData.ParentId,
+		ChildIds: make([]string, 0),
+		NodeType:        incomingData.NodeType,
+		Timestamp:       incomingData.Timestamp,
+		AppJSON:         incomingData.AppJSON,
 	}
 	if _, ok := parentVerifySet[incomingData.NodeType]; ok {
 		if len(backwardsLinks) > 1 {
 			return nil, fmt.Errorf("node should have exactly one edge. NodeId: %s", incomingData.NodeId)
 		}
-		outgoingNode.OrderedChildIds = append(outgoingNode.OrderedChildIds, backwardsLinks...)
+		outgoingNode.ChildIds = append(outgoingNode.ChildIds, backwardsLinks...)
 	} else {
-		outgoingNode.OrderedChildIds = append(outgoingNode.OrderedChildIds, incomingData.ChildIds...)
+		outgoingNode.ChildIds = append(outgoingNode.ChildIds, incomingData.ChildIds...)
 	}
 	return outgoingNode, nil
 }
@@ -874,11 +886,11 @@ func (gav *GroupAndVerify) SendTo(data *Server.AppData) (err error) {
 		errChan:      make(chan error),
 	}
 	defer close(task.errChan)
-	defer func ()  {
+	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("taskChan is closed")
 		}
-	}() 
+	}()
 	gav.taskChan <- task
 	err = <-task.errChan
 	return err

@@ -1339,8 +1339,8 @@ func TestOutgoingDataFromIncomingDataHolder(t *testing.T) {
 	if !reflect.DeepEqual(outgoingData.AppJSON, map[string]interface{}{"key": "value"}) {
 		t.Errorf("expected map[string]interface{}{\"key\": \"value\"}, got %v", outgoingData.AppJSON)
 	}
-	if len(outgoingData.OrderedChildIds) != 0 {
-		t.Errorf("expected 0, got %d", len(outgoingData.OrderedChildIds))
+	if len(outgoingData.ChildIds) != 0 {
+		t.Errorf("expected 0, got %d", len(outgoingData.ChildIds))
 	}
 	// Test case: incomingDataHolder has incomingData and children and nodeType is not in parentVerifySet
 	holder = &incomingDataHolder{incomingData: &IncomingData{NodeId: "node", AppJSON: map[string]interface{}{"key": "value"}, ChildIds: []string{"child"}}}
@@ -1357,11 +1357,11 @@ func TestOutgoingDataFromIncomingDataHolder(t *testing.T) {
 	if !reflect.DeepEqual(outgoingData.AppJSON, map[string]interface{}{"key": "value"}) {
 		t.Errorf("expected map[string]interface{}{\"key\": \"value\"}, got %v", outgoingData.AppJSON)
 	}
-	if len(outgoingData.OrderedChildIds) != 1 {
-		t.Errorf("expected 1, got %d", len(outgoingData.OrderedChildIds))
+	if len(outgoingData.ChildIds) != 1 {
+		t.Errorf("expected 1, got %d", len(outgoingData.ChildIds))
 	}
-	if outgoingData.OrderedChildIds[0] != "child" {
-		t.Errorf("expected child, got %v", outgoingData.OrderedChildIds)
+	if outgoingData.ChildIds[0] != "child" {
+		t.Errorf("expected child, got %v", outgoingData.ChildIds)
 	}
 	// Test case: incomingDataHolder has incomingData no children and nodeType is in parentVerifySet and has a single backwards link
 	holder = &incomingDataHolder{incomingData: &IncomingData{NodeId: "node", AppJSON: map[string]interface{}{"key": "value"}, NodeType: "type"}, backwardsLinks: []string{"child"}}
@@ -1378,11 +1378,11 @@ func TestOutgoingDataFromIncomingDataHolder(t *testing.T) {
 	if !reflect.DeepEqual(outgoingData.AppJSON, map[string]interface{}{"key": "value"}) {
 		t.Errorf("expected map[string]interface{}{\"key\": \"value\"}, got %v", outgoingData.AppJSON)
 	}
-	if len(outgoingData.OrderedChildIds) != 1 {
-		t.Errorf("expected 1, got %d", len(outgoingData.OrderedChildIds))
+	if len(outgoingData.ChildIds) != 1 {
+		t.Errorf("expected 1, got %d", len(outgoingData.ChildIds))
 	}
-	if outgoingData.OrderedChildIds[0] != "child" {
-		t.Errorf("expected child, got %v", outgoingData.OrderedChildIds)
+	if outgoingData.ChildIds[0] != "child" {
+		t.Errorf("expected child, got %v", outgoingData.ChildIds)
 	}
 	// Test case: incomingDataHolder has incomingData no children and nodeType is in parentVerifySet and has multiple backwards links
 	holder = &incomingDataHolder{incomingData: &IncomingData{NodeId: "node", AppJSON: map[string]interface{}{"key": "value"}, NodeType: "type"}, backwardsLinks: []string{"child", "child2"}}
@@ -1476,8 +1476,8 @@ func TestTreeHandler(t *testing.T) {
 	if !reflect.DeepEqual(gotData[0].AppJSON, map[string]interface{}{"key": "value"}) {
 		t.Errorf("expected map[string]interface{}{\"key\": \"value\"}, got %v", gotData[0].AppJSON)
 	}
-	if len(gotData[0].OrderedChildIds) != 0 {
-		t.Errorf("expected 0, got %d", len(gotData[0].OrderedChildIds))
+	if len(gotData[0].ChildIds) != 0 {
+		t.Errorf("expected 0, got %d", len(gotData[0].ChildIds))
 	}
 }
 
@@ -1515,16 +1515,16 @@ func TestTasksHandler(t *testing.T) {
 			if !reflect.DeepEqual(gotDataEntry.AppJSON, map[string]any{"key1": "value1"}) {
 				t.Errorf("expected map[string]any{\"key1\":\"value1\"}, got %v", gotDataEntry.AppJSON)
 			}
-			if len(gotDataEntry.OrderedChildIds) != 0 {
-				t.Errorf("expected 0, got %d", len(gotDataEntry.OrderedChildIds))
+			if len(gotDataEntry.ChildIds) != 0 {
+				t.Errorf("expected 0, got %d", len(gotDataEntry.ChildIds))
 			}
 			seenNodes["node1"] = true
 		} else if gotDataEntry.NodeId == "node2" {
 			if !reflect.DeepEqual(gotDataEntry.AppJSON, map[string]any{"key2": "value2"}) {
 				t.Errorf("expected map[string]any{\"key2\":\"value2\"}, got %v", gotDataEntry.AppJSON)
 			}
-			if len(gotDataEntry.OrderedChildIds) != 0 {
-				t.Errorf("expected 0, got %d", len(gotDataEntry.OrderedChildIds))
+			if len(gotDataEntry.ChildIds) != 0 {
+				t.Errorf("expected 0, got %d", len(gotDataEntry.ChildIds))
 			}
 			seenNodes["node2"] = true
 		} else {
@@ -1590,7 +1590,6 @@ func (mss *MockSourceServer) Serve() error {
 	}
 	for range mss.dataToSend {
 		err := <-errChan
-		fmt.Println(err)
 		if err != nil {
 			return err
 		}
@@ -1739,7 +1738,7 @@ func TestGroupAndVerifyRunApp(t *testing.T) {
 		for _, receivedOutgoingData := range receivedData {
 			nodeId := receivedOutgoingData.NodeId
 			nodeIds = append(nodeIds, nodeId)
-			orderedChildIds := receivedOutgoingData.OrderedChildIds
+			orderedChildIds := receivedOutgoingData.ChildIds
 			if nodeId == "0" {
 				if len(orderedChildIds) != 0 {
 					t.Errorf("expected 0, got %d", len(orderedChildIds))
