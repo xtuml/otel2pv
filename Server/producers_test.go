@@ -2,7 +2,6 @@ package Server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -150,7 +149,7 @@ func TestHTTPProducer(t *testing.T) {
 			client: &http.Client{},
 		}
 		appData := &AppData{
-			data:    map[string]any{"test": "data"},
+			data: []byte(sentData),
 		}
 
 		err := producer.SendTo(appData)
@@ -166,20 +165,20 @@ func TestHTTPProducer(t *testing.T) {
 		if err.Error() != "data is not set" {
 			t.Errorf("Expected specified error from SendTo, got '%v'", err)
 		}
-		// Error case in which data cannot be converted to JSON 
+		// Error case in which data cannot be converted to JSON
 		appData = &AppData{
-			data:    make(chan int),
+			data: []byte("{test: data}"),
 		}
 		err = producer.SendTo(appData)
 		if err == nil {
 			t.Errorf("Expected error from SendTo, got nil")
 		}
-		if err.Error() != "json: unsupported type: chan int" {
+		if err.Error() != "data is not valid JSON" {
 			t.Errorf("Expected specified error from SendTo, got '%v'", err)
 		}
 		// Error case in which url is not found (2 retries to test)
 		appData = &AppData{
-			data:    map[string]any{"test": "data"},
+			data: []byte(sentData),
 		}
 		producer.config.URL = "invalid"
 		producer.config.numRetries = 2
@@ -495,7 +494,7 @@ func TestRabbitMQProducerConfig(t *testing.T) {
 		config = &RabbitMQProducerConfig{}
 		err = config.IngestConfig(map[string]any{
 			"Connection": "test",
-			"Queue": "test",
+			"Queue":      "test",
 		})
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
@@ -514,7 +513,7 @@ func TestRabbitMQProducerConfig(t *testing.T) {
 		err = config.IngestConfig(map[string]any{
 			"Connection": "test",
 			"Exchange":   "test",
-			"Queue": "test",
+			"Queue":      "test",
 		})
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
@@ -729,7 +728,7 @@ func TestRabbitMQProducer(t *testing.T) {
 	t.Run("SendTo", func(t *testing.T) {
 		producer := &RabbitMQProducer{}
 		appData := &AppData{
-			data: map[string]any{"test": "data"},
+			data: []byte(`{"test":"data"}`),
 		}
 		// check error case when config is not set
 		err := producer.SendTo(appData)
@@ -739,7 +738,7 @@ func TestRabbitMQProducer(t *testing.T) {
 		if err.Error() != "config not set" {
 			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
 		}
-		// check error case when context is not set 
+		// check error case when context is not set
 		producer.config = &RabbitMQProducerConfig{}
 		err = producer.SendTo(appData)
 		if err == nil {
@@ -770,18 +769,18 @@ func TestRabbitMQProducer(t *testing.T) {
 		// check error when the data cannot be marshalled to json
 		producer.channel = &MockRabbitMQProducerChannel{}
 		appData = &AppData{
-			data: make(chan int),
+			data: []byte(`{test: data}`),
 		}
 		err = producer.SendTo(appData)
 		if err == nil {
 			t.Fatalf("Expected error from SendTo, got nil")
 		}
-		if err.Error() != "json: unsupported type: chan int" {
+		if err.Error() != "data is not valid JSON" {
 			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
 		}
 		// check error case when Publish() returns an error
 		appData = &AppData{
-			data: map[string]any{"test": "data"},
+			data: []byte(`{"test":"data"}`),
 		}
 		producer.channel = &MockRabbitMQProducerChannel{isPublishError: true}
 		err = producer.SendTo(appData)
@@ -799,23 +798,19 @@ func TestRabbitMQProducer(t *testing.T) {
 				Connection: "test",
 				RoutingKey: "test",
 			},
-			ctx:    ctx,
-			cancel: cancel,
+			ctx:     ctx,
+			cancel:  cancel,
 			channel: &MockRabbitMQProducerChannel{},
 		}
 		appData = &AppData{
-			data: map[string]any{"test": "data"},
+			data: []byte(`{"test":"data"}`),
 		}
 		err = producer.SendTo(appData)
 		if err != nil {
 			t.Fatalf("Expected no error from SendTo, got %v", err)
 		}
-		marshalledData, err := json.Marshal(appData.data)
-		if err != nil {
-			t.Fatalf("Expected no error from json.Marshal, got %v", err)
-		}
 		publishedData := rabbitmq.Publishing{
-			Body:    marshalledData,
+			Body:        appData.data,
 			ContentType: "application/json",
 		}
 		if !reflect.DeepEqual(producer.channel.(*MockRabbitMQProducerChannel).incomingData, publishedData) {
@@ -869,7 +864,7 @@ func TestAMQPOneProducerConfig(t *testing.T) {
 		// Test when Connection is set correctly and Queue is set but not a string
 		err = config.IngestConfig(map[string]any{
 			"Connection": "test",
-			"Queue": 1,
+			"Queue":      1,
 		})
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
@@ -880,7 +875,7 @@ func TestAMQPOneProducerConfig(t *testing.T) {
 		// Test valid config
 		err = config.IngestConfig(map[string]any{
 			"Connection": "test",
-			"Queue": "test",
+			"Queue":      "test",
 		})
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
@@ -896,7 +891,7 @@ func TestAMQPOneProducerConfig(t *testing.T) {
 
 // MockAMQPOneProducerSender is a mock implementation of the AMQPOneProducerSender interface
 type MockAMQPOneProducerSender struct {
-	isSendError bool
+	isSendError  bool
 	isCloseError bool
 	incomingData *amqp.Message
 }
@@ -919,7 +914,7 @@ func (s *MockAMQPOneProducerSender) Close(ctx context.Context) error {
 // MockAMQPOneProducerSession is a mock implementation of the AMQPOneProducerSession interface
 type MockAMQPOneProducerSession struct {
 	isSenderError bool
-	isCloseError bool
+	isCloseError  bool
 	sender        *MockAMQPOneProducerSender
 }
 
@@ -943,8 +938,8 @@ func (s *MockAMQPOneProducerSession) Close(ctx context.Context) error {
 // MockAMQPOneProducerConn is a mock implementation of the AMQPOneProducerConn interface
 type MockAMQPOneProducerConnection struct {
 	isNewSessionError bool
-	isCloseError bool
-	session *MockAMQPOneProducerSession
+	isCloseError      bool
+	session           *MockAMQPOneProducerSession
 }
 
 func (c *MockAMQPOneProducerConnection) NewSession(ctx context.Context, opts *amqp.SessionOptions) (AMQPOneProducerSession, error) {
@@ -974,11 +969,6 @@ func MockAMQPOneProducerDialWrapper(mockAMQPOneProducerConn *MockAMQPOneProducer
 	}
 }
 
-
-
-
-
-
 // Test AMQPOneProducer
 func TestAMQPOneProducer(t *testing.T) {
 	t.Run("ImplementsSinkServer", func(t *testing.T) {
@@ -992,7 +982,7 @@ func TestAMQPOneProducer(t *testing.T) {
 		producer := &AMQPOneProducer{}
 		config := &AMQPOneProducerConfig{
 			Connection: "test",
-			Queue: "test",
+			Queue:      "test",
 		}
 		// Test valid config
 		err := producer.Setup(config)
@@ -1104,7 +1094,7 @@ func TestAMQPOneProducer(t *testing.T) {
 		producer = &AMQPOneProducer{
 			config: &AMQPOneProducerConfig{
 				Connection: "test",
-				Queue: "test",
+				Queue:      "test",
 			},
 			dial: MockAMQPOneProducerDialWrapper(&MockAMQPOneProducerConnection{
 				session: &MockAMQPOneProducerSession{
@@ -1127,7 +1117,7 @@ func TestAMQPOneProducer(t *testing.T) {
 	t.Run("SendTo", func(t *testing.T) {
 		producer := &AMQPOneProducer{}
 		appData := &AppData{
-			data: map[string]any{"test": "data"},
+			data: []byte(`{"test":"data"}`),
 		}
 		// check error case when config is not set
 		err := producer.SendTo(appData)
@@ -1137,7 +1127,7 @@ func TestAMQPOneProducer(t *testing.T) {
 		if err.Error() != "config not set" {
 			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
 		}
-		// check error case when context is not set 
+		// check error case when context is not set
 		producer.config = &AMQPOneProducerConfig{}
 		err = producer.SendTo(appData)
 		if err == nil {
@@ -1168,18 +1158,18 @@ func TestAMQPOneProducer(t *testing.T) {
 		// check error when the data cannot be marshalled to json
 		producer.sender = &MockAMQPOneProducerSender{}
 		appData = &AppData{
-			data: make(chan int),
+			data: []byte(`{test: data}`),
 		}
 		err = producer.SendTo(appData)
 		if err == nil {
 			t.Fatalf("Expected error from SendTo, got nil")
 		}
-		if err.Error() != "json: unsupported type: chan int" {
+		if err.Error() != "data is not valid JSON" {
 			t.Fatalf("Expected specified error from SendTo, got '%v'", err)
 		}
 		// check error case when Send() returns an error
 		appData = &AppData{
-			data: map[string]any{"test": "data"},
+			data: []byte(`{"test":"data"}`),
 		}
 		producer.sender = &MockAMQPOneProducerSender{isSendError: true}
 		err = producer.SendTo(appData)
@@ -1195,27 +1185,23 @@ func TestAMQPOneProducer(t *testing.T) {
 		producer = &AMQPOneProducer{
 			config: &AMQPOneProducerConfig{
 				Connection: "test",
-				Queue: "test",
+				Queue:      "test",
 			},
 			ctx:    ctx,
 			cancel: cancel,
 			sender: &MockAMQPOneProducerSender{},
 		}
 		appData = &AppData{
-			data: map[string]any{"test": "data"},
+			data: []byte(`{"test":"data"}`),
 		}
 		err = producer.SendTo(appData)
 		if err != nil {
 			t.Fatalf("Expected no error from SendTo, got %v", err)
 		}
 		producerSender := producer.sender.(*MockAMQPOneProducerSender)
-		unmarshalledData := map[string]any{}
-		err = json.Unmarshal(producerSender.incomingData.GetData(), &unmarshalledData)
-		if err != nil {
-			t.Fatalf("Expected no error from json.Unmarshal, got %v", err)
-		}
-		if !reflect.DeepEqual(unmarshalledData, appData.data) {
-			t.Fatalf("Expected incomingData to be '%v', got '%v'", appData.data, unmarshalledData)
+		gotData := producerSender.incomingData.GetData()
+		if !reflect.DeepEqual(gotData, appData.data) {
+			t.Fatalf("Expected incomingData to be '%v', got '%v'", appData.data, gotData)
 		}
 		if producer.ctx.Err() != nil {
 			t.Fatalf("Expected context to still be active, got %v", producer.ctx.Err())

@@ -1,6 +1,7 @@
 package groupandverify
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -347,7 +348,7 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 					},
 				},
 				"parentVerifySet": []any{"string"},
-				"Timeout":          1,
+				"Timeout":         1,
 			}
 			gavc = GroupAndVerifyConfig{}
 			err = gavc.IngestConfig(config)
@@ -537,38 +538,22 @@ func TestGroupAndVerify(t *testing.T) {
 			t.Errorf("expected data is nil, got %v", err)
 		}
 		close(gav.taskChan)
-		// Test case: data on appData is not a map
-		gav = GroupAndVerify{taskChan: make(chan *Task, 1)}
-		appData := Server.NewAppData("not a map", "")
-		err = gav.SendTo(appData)
-		if err == nil {
-			t.Fatalf("expected error, got nil")
-		}
-		if err.Error() != "data is not a map" {
-			t.Errorf("expected data is not a map, got %v", err)
-		}
-		close(gav.taskChan)
 		// Test case: map data does not fit the IncomingData expected format
 		gav = GroupAndVerify{taskChan: make(chan *Task, 1)}
-		appData = Server.NewAppData(map[string]any{}, "")
+		appData := Server.NewAppData([]byte(`{}`), "")
 		err = gav.SendTo(appData)
 		if err == nil {
 			t.Fatalf("expected error, got nil")
 		}
-		if err.Error() != "TreeId does not exist or is not a string" {
-			t.Errorf("expected TreeId does not exist or is not a string, got %v", err)
+		if err.Error() != "TreeId is required" {
+			t.Errorf("expected TreeId is required, got %v", err)
 		}
 		// Test case: all required fields are set but the taskChan is closed
 		gav = GroupAndVerify{taskChan: make(chan *Task, 1)}
-		appData = Server.NewAppData(map[string]any{
-			"treeId":    "tree",
-			"nodeId":    "node",
-			"parentId":  "",
-			"nodeType":  "",
-			"childIds":  []any{},
-			"timestamp": 0,
-			"appJSON":   map[string]any{},
-		}, "")
+		appData = Server.NewAppData(
+			[]byte(`{"treeId":"tree","nodeId":"node","parentId":"","nodeType":"","childIds":[],"timestamp":0,"appJSON":{}}`),
+			"",
+		)
 		close(gav.taskChan)
 		err = gav.SendTo(appData)
 		if err == nil {
@@ -579,15 +564,10 @@ func TestGroupAndVerify(t *testing.T) {
 		}
 		// Test case: all required fields are set
 		gav = GroupAndVerify{taskChan: make(chan *Task, 1)}
-		appData = Server.NewAppData(map[string]any{
-			"treeId":    "tree",
-			"nodeId":    "node",
-			"parentId":  "",
-			"nodeType":  "",
-			"childIds":  []any{},
-			"timestamp": 0,
-			"appJSON":   map[string]any{},
-		}, "")
+		appData = Server.NewAppData(
+			[]byte(`{"treeId":"tree","nodeId":"node","parentId":"","nodeType":"","childIds":[],"timestamp":0,"appJSON":{}}`),
+			"",
+		)
 		// no error expected
 		go func() {
 			task := <-gav.taskChan
@@ -1325,7 +1305,7 @@ func TestOutgoingDataFromIncomingDataHolder(t *testing.T) {
 		t.Fatalf("expected incomingData is nil, got %v", err)
 	}
 	// Test case: incomingDataHolder has incomingData and no children and nodeType is not in parentVerifySet
-	holder = &incomingDataHolder{incomingData: &IncomingData{NodeId: "node", AppJSON: map[string]interface{}{"key": "value"}}}
+	holder = &incomingDataHolder{incomingData: &IncomingData{NodeId: "node", AppJSON: json.RawMessage(`{"key": "value"}`)}}
 	outgoingData, err = outgoingDataFromIncomingDataHolder(holder, map[string]bool{})
 	if outgoingData == nil {
 		t.Fatalf("expected outgoingData, got nil")
@@ -1336,14 +1316,14 @@ func TestOutgoingDataFromIncomingDataHolder(t *testing.T) {
 	if outgoingData.NodeId != "node" {
 		t.Errorf("expected node, got %v", outgoingData.NodeId)
 	}
-	if !reflect.DeepEqual(outgoingData.AppJSON, map[string]interface{}{"key": "value"}) {
-		t.Errorf("expected map[string]interface{}{\"key\": \"value\"}, got %v", outgoingData.AppJSON)
+	if !reflect.DeepEqual(outgoingData.AppJSON, json.RawMessage(`{"key": "value"}`)) {
+		t.Errorf("expected %v, got %v", json.RawMessage(`{"key": "value"}`), outgoingData.AppJSON)
 	}
 	if len(outgoingData.ChildIds) != 0 {
 		t.Errorf("expected 0, got %d", len(outgoingData.ChildIds))
 	}
 	// Test case: incomingDataHolder has incomingData and children and nodeType is not in parentVerifySet
-	holder = &incomingDataHolder{incomingData: &IncomingData{NodeId: "node", AppJSON: map[string]interface{}{"key": "value"}, ChildIds: []string{"child"}}}
+	holder = &incomingDataHolder{incomingData: &IncomingData{NodeId: "node", AppJSON: json.RawMessage(`{"key": "value"}`), ChildIds: []string{"child"}}}
 	outgoingData, err = outgoingDataFromIncomingDataHolder(holder, map[string]bool{})
 	if outgoingData == nil {
 		t.Fatalf("expected outgoingData, got nil")
@@ -1354,8 +1334,8 @@ func TestOutgoingDataFromIncomingDataHolder(t *testing.T) {
 	if outgoingData.NodeId != "node" {
 		t.Errorf("expected node, got %v", outgoingData.NodeId)
 	}
-	if !reflect.DeepEqual(outgoingData.AppJSON, map[string]interface{}{"key": "value"}) {
-		t.Errorf("expected map[string]interface{}{\"key\": \"value\"}, got %v", outgoingData.AppJSON)
+	if !reflect.DeepEqual(outgoingData.AppJSON, json.RawMessage(`{"key": "value"}`)) {
+		t.Errorf("expected %v, got %v", json.RawMessage(`{"key": "value"}`), outgoingData.AppJSON)
 	}
 	if len(outgoingData.ChildIds) != 1 {
 		t.Errorf("expected 1, got %d", len(outgoingData.ChildIds))
@@ -1364,7 +1344,7 @@ func TestOutgoingDataFromIncomingDataHolder(t *testing.T) {
 		t.Errorf("expected child, got %v", outgoingData.ChildIds)
 	}
 	// Test case: incomingDataHolder has incomingData no children and nodeType is in parentVerifySet and has a single backwards link
-	holder = &incomingDataHolder{incomingData: &IncomingData{NodeId: "node", AppJSON: map[string]interface{}{"key": "value"}, NodeType: "type"}, backwardsLinks: []string{"child"}}
+	holder = &incomingDataHolder{incomingData: &IncomingData{NodeId: "node", AppJSON: json.RawMessage(`{"key": "value"}`), NodeType: "type"}, backwardsLinks: []string{"child"}}
 	outgoingData, err = outgoingDataFromIncomingDataHolder(holder, map[string]bool{"type": true})
 	if outgoingData == nil {
 		t.Fatalf("expected outgoingData, got nil")
@@ -1375,8 +1355,8 @@ func TestOutgoingDataFromIncomingDataHolder(t *testing.T) {
 	if outgoingData.NodeId != "node" {
 		t.Errorf("expected node, got %v", outgoingData.NodeId)
 	}
-	if !reflect.DeepEqual(outgoingData.AppJSON, map[string]interface{}{"key": "value"}) {
-		t.Errorf("expected map[string]interface{}{\"key\": \"value\"}, got %v", outgoingData.AppJSON)
+	if !reflect.DeepEqual(outgoingData.AppJSON, json.RawMessage(`{"key": "value"}`)) {
+		t.Errorf("expected %v, got %v", json.RawMessage(`{"key": "value"}`), outgoingData.AppJSON)
 	}
 	if len(outgoingData.ChildIds) != 1 {
 		t.Errorf("expected 1, got %d", len(outgoingData.ChildIds))
@@ -1385,7 +1365,7 @@ func TestOutgoingDataFromIncomingDataHolder(t *testing.T) {
 		t.Errorf("expected child, got %v", outgoingData.ChildIds)
 	}
 	// Test case: incomingDataHolder has incomingData no children and nodeType is in parentVerifySet and has multiple backwards links
-	holder = &incomingDataHolder{incomingData: &IncomingData{NodeId: "node", AppJSON: map[string]interface{}{"key": "value"}, NodeType: "type"}, backwardsLinks: []string{"child", "child2"}}
+	holder = &incomingDataHolder{incomingData: &IncomingData{NodeId: "node", AppJSON: json.RawMessage(`{"key": "value"}`), NodeType: "type"}, backwardsLinks: []string{"child", "child2"}}
 	outgoingData, err = outgoingDataFromIncomingDataHolder(holder, map[string]bool{"type": true})
 	if outgoingData != nil {
 		t.Fatalf("expected nil, got %v", outgoingData)
@@ -1439,7 +1419,7 @@ func TestTreeHandler(t *testing.T) {
 	}
 	// Test case where everything works as expected
 	taskChan = make(chan *Task, 1)
-	task := &Task{IncomingData: &IncomingData{NodeId: "node", AppJSON: map[string]interface{}{"key": "value"}}}
+	task := &Task{IncomingData: &IncomingData{NodeId: "node", AppJSON: json.RawMessage(`{"key": "value"}`)}}
 	taskChan <- task
 	close(taskChan)
 	pushable := &MockPushable{}
@@ -1463,21 +1443,22 @@ func TestTreeHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
-	gotData, ok := gotDataRaw.([]*OutgoingData)
-	if !ok {
-		t.Fatalf("expected OutgoingData, got %v", gotDataRaw)
+	var outgoingData []*OutgoingData
+	err = json.Unmarshal(gotDataRaw, &outgoingData)
+	if err != nil {
+		t.Fatalf("expected nil, got %v", err)
 	}
-	if len(gotData) != 1 {
-		t.Fatalf("expected 1, got %d", len(gotData))
+	if len(outgoingData) != 1 {
+		t.Fatalf("expected 1, got %d", len(outgoingData))
 	}
-	if gotData[0].NodeId != "node" {
-		t.Errorf("expected node, got %v", gotData[0].NodeId)
+	if outgoingData[0].NodeId != "node" {
+		t.Errorf("expected node, got %v", outgoingData[0].NodeId)
 	}
-	if !reflect.DeepEqual(gotData[0].AppJSON, map[string]interface{}{"key": "value"}) {
-		t.Errorf("expected map[string]interface{}{\"key\": \"value\"}, got %v", gotData[0].AppJSON)
+	if !reflect.DeepEqual(outgoingData[0].AppJSON, json.RawMessage(`{"key":"value"}`)) {
+		t.Errorf("expected %v, got %v", json.RawMessage(`{"key":"value"}`), outgoingData[0].AppJSON)
 	}
-	if len(gotData[0].ChildIds) != 0 {
-		t.Errorf("expected 0, got %d", len(gotData[0].ChildIds))
+	if len(outgoingData[0].ChildIds) != 0 {
+		t.Errorf("expected 0, got %d", len(outgoingData[0].ChildIds))
 	}
 }
 
@@ -1485,8 +1466,8 @@ func TestTreeHandler(t *testing.T) {
 func TestTasksHandler(t *testing.T) {
 	// Test case where two separate trees both complete without errors
 	taskChan := make(chan *Task, 2)
-	task1 := &Task{IncomingData: &IncomingData{TreeId: "tree1", NodeId: "node1", AppJSON: map[string]any{"key1": "value1"}}, errChan: make(chan error, 1)}
-	task2 := &Task{IncomingData: &IncomingData{TreeId: "tree2", NodeId: "node2", AppJSON: map[string]any{"key2": "value2"}}, errChan: make(chan error, 1)}
+	task1 := &Task{IncomingData: &IncomingData{TreeId: "tree1", NodeId: "node1", AppJSON: json.RawMessage(`{"key1":"value1"}`)}, errChan: make(chan error, 1)}
+	task2 := &Task{IncomingData: &IncomingData{TreeId: "tree2", NodeId: "node2", AppJSON: json.RawMessage(`{"key2":"value2"}`)}, errChan: make(chan error, 1)}
 	taskChan <- task1
 	taskChan <- task2
 	close(taskChan)
@@ -1503,32 +1484,33 @@ func TestTasksHandler(t *testing.T) {
 		if err != nil {
 			t.Fatalf("expected nil, got %v", err)
 		}
-		gotData, ok := gotDataRaw.([]*OutgoingData)
-		if !ok {
-			t.Fatalf("expected OutgoingData, got %v", gotDataRaw)
+		var outgoingData []*OutgoingData
+		err = json.Unmarshal(gotDataRaw, &outgoingData)
+		if err != nil {
+			t.Fatalf("expected nil, got %v", err)
 		}
-		if len(gotData) != 1 {
-			t.Fatalf("expected 1, got %d", len(gotData))
+		if len(outgoingData) != 1 {
+			t.Fatalf("expected 1, got %d", len(outgoingData))
 		}
-		gotDataEntry := gotData[0]
-		if gotDataEntry.NodeId == "node1" {
-			if !reflect.DeepEqual(gotDataEntry.AppJSON, map[string]any{"key1": "value1"}) {
-				t.Errorf("expected map[string]any{\"key1\":\"value1\"}, got %v", gotDataEntry.AppJSON)
+		outgoingDataEntry := outgoingData[0]
+		if outgoingDataEntry.NodeId == "node1" {
+			if !reflect.DeepEqual(outgoingDataEntry.AppJSON, json.RawMessage(`{"key1":"value1"}`)) {
+				t.Errorf("expected %v, got %v", json.RawMessage(`{"key1":"value1"}`), outgoingDataEntry.AppJSON)
 			}
-			if len(gotDataEntry.ChildIds) != 0 {
-				t.Errorf("expected 0, got %d", len(gotDataEntry.ChildIds))
+			if len(outgoingDataEntry.ChildIds) != 0 {
+				t.Errorf("expected 0, got %d", len(outgoingDataEntry.ChildIds))
 			}
 			seenNodes["node1"] = true
-		} else if gotDataEntry.NodeId == "node2" {
-			if !reflect.DeepEqual(gotDataEntry.AppJSON, map[string]any{"key2": "value2"}) {
-				t.Errorf("expected map[string]any{\"key2\":\"value2\"}, got %v", gotDataEntry.AppJSON)
+		} else if outgoingDataEntry.NodeId == "node2" {
+			if !reflect.DeepEqual(outgoingDataEntry.AppJSON, json.RawMessage(`{"key2":"value2"}`)) {
+				t.Errorf("expected %v, got %v", json.RawMessage(`{"key2":"value2"}`), outgoingDataEntry.AppJSON)
 			}
-			if len(gotDataEntry.ChildIds) != 0 {
-				t.Errorf("expected 0, got %d", len(gotDataEntry.ChildIds))
+			if len(outgoingDataEntry.ChildIds) != 0 {
+				t.Errorf("expected 0, got %d", len(outgoingDataEntry.ChildIds))
 			}
 			seenNodes["node2"] = true
 		} else {
-			t.Fatalf("unexpected NodeId: %s", gotDataEntry.NodeId)
+			t.Fatalf("unexpected NodeId: %s", outgoingDataEntry.NodeId)
 		}
 	}
 	if !reflect.DeepEqual(seenNodes, map[string]bool{"node1": true, "node2": true}) {
@@ -1546,7 +1528,7 @@ func TestTasksHandler(t *testing.T) {
 	close(task2.errChan)
 	// Test case where a tree completes with an error
 	taskChan = make(chan *Task, 1)
-	task := &Task{IncomingData: &IncomingData{TreeId: "tree", NodeId: "node", AppJSON: map[string]any{"key": "value"}}, errChan: make(chan error, 1)}
+	task := &Task{IncomingData: &IncomingData{TreeId: "tree", NodeId: "node", AppJSON: json.RawMessage(`{"key":"value"}`)}, errChan: make(chan error, 1)}
 	taskChan <- task
 	close(taskChan)
 	pushable = &MockChanPushable{isSendToError: true, appDataChan: make(chan *Server.AppData, 1)}
@@ -1584,7 +1566,12 @@ func (mss *MockSourceServer) Serve() error {
 	defer close(errChan)
 	for _, data := range mss.dataToSend {
 		go func() {
-			err := mss.pushable.SendTo(Server.NewAppData(data, ""))
+			jsonBytes, err := json.Marshal(data)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			err = mss.pushable.SendTo(Server.NewAppData(jsonBytes, ""))
 			errChan <- err
 		}()
 	}
@@ -1604,10 +1591,10 @@ func (mss *MockSourceServer) Setup(config Server.Config) error {
 
 // MockSinkServer is a mock implementation of the SinkServer interface
 type MockSinkServer struct {
-	dataReceived chan (any)
+	dataReceived  chan ([]byte)
 	expectedCount int
 	receivedCount int
-	taskChan	  chan *Task
+	taskChan      chan *Task
 }
 
 // SendTo is a method that sends data to the SinkServer
@@ -1648,7 +1635,7 @@ func TestGroupAndVerifyRunApp(t *testing.T) {
 				"appJSON": map[string]interface{}{
 					"jobId": fmt.Sprintf("%d", i),
 				},
-				"nodeType": "type",
+				"nodeType":  "type",
 				"timestamp": j,
 			}
 			if j == 0 {
@@ -1671,10 +1658,10 @@ func TestGroupAndVerifyRunApp(t *testing.T) {
 	mockSourceServer := &MockSourceServer{
 		dataToSend: dataToSend,
 	}
-	chanForData := make(chan (any), 10)
+	chanForData := make(chan ([]byte), 10)
 	mockSinkServer := &MockSinkServer{
-		dataReceived: chanForData,
-		taskChan: gav.taskChan,
+		dataReceived:  chanForData,
+		taskChan:      gav.taskChan,
 		expectedCount: 5,
 	}
 	producerConfigMap := map[string]func() Server.Config{
@@ -1728,9 +1715,10 @@ func TestGroupAndVerifyRunApp(t *testing.T) {
 	for rawReceivedData := range chanForData {
 		jobIds := []string{}
 		nodeIds := []string{}
-		receivedData, ok := rawReceivedData.([]*OutgoingData)
-		if !ok {
-			t.Fatalf("expected []*OutgoingData, got %v", rawReceivedData)
+		var receivedData []*OutgoingData
+		err := json.Unmarshal(rawReceivedData, &receivedData)
+		if err != nil {
+			t.Fatalf("expected nil, got %v", err)
 		}
 		if len(receivedData) != 2 {
 			t.Fatalf("expected 2, got %d", len(receivedData))
@@ -1752,7 +1740,12 @@ func TestGroupAndVerifyRunApp(t *testing.T) {
 					t.Errorf("expected 0, got %s", orderedChildIds[0])
 				}
 			}
-			appJSON := receivedOutgoingData.AppJSON
+			appJSONRaw := receivedOutgoingData.AppJSON
+			var appJSON map[string]interface{}
+			err = json.Unmarshal(appJSONRaw, &appJSON)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
 			if len(appJSON) != 1 {
 				t.Fatalf("expected 1, got %d", len(appJSON))
 			}

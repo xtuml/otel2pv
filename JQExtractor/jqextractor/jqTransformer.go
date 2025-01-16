@@ -2,6 +2,7 @@ package jqextractor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -75,7 +76,6 @@ func getJQStringFromInput(jqStringDataMapRaw any) (string, error) {
 		return "", fmt.Errorf("invalid JQQueryStrings map in config. Invalid field \"type\": %s", jqStringType)
 	}
 }
-
 
 func (jqt *JQTransformerConfig) IngestConfig(config map[string]any) error {
 	// IngestConfig is a method that will ingest the configuration for the JQTransformer
@@ -171,7 +171,12 @@ func (jqt *JQTransformer) SendTo(data *Server.AppData) error {
 	if err != nil {
 		return err
 	}
-	iter := jqt.jqProgram.Run(dataToExtract)
+	var unmarshalledData any
+	err = json.Unmarshal(dataToExtract, &unmarshalledData)
+	if err != nil {
+		return err
+	}
+	iter := jqt.jqProgram.Run(unmarshalledData)
 	outData, err := getDataFromJQIterator(&iter)
 	if err != nil {
 		return err
@@ -183,8 +188,13 @@ func (jqt *JQTransformer) SendTo(data *Server.AppData) error {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				appData := Server.NewAppData(val, key)
-				err := jqt.pushable.SendTo(appData)
+				jsonData, err := json.Marshal(val)
+				if err != nil {
+					cancel(err)
+					return
+				}
+				appData := Server.NewAppData(jsonData, key)
+				err = jqt.pushable.SendTo(appData)
 				if err != nil {
 					cancel(err)
 				}

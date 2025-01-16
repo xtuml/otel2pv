@@ -24,4 +24,3 @@ func main() {
 		slog.Info("GroupAndVerify ran successfully")
 	}
 }
-

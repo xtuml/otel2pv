@@ -1,12 +1,13 @@
 package Server
 
 import (
+	"encoding/json"
 	"errors"
 )
 
 // AppData is a struct that holds data and a CompletionHandler for a task.
 type AppData struct {
-	data    any
+	data       []byte
 	routingKey string
 }
 
@@ -17,7 +18,7 @@ type AppData struct {
 // 1. any. The data.
 //
 // 2. error. An error if the data is not set.
-func (a *AppData) GetData() (any, error) {
+func (a *AppData) GetData() ([]byte, error) {
 	if a.data == nil {
 		return nil, errors.New("data is not set")
 	}
@@ -42,20 +43,19 @@ func (a *AppData) GetRoutingKey() (string, error) {
 //
 // It takes as args:
 //
-// 1. data: any. The data to be stored in the AppData struct.
+// 1. data: []byte. The data to be stored in the AppData struct.
 //
 // 2. routingKey: string. The routing key to be stored in the AppData struct, if any.
 //
 // It returns:
 //
 // 1. *AppData. A pointer to the AppData struct.
-func NewAppData(data any, routingKey string) *AppData {
+func NewAppData(data []byte, routingKey string) *AppData {
 	return &AppData{
-		data:    data,
+		data:       data,
 		routingKey: routingKey,
 	}
 }
-
 
 // convertBytesJSONDataToAppData is a function that converts a byte slice to an AppData struct.
 //
@@ -69,19 +69,12 @@ func NewAppData(data any, routingKey string) *AppData {
 //
 // 2. error. An error if the conversion fails.
 func convertBytesJSONDataToAppData(message []byte) (*AppData, error) {
-	if jsonDataMap, err := convertBytesToMap(message); err == nil {
-		appData := &AppData{
-			data:    jsonDataMap,
-		}
-		return appData, nil
+	if !json.Valid(message) {
+		return nil, errors.New("Bytes data is not a valid JSON")
 	}
-	if jsonDataArray, err := convertBytesToArray(message); err == nil {
-		appData := &AppData{
-			data:    jsonDataArray,
-		}
-		return appData, nil
-	}
-	return nil, errors.New("Bytes data is not a JSON map or an array")
+	return &AppData{
+		data: message,
+	}, nil
 }
 
 // convertStringJSONDataToAppData is a function that converts a string to an AppData struct.
@@ -96,17 +89,11 @@ func convertBytesJSONDataToAppData(message []byte) (*AppData, error) {
 //
 // 2. error. An error if the conversion fails.
 func convertStringJSONDataToAppData(message string) (*AppData, error) {
-	if jsonDataMap, err := convertStringToMap(message); err == nil {
-		appData := &AppData{
-			data:    jsonDataMap,
-		}
-		return appData, nil
+	messageJSON := []byte(message)
+	if !json.Valid(messageJSON) {
+		return nil, errors.New("String data is not a valid JSON")
 	}
-	if jsonDataArray, err := convertStringToArray(message); err == nil {
-		appData := &AppData{
-			data:    jsonDataArray,
-		}
-		return appData, nil
-	}
-	return nil, errors.New("String data is not a JSON map or an array")
+	return &AppData{
+		data: messageJSON,
+	}, nil
 }

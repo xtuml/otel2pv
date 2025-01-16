@@ -1,9 +1,12 @@
 package jqextractor
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"os"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -166,7 +169,7 @@ func TestGetDataFromJQIterator(t *testing.T) {
 // MockPushable is a mock implementation of the Pushable interface
 type MockPushable struct {
 	isSendToError bool
-	incomingData  chan(*Server.AppData)
+	incomingData  chan (*Server.AppData)
 }
 
 func (p *MockPushable) SendTo(data *Server.AppData) error {
@@ -257,14 +260,14 @@ func TestJQTransformer(t *testing.T) {
 		}
 		// Test when jqProgram and pushable are set but the jqProgram does not return a map of string to an array
 		jqTransformer.pushable = &Pushable
-		appData := Server.NewAppData(map[string]interface{}{"key": 1}, "")
+		appData := Server.NewAppData([]byte(`{"key":1}`), "")
 		err = jqTransformer.SendTo(appData)
 		if err == nil {
 			t.Errorf("Expected error from SendTo, got nil")
 		}
 		// Test when the pushable SendTo method returns an error
 		Pushable.isSendToError = true
-		// this provides a test that the gojq parser can handle comments and new lines 
+		// this provides a test that the gojq parser can handle comments and new lines
 		// i.e. such as in a file
 		newjqQuery, err := gojq.Parse("{\"X\": [(.|###\n .key)]}")
 		if err != nil {
@@ -284,19 +287,19 @@ func TestJQTransformer(t *testing.T) {
 		}
 		// Test when jqProgram and pushable are set and the jqProgram returns a map of string to an array
 		Pushable.isSendToError = false
-		incomingChannel := make(chan(*Server.AppData), 1)
+		incomingChannel := make(chan (*Server.AppData), 1)
 		Pushable.incomingData = incomingChannel
 		err = jqTransformer.SendTo(appData)
 		if err != nil {
 			t.Errorf("Expected no error from SendTo, got %v", err)
 		}
-		data := <- Pushable.incomingData
+		data := <-Pushable.incomingData
 		close(incomingChannel)
 		gotData, err := data.GetData()
 		if err != nil {
 			t.Errorf("Expected no error from GetData, got %v", err)
 		}
-		if gotData != 1 {
+		if !reflect.DeepEqual(gotData, []byte(`1`)) {
 			t.Errorf("Expected data to be 1, got %v", gotData)
 		}
 	})
@@ -370,7 +373,7 @@ func TestJQTransformer(t *testing.T) {
 }
 
 // MockConfig is a mock implementation of the Config interface
-type MockConfig struct {}
+type MockConfig struct{}
 
 func (mc *MockConfig) IngestConfig(config map[string]any) error {
 	return nil
@@ -379,7 +382,7 @@ func (mc *MockConfig) IngestConfig(config map[string]any) error {
 // MockSourceServer is a mock implementation of the SourceServer interface
 type MockSourceServer struct {
 	dataToSend []any
-	pushable  Server.Pushable
+	pushable   Server.Pushable
 }
 
 // AddPushable is a method that adds a pushable to the SourceServer
@@ -391,7 +394,11 @@ func (mss *MockSourceServer) AddPushable(pushable Server.Pushable) error {
 // Serve is a method that serves the SourceServer
 func (mss *MockSourceServer) Serve() error {
 	for _, data := range mss.dataToSend {
-		err := mss.pushable.SendTo(Server.NewAppData(data, ""))
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			return err
+		}
+		err = mss.pushable.SendTo(Server.NewAppData(jsonData, ""))
 		if err != nil {
 			return err
 		}
@@ -406,7 +413,7 @@ func (mss *MockSourceServer) Setup(config Server.Config) error {
 
 // MockSinkServer is a mock implementation of the SinkServer interface
 type MockSinkServer struct {
-	dataReceived chan(any)
+	dataReceived chan ([]byte)
 }
 
 // SendTo is a method that sends data to the SinkServer
@@ -432,8 +439,6 @@ func (mss *MockSinkServer) Setup(config Server.Config) error {
 	return nil
 }
 
-
-
 // TestJQTransformer integrating with RunApp
 func TestJQTransformerRunApp(t *testing.T) {
 	// Setup
@@ -444,7 +449,7 @@ func TestJQTransformerRunApp(t *testing.T) {
 	mockSourceServer := &MockSourceServer{
 		dataToSend: dataToSend,
 	}
-	chanForData := make(chan(any), 10)
+	chanForData := make(chan ([]byte), 10)
 	mockSinkServer := &MockSinkServer{
 		dataReceived: chanForData,
 	}
@@ -500,7 +505,7 @@ func TestJQTransformerRunApp(t *testing.T) {
 	// Check if the data was transformed correctly
 	counter := 0
 	for data := range mockSinkServer.dataReceived {
-		if data != counter {
+		if !reflect.DeepEqual(data, []byte(strconv.Itoa(counter))) {
 			t.Errorf("Expected data to be %d, got %v", counter, data)
 		}
 		counter++

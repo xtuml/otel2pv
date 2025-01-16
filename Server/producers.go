@@ -117,11 +117,10 @@ func (h *HTTPProducer) SendTo(data *AppData) error {
 	if err != nil {
 		return err
 	}
-	jsonData, err := json.Marshal(gotData)
-	if err != nil {
-		return err
+	if !json.Valid(gotData) {
+		return errors.New("data is not valid JSON")
 	}
-	req, err := http.NewRequest("POST", h.config.URL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", h.config.URL, bytes.NewBuffer(gotData))
 	if err != nil {
 		return err
 	}
@@ -477,13 +476,12 @@ func (r *RabbitMQProducer) SendTo(data *AppData) error {
 	if err != nil {
 		return err
 	}
-	jsonData, err := json.Marshal(gotData)
-	if err != nil {
-		return err
+	if !json.Valid(gotData) {
+		return errors.New("data is not valid JSON")
 	}
 	err = r.channel.Publish(r.config.Exchange, r.config.RoutingKey, false, false, rabbitmq.Publishing{
 		ContentType: "application/json",
-		Body:        jsonData,
+		Body:        gotData,
 	})
 	slog.Info("Successfully sent message", "details", fmt.Sprintf("Sent data to exchange: %s, routing key: %s", r.config.Exchange, r.config.RoutingKey))
 	if err != nil {
@@ -714,11 +712,10 @@ func (a *AMQPOneProducer) SendTo(data *AppData) error {
 	if err != nil {
 		return err
 	}
-	jsonData, err := json.Marshal(gotData)
-	if err != nil {
-		return err
+	if !json.Valid(gotData) {
+		return errors.New("data is not valid JSON")
 	}
-	msg := amqp.NewMessage(jsonData)
+	msg := amqp.NewMessage(gotData)
 	msg.Properties = &amqp.MessageProperties{
 		ContentType: &contentType,
 	}

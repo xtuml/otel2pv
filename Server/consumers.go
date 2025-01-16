@@ -13,7 +13,7 @@ import (
 // CONSUMERMAP is a map that maps a string to a Consumer.
 var CONSUMERMAP = map[string]func() SourceServer{
 	"RabbitMQ": func() SourceServer { return &RabbitMQConsumer{} },
-    "AMQPOne":  func() SourceServer { return &AMQPOneConsumer{} },
+	"AMQPOne":  func() SourceServer { return &AMQPOneConsumer{} },
 }
 
 // CONSUMERCONFIGMAP is a map that maps a string to a Config.
@@ -270,7 +270,6 @@ func sendBytesJSONDataToPushable(data []byte, pushable Pushable) error {
 	return nil
 }
 
-
 // sendRabbitMQMessageDataToPushable is a function that sends RabbitMQ message data to a Pushable.
 //
 // Its args are:
@@ -300,7 +299,7 @@ func sendRabbitMQMessageDataToPushable(msg *rabbitmq.Delivery, pushable Pushable
 func sendChannelOfRabbitMQDeliveryToPushable(channel <-chan rabbitmq.Delivery, pushable Pushable) error {
 	wg := &sync.WaitGroup{}
 	ctx, cancel := context.WithCancelCause(context.Background())
-    defer cancel(nil)
+	defer cancel(nil)
 BREAK:
 	for {
 		select {
@@ -381,9 +380,9 @@ func (r *RabbitMQConsumer) Serve() error {
 //
 // 4. MaxConcurrentMessages: int. The maximum number of concurrent messages to process. Defaults to 1.
 type AMQPOneConsumerConfig struct {
-	Connection string
-	Queue      string
-	OnValue bool
+	Connection            string
+	Queue                 string
+	OnValue               bool
 	MaxConcurrentMessages int
 }
 
@@ -511,10 +510,10 @@ func (a AMQPOneConsumerSessionWrapper) NewReceiver(ctx context.Context, source s
 //
 // 4. finishCtx: context.Context. The context for finishing the AMQP one consumer.
 type AMQPOneConsumer struct {
-	config   *AMQPOneConsumerConfig
-	pushable Pushable
-	dial     AMQPOneConsumerDial
-    finishCtx context.Context
+	config    *AMQPOneConsumerConfig
+	pushable  Pushable
+	dial      AMQPOneConsumerDial
+	finishCtx context.Context
 }
 
 // Setup is a method that will set up the AMQP one consumer.
@@ -577,8 +576,8 @@ func (a *AMQPOneConsumer) Serve() error {
 	}
 
 	if a.finishCtx == nil {
-        a.finishCtx = context.Background()
-    }
+		a.finishCtx = context.Background()
+	}
 	ctx := context.Background()
 	conn, err := a.dial(ctx, a.config.Connection, nil)
 	if err != nil {
@@ -601,7 +600,7 @@ func (a *AMQPOneConsumer) Serve() error {
 	sendOnErr, sendOnCancel := context.WithCancelCause(ctx)
 	defer sendOnCancel(nil)
 	wg := &sync.WaitGroup{}
-	BREAK:
+BREAK:
 	for {
 		select {
 		case <-a.finishCtx.Done():
@@ -613,10 +612,10 @@ func (a *AMQPOneConsumer) Serve() error {
 			msg, err := receiver.Receive(timeoutCtx, nil)
 			cancel()
 			if err != nil {
-                if err == context.DeadlineExceeded {
-                    continue
-                }
-				return err 
+				if err == context.DeadlineExceeded {
+					continue
+				}
+				return err
 			}
 			wg.Add(1)
 			go func() {
@@ -630,19 +629,19 @@ func (a *AMQPOneConsumer) Serve() error {
 				if err != nil {
 					sendOnCancel(err)
 					return
-				}	
+				}
 			}()
 
 		}
 	}
 	wg.Wait()
-    sendOnCancel(nil)
-    // check if there was an error in the sendOnErr context
-    // that occurred between receiving a finished signal and sending the message
-    <- sendOnErr.Done()
-    if context.Cause(sendOnErr) != context.Canceled {
-        return context.Cause(sendOnErr)
-    }
+	sendOnCancel(nil)
+	// check if there was an error in the sendOnErr context
+	// that occurred between receiving a finished signal and sending the message
+	<-sendOnErr.Done()
+	if context.Cause(sendOnErr) != context.Canceled {
+		return context.Cause(sendOnErr)
+	}
 	return nil
 }
 
@@ -713,7 +712,7 @@ func amqpStringValueConverter(msg *amqp.Message) (*AppData, error) {
 
 // amqpConverters is a map that maps a string to an amqpMessageConverter.
 var amqpConverters = map[string]amqpMessageConverter{
-	"BytesData": amqpBytesDataConverter,
+	"BytesData":   amqpBytesDataConverter,
 	"StringValue": amqpStringValueConverter,
 }
 

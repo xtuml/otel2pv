@@ -632,5 +632,4 @@ func TestRunAppFromConfigPath(t *testing.T) {
 		t.Errorf("Expected no error from RunAppFromConfigPath, got %v", err)
 	}
 
-
 }

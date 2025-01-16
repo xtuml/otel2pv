@@ -155,7 +155,7 @@ func (mss *MapSinkServer) SendTo(data *AppData) error {
 	err = sinkServer.SendTo(&AppData{data: inData})
 	if err != nil {
 		return err
-	} 
+	}
 	return nil
 }
 

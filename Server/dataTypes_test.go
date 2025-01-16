@@ -8,13 +8,13 @@ import (
 // Tests for AppData
 func TestAppData(t *testing.T) {
 	t.Run("GetData", func(t *testing.T) {
-		testData := "test data"
+		testData := []byte("test data")
 		appData := &AppData{data: testData}
 		data, err := appData.GetData()
 		if err != nil {
 			t.Errorf("Expected no error from GetData, got %v", err)
 		}
-		if data != testData {
+		if !reflect.DeepEqual(data, testData) {
 			t.Errorf("Expected data to be '%v', got '%v'", testData, data)
 		}
 		// Test for nil data
@@ -60,30 +60,8 @@ func TestConvertBytesJSONDataToAppData(t *testing.T) {
 		if appData.data == nil {
 			t.Errorf("Expected data to be set, got nil")
 		}
-		if heldmapData, ok := appData.data.(map[string]any); ok {
-			if !reflect.DeepEqual(heldmapData, map[string]any{"key": "value"}) {
-				t.Errorf("Expected data to be '%v', got '%v'", map[string]any{"key": "value"}, heldmapData)
-			}
-		} else {
-			t.Errorf("Expected data to be a map, got %v", appData.data)
-		}
-		// check when JSON is an array
-		message = []byte(`["value"]`)
-
-		appData, err = convertBytesJSONDataToAppData(message)
-
-		if err != nil {
-			t.Errorf("Expected no error from convertBytesJSONDataToAppData, got %v", err)
-		}
-		if appData.data == nil {
-			t.Errorf("Expected data to be set, got nil")
-		}
-		if heldArrayData, ok := appData.data.([]any); ok {
-			if !reflect.DeepEqual(heldArrayData, []any{"value"}) {
-				t.Errorf("Expected data to be '%v', got '%v'", []any{"value"}, heldArrayData)
-			}
-		} else {
-			t.Errorf("Expected data to be an array, got %v", appData.data)
+		if !reflect.DeepEqual(appData.data, message) {
+			t.Errorf("Expected data to be '%v', got '%v'", message, appData.data)
 		}
 	})
 	t.Run("Error", func(t *testing.T) {
@@ -111,30 +89,8 @@ func TestConvertStringJSONDataToAppData(t *testing.T) {
 		if appData.data == nil {
 			t.Errorf("Expected data to be set, got nil")
 		}
-		if heldmapData, ok := appData.data.(map[string]any); ok {
-			if !reflect.DeepEqual(heldmapData, map[string]any{"key": "value"}) {
-				t.Errorf("Expected data to be '%v', got '%v'", map[string]any{"key": "value"}, heldmapData)
-			}
-		} else {
-			t.Errorf("Expected data to be a map, got %v", appData.data)
-		}
-		// check when JSON is an array
-		message = `["value"]`
-
-		appData, err = convertStringJSONDataToAppData(message)
-
-		if err != nil {
-			t.Errorf("Expected no error from convertStringJSONDataToAppData, got %v", err)
-		}
-		if appData.data == nil {
-			t.Errorf("Expected data to be set, got nil")
-		}
-		if heldArrayData, ok := appData.data.([]any); ok {
-			if !reflect.DeepEqual(heldArrayData, []any{"value"}) {
-				t.Errorf("Expected data to be '%v', got '%v'", []any{"value"}, heldArrayData)
-			}
-		} else {
-			t.Errorf("Expected data to be an array, got %v", appData.data)
+		if !reflect.DeepEqual(appData.data, []byte(message)) {
+			t.Errorf("Expected data to be '%v', got '%v'", []byte(message), appData.data)
 		}
 	})
 	t.Run("Error", func(t *testing.T) {

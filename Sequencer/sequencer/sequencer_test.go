@@ -1,6 +1,7 @@
 package sequencer
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"os"
@@ -299,19 +300,17 @@ func TestSequencer(t *testing.T) {
 			}
 			// check error in convertToIncomingDataMapAndRootNodes
 			sequencer.config = &SequencerConfig{}
-			err = sequencer.SendTo(Server.NewAppData(
-				1, "",
-			))
+			err = sequencer.SendTo(Server.NewAppData([]byte(`[1]`), ""))
 			if err == nil {
 				t.Fatalf("Expected error from SendTo, got nil")
 			}
-			if err.Error() != "data must be an array of maps" {
-				t.Errorf("Expected error message 'data must be an array of maps', got %v", err.Error())
+			if err.Error() != "input JSON does not match the IncomingData format with strictly disallowed unknown fields except \"treeId\"" {
+				t.Errorf("Expected error message 'input JSON does not match the IncomingData format with strictly disallowed unknown fields except \"treeId\"', got %v", err.Error())
 			}
 			// check error case where there are no root nodes
 			sequencer.config = &SequencerConfig{}
 			err = sequencer.SendTo(Server.NewAppData(
-				[]any{}, "",
+				[]byte(`[]`), "",
 			))
 			if err == nil {
 				t.Fatalf("Expected error from SendTo, got nil")
@@ -322,14 +321,7 @@ func TestSequencer(t *testing.T) {
 			// check error case where sequenceWithStack returns an error
 			sequencer.config = &SequencerConfig{}
 			err = sequencer.SendTo(Server.NewAppData(
-				[]any{
-					map[string]any{
-						"nodeId":          "1",
-						"childIds": []any{"2"},
-						"appJSON":         map[string]any{},
-					},
-				},
-				"",
+				[]byte(`[{"nodeId":"1","childIds":["2"],"appJSON":{}}]`), "",
 			))
 			if err == nil {
 				t.Fatalf("Expected error from SendTo, got nil")
@@ -340,19 +332,7 @@ func TestSequencer(t *testing.T) {
 			// check error case where getPrevIdData returns an error
 			sequencer.config = &SequencerConfig{}
 			appData := Server.NewAppData(
-				[]any{
-					map[string]any{
-						"nodeId":          "1",
-						"childIds": []any{"2"},
-						"appJSON":         map[string]any{},
-					},
-					map[string]any{
-						"nodeId":          "2",
-						"childIds": []any{},
-						"appJSON":         map[string]any{},
-					},
-				},
-				"",
+				[]byte(`[{"nodeId":"1","childIds":["2"],"appJSON":{}},{"nodeId":"2","childIds":[],"appJSON":{}}]`), "",
 			)
 			err = sequencer.SendTo(appData)
 			if err == nil {
@@ -387,19 +367,7 @@ func TestSequencer(t *testing.T) {
 				},
 			}
 			appData := Server.NewAppData(
-				[]any{
-					map[string]any{
-						"nodeId":          "1",
-						"childIds": []any{"2"},
-						"appJSON":         map[string]any{},
-					},
-					map[string]any{
-						"nodeId":          "2",
-						"childIds": []any{},
-						"appJSON":         map[string]any{},
-					},
-				},
-				"",
+				[]byte(`[{"nodeId":"1","childIds":["2"],"appJSON":{}},{"nodeId":"2","childIds":[],"appJSON":{}}]`), "",
 			)
 			err := sequencer.SendTo(appData)
 			if err != nil {
@@ -414,10 +382,7 @@ func TestSequencer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Expected no error from GetData, got %v", err)
 			}
-			expectedData := []map[string]any{
-				{},
-				{"SeqField": "2"},
-			}
+			expectedData := []byte(`[{},{"SeqField":"2"}]`)
 			if !reflect.DeepEqual(gotData, expectedData) {
 				t.Errorf("Expected appData to be %v, got %v", expectedData, gotData)
 			}
@@ -432,29 +397,35 @@ func TestSequencer(t *testing.T) {
 					incomingData: pushableChan,
 				},
 			}
-			appData = Server.NewAppData(
+			jsonBytes, err := json.Marshal(
 				[]any{
 					map[string]any{
-						"nodeId":          "1",
+						"nodeId":   "1",
 						"childIds": []any{"2"},
-						"appJSON":         map[string]any{},
+						"appJSON":  map[string]any{},
 					},
 					map[string]any{
-						"nodeId":          "2",
+						"nodeId":   "2",
 						"childIds": []any{},
-						"appJSON":         map[string]any{"field": "2"},
+						"appJSON":  map[string]any{"field": "2"},
 					},
 					map[string]any{
-						"nodeId":          "3",
+						"nodeId":   "3",
 						"childIds": []any{"4"},
-						"appJSON":         map[string]any{},
+						"appJSON":  map[string]any{},
 					},
 					map[string]any{
-						"nodeId":          "4",
+						"nodeId":   "4",
 						"childIds": []any{},
-						"appJSON":         map[string]any{"field": "4"},
+						"appJSON":  map[string]any{"field": "4"},
 					},
 				},
+			)
+			if err != nil {
+				t.Fatalf("Expected no error from Marshal, got %v", err)
+			}
+			appData = Server.NewAppData(
+				jsonBytes,
 				"",
 			)
 			err = sequencer.SendTo(appData)
@@ -470,9 +441,10 @@ func TestSequencer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Expected no error from GetData, got %v", err)
 			}
-			gotDataArray, ok := gotData.([]map[string]any)
-			if !ok {
-				t.Fatalf("Expected gotData to be an array of maps")
+			var gotDataArray []map[string]any
+			err = json.Unmarshal(gotData, &gotDataArray)
+			if err != nil {
+				t.Fatalf("Expected no error from Unmarshal, got %v", err)
 			}
 			expectedSeqFields := map[string]bool{
 				"2": true,
@@ -502,8 +474,8 @@ func TestSequencer(t *testing.T) {
 func TestStackIncomingData(t *testing.T) {
 	t.Run("nextChildId", func(t *testing.T) {
 		sid := &stackIncomingData{}
-		// check error case when currentChildIdIndex is greater than or equal to len(incomingData)
-		sid.incomingData = &incomingData{
+		// check error case when currentChildIdIndex is greater than or equal to len(IncomingData)
+		sid.IncomingData = &IncomingData{
 			ChildIds: []string{},
 		}
 		sid.currentChildIdIndex = 0
@@ -515,7 +487,7 @@ func TestStackIncomingData(t *testing.T) {
 			t.Errorf("Expected error message 'no more child ids', got %v", err.Error())
 		}
 		// check valid case
-		sid.incomingData = &incomingData{
+		sid.IncomingData = &IncomingData{
 			ChildIds: []string{"1", "2"},
 		}
 		childId, err := sid.nextChildId()
@@ -567,7 +539,7 @@ func TestSequenceWithStack(t *testing.T) {
 	t.Run("nodeIdToIncomingDataMapNotSet", func(t *testing.T) {
 		// check error case when nodeIdToIncomingDataMap is nil
 		counter := 0
-		rootNode := &incomingData{}
+		rootNode := &IncomingData{}
 		sequence := sequenceWithStack(rootNode, nil)
 		for node, err := range sequence {
 			if node != nil {
@@ -587,8 +559,8 @@ func TestSequenceWithStack(t *testing.T) {
 	})
 	t.Run("childNodeNotFound", func(t *testing.T) {
 		// check error case when child node is not found
-		nodeIdToIncomingDataMap := map[string]*incomingData{}
-		rootNode := &incomingData{
+		nodeIdToIncomingDataMap := map[string]*IncomingData{}
+		rootNode := &IncomingData{
 			ChildIds: []string{"1"},
 		}
 		sequence := sequenceWithStack(rootNode, nodeIdToIncomingDataMap)
@@ -611,10 +583,10 @@ func TestSequenceWithStack(t *testing.T) {
 	})
 	t.Run("childNodeIsNil", func(t *testing.T) {
 		// check error case when child node is nil
-		nodeIdToIncomingDataMap := map[string]*incomingData{
+		nodeIdToIncomingDataMap := map[string]*IncomingData{
 			"1": nil,
 		}
-		rootNode := &incomingData{
+		rootNode := &IncomingData{
 			ChildIds: []string{"1"},
 		}
 		sequence := sequenceWithStack(rootNode, nodeIdToIncomingDataMap)
@@ -637,7 +609,7 @@ func TestSequenceWithStack(t *testing.T) {
 	})
 	t.Run("valid", func(t *testing.T) {
 		// check valid case
-		nodeIdToIncomingDataMap := map[string]*incomingData{
+		nodeIdToIncomingDataMap := map[string]*IncomingData{
 			"1": {
 				NodeId:   "1",
 				ChildIds: []string{"2", "3"},
@@ -674,165 +646,47 @@ func TestSequenceWithStack(t *testing.T) {
 	})
 }
 
-// Tests convertRawDataToIncomingData
-func TestConvertRawDataMapToIncomingData(t *testing.T) {
-	t.Run("invalidData", func(t *testing.T) {
-		// check error case when nodeId is not set
-		data := map[string]any{}
-		_, err := convertRawDataMapToIncomingData(data)
-		if err == nil {
-			t.Fatalf("Expected error from convertRawDataToIncomingData, got nil")
-		}
-		if err.Error() != "nodeId must be set and must be a string" {
-			t.Errorf("Expected error message 'nodeId must be set and must be a string', got %v", err.Error())
-		}
-		// check error case when nodeId is not a string
-		data = map[string]any{
-			"nodeId": 1,
-		}
-		_, err = convertRawDataMapToIncomingData(data)
-		if err == nil {
-			t.Fatalf("Expected error from convertRawDataToIncomingData, got nil")
-		}
-		if err.Error() != "nodeId must be set and must be a string" {
-			t.Errorf("Expected error message 'nodeId must be set and must be a string', got %v", err.Error())
-		}
-		// check error case when childIds is not set
-		data = map[string]any{
-			"nodeId": "1",
-		}
-		_, err = convertRawDataMapToIncomingData(data)
-		if err == nil {
-			t.Fatalf("Expected error from convertRawDataToIncomingData, got nil")
-		}
-		if err.Error() != "childIds must be set and must be an array of strings" {
-			t.Errorf("Expected error message 'childIds must be set and must be an array of strings', got %v", err.Error())
-		}
-		// check error case when childIds is not an array
-		data = map[string]any{
-			"nodeId":          "1",
-			"childIds": 1,
-		}
-		_, err = convertRawDataMapToIncomingData(data)
-		if err == nil {
-			t.Fatalf("Expected error from convertRawDataToIncomingData, got nil")
-		}
-		if err.Error() != "childIds must be set and must be an array of strings" {
-			t.Errorf("Expected error message 'childIds must be set and must be an array of strings', got %v", err.Error())
-		}
-		// check error case when childIds is not an array of strings
-		data = map[string]any{
-			"nodeId":          "1",
-			"childIds": []any{1},
-		}
-		_, err = convertRawDataMapToIncomingData(data)
-		if err == nil {
-			t.Fatalf("Expected error from convertRawDataToIncomingData, got nil")
-		}
-		if err.Error() != "childIds must be set and must be an array of strings" {
-			t.Errorf("Expected error message 'childIds must be set and must be an array of strings', got %v", err.Error())
-		}
-		// check error case where appJSON is not set
-		data = map[string]any{
-			"nodeId":          "1",
-			"childIds": []any{"2"},
-		}
-		_, err = convertRawDataMapToIncomingData(data)
-		if err == nil {
-			t.Fatalf("Expected error from convertRawDataToIncomingData, got nil")
-		}
-		if err.Error() != "appJSON must be set and must be a map" {
-			t.Errorf("Expected error message 'appJSON must be set and must be a map', got %v", err.Error())
-		}
-		// check error case where appJSON is not a map
-		data = map[string]any{
-			"nodeId":          "1",
-			"childIds": []any{"2"},
-			"appJSON":         1,
-		}
-		_, err = convertRawDataMapToIncomingData(data)
-		if err == nil {
-			t.Fatalf("Expected error from convertRawDataToIncomingData, got nil")
-		}
-		if err.Error() != "appJSON must be set and must be a map" {
-			t.Errorf("Expected error message 'appJSON must be set and must be a map', got %v", err.Error())
-		}
-	})
-	t.Run("valid", func(t *testing.T) {
-		// check valid case
-		data := map[string]any{
-			"nodeId":          "1",
-			"childIds": []any{"2", "3"},
-			"appJSON": map[string]any{
-				"key": "value",
-			},
-		}
-		incomingData, err := convertRawDataMapToIncomingData(data)
-		if err != nil {
-			t.Errorf("Expected no error from convertRawDataToIncomingData, got %v", err)
-		}
-		if incomingData.NodeId != "1" {
-			t.Errorf("Expected nodeId to be '1', got %v", incomingData.NodeId)
-		}
-		if !reflect.DeepEqual(incomingData.ChildIds, []string{"2", "3"}) {
-			t.Errorf("Expected childIds to be ['2', '3'], got %v", incomingData.ChildIds)
-		}
-		if !reflect.DeepEqual(incomingData.AppJSON, map[string]any{"key": "value"}) {
-			t.Errorf("Expected appJSON to be {'key': 'value'}, got %v", incomingData.AppJSON)
-		}
-	})
-}
-
 // Tests convertToIncomingDataMapAndRootNodes
 func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 	t.Run("invalidData", func(t *testing.T) {
-		// check error case when data is not an array
-		_, _, err := convertToIncomingDataMapAndRootNodes(1)
+		// check error case where unmarshalling returns an error
+		_, _, err := convertToIncomingDataMapAndRootNodes([]json.RawMessage{json.RawMessage(`1`)})
 		if err == nil {
 			t.Fatalf("Expected error from convertAppDataToIncomingDataMapAndRootNodes, got nil")
 		}
-		if err.Error() != "data must be an array of maps" {
-			t.Errorf("Expected error message 'data must be an array of maps', got %v", err.Error())
-		}
-		// check error case when data is not an array of maps
-		_, _, err = convertToIncomingDataMapAndRootNodes([]any{1})
-		if err == nil {
-			t.Fatalf("Expected error from convertAppDataToIncomingDataMapAndRootNodes, got nil")
-		}
-		if err.Error() != "data must be an array of maps" {
-			t.Errorf("Expected error message 'data must be an array of maps', got %v", err.Error())
-		}
-		// check error case where convertRawDataMapToIncomingData returns an error
-		_, _, err = convertToIncomingDataMapAndRootNodes([]any{
-			map[string]any{},
-		})
-		if err == nil {
-			t.Fatalf("Expected error from convertAppDataToIncomingDataMapAndRootNodes, got nil")
-		}
-		if err.Error() != "nodeId must be set and must be a string" {
-			t.Errorf("Expected error message 'nodeId must be set and must be a string', got %v", err.Error())
+		if err.Error() != "input JSON does not match the IncomingData format with strictly disallowed unknown fields except \"treeId\"" {
+			t.Errorf("Expected error message 'input JSON does not match the IncomingData format with strictly disallowed unknown fields except \"treeId\"', got %v", err.Error())
 		}
 	})
 	t.Run("valid", func(t *testing.T) {
 		// check valid case
 		nodes := []any{
 			map[string]any{
-				"nodeId":          "1",
+				"nodeId":   "1",
 				"childIds": []any{"2", "3"},
-				"appJSON":         map[string]any{},
+				"appJSON":  map[string]any{},
 			},
 			map[string]any{
-				"nodeId":          "2",
+				"nodeId":   "2",
 				"childIds": []any{},
-				"appJSON":         map[string]any{},
+				"appJSON":  map[string]any{},
 			},
 			map[string]any{
-				"nodeId":          "3",
+				"nodeId":   "3",
 				"childIds": []any{},
-				"appJSON":         map[string]any{},
+				"appJSON":  map[string]any{},
 			},
 		}
-		incomingDataMap, rootNodes, err := convertToIncomingDataMapAndRootNodes(nodes)
+		jsonBytes, err := json.Marshal(nodes)
+		if err != nil {
+			t.Fatalf("Expected no error from Marshal, got %v", err)
+		}
+		var rawDataArray []json.RawMessage
+		err = json.Unmarshal(jsonBytes, &rawDataArray)
+		if err != nil {
+			t.Fatalf("Expected no error from Unmarshal, got %v", err)
+		}
+		incomingDataMap, rootNodes, err := convertToIncomingDataMapAndRootNodes(rawDataArray)
 		if err != nil {
 			t.Errorf("Expected no error from convertAppDataToIncomingDataMapAndRootNodes, got %v", err)
 		}
@@ -877,7 +731,7 @@ func TestGetPrevIdFromPrevIncomingData(t *testing.T) {
 	t.Run("invalidData", func(t *testing.T) {
 		// check error case outputAppFieldSequenceIdMap is not found
 		// in prevIncomingData appJSON
-		prevIncomingData := &incomingData{
+		prevIncomingData := &IncomingData{
 			AppJSON: map[string]any{},
 		}
 		_, err := getPrevIdFromPrevIncomingData(prevIncomingData, "test")
@@ -888,7 +742,7 @@ func TestGetPrevIdFromPrevIncomingData(t *testing.T) {
 			t.Errorf("Expected error message 'outputAppFieldSequenceIdMap must be a string and must exist in the input JSON', got %v", err.Error())
 		}
 		// check error case outputAppFieldSequenceIdMap is not a string
-		prevIncomingData = &incomingData{
+		prevIncomingData = &IncomingData{
 			AppJSON: map[string]any{
 				"test": 1,
 			},
@@ -903,7 +757,7 @@ func TestGetPrevIdFromPrevIncomingData(t *testing.T) {
 	})
 	t.Run("valid", func(t *testing.T) {
 		// check case where outputAppFieldSequenceIdMap is not set
-		prevIncomingData := &incomingData{
+		prevIncomingData := &IncomingData{
 			NodeId: "1",
 			AppJSON: map[string]any{
 				"key": "value",
@@ -931,7 +785,7 @@ func TestGetPrevIdFromPrevIncomingData(t *testing.T) {
 func TestGetPrevIdData(t *testing.T) {
 	t.Run("errorCases", func(t *testing.T) {
 		// check when there is an error in getPrevIdFromPrevIncomingData
-		prevIncomingData := &incomingData{}
+		prevIncomingData := &IncomingData{}
 		config := &SequencerConfig{outputAppFieldSequenceIdMap: "test"}
 		_, err := getPrevIdData(prevIncomingData, config)
 		if err == nil {
@@ -941,7 +795,7 @@ func TestGetPrevIdData(t *testing.T) {
 			t.Errorf("Expected error message 'outputAppFieldSequenceIdMap must be a string and must exist in the input JSON', got %v", err.Error())
 		}
 		// check when there the config field outputAppFieldSequenceType is not correct
-		prevIncomingData = &incomingData{NodeId: "1"}
+		prevIncomingData = &IncomingData{NodeId: "1"}
 		config = &SequencerConfig{}
 		_, err = getPrevIdData(prevIncomingData, config)
 		if err == nil {
@@ -953,7 +807,7 @@ func TestGetPrevIdData(t *testing.T) {
 	})
 	t.Run("valid", func(t *testing.T) {
 		// check valid array case
-		prevIncomingData := &incomingData{NodeId: "1"}
+		prevIncomingData := &IncomingData{NodeId: "1"}
 		config := &SequencerConfig{outputAppFieldSequenceType: Array}
 		prevIdData, err := getPrevIdData(prevIncomingData, config)
 		if err != nil {
@@ -967,7 +821,7 @@ func TestGetPrevIdData(t *testing.T) {
 			t.Errorf("Expected prevIdData to be ['1'], got %v", prevIdDataArray)
 		}
 		// check valid string case
-		prevIncomingData = &incomingData{NodeId: "1"}
+		prevIncomingData = &IncomingData{NodeId: "1"}
 		config = &SequencerConfig{outputAppFieldSequenceType: String}
 		prevIdData, err = getPrevIdData(prevIncomingData, config)
 		if err != nil {
@@ -1001,7 +855,11 @@ func (mss *MockSourceServer) AddPushable(pushable Server.Pushable) error {
 // Serve is a method that serves the SourceServer
 func (mss *MockSourceServer) Serve() error {
 	for _, data := range mss.dataToSend {
-		err := mss.pushable.SendTo(Server.NewAppData(data, ""))
+		jsonBytes, err := json.Marshal(data)
+		if err != nil {
+			return err
+		}
+		err = mss.pushable.SendTo(Server.NewAppData(jsonBytes, ""))
 		if err != nil {
 			return err
 		}
@@ -1016,7 +874,7 @@ func (mss *MockSourceServer) Setup(config Server.Config) error {
 
 // MockSinkServer is a mock implementation of the SinkServer interface
 type MockSinkServer struct {
-	dataReceived chan (any)
+	dataReceived chan ([]byte)
 }
 
 // SendTo is a method that sends data to the SinkServer
@@ -1064,7 +922,7 @@ func TestSeqeuncerRunApp(t *testing.T) {
 	mockSourceServer := &MockSourceServer{
 		dataToSend: dataToSend,
 	}
-	chanForData := make(chan (any), 10)
+	chanForData := make(chan ([]byte), 10)
 	mockSinkServer := &MockSinkServer{
 		dataReceived: chanForData,
 	}
@@ -1120,9 +978,10 @@ func TestSeqeuncerRunApp(t *testing.T) {
 	// Check if the data was transformed correctly
 	counter := 0
 	for data := range mockSinkServer.dataReceived {
-		dataAsArray, ok := data.([]map[string]any)
-		if !ok {
-			t.Fatalf("Expected data to be an array of maps")
+		var dataAsArray []map[string]any
+		err = json.Unmarshal(data, &dataAsArray)
+		if err != nil {
+			t.Fatalf("Expected no error from Unmarshal, got %v", err)
 		}
 		if len(dataAsArray) != 10 {
 			t.Fatalf("Expected data to have 10 elements, got %v", len(dataAsArray))

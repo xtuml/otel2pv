@@ -1,7 +1,9 @@
 package groupandverify
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -44,14 +46,14 @@ type GroupApply struct {
 //
 // 5. Timestamp: int. It is the timestamp of the node. Optional.
 //
-// 6. AppJSON: map[string]any. It is the JSON data that is to be sent to the next stage.
+// 6. AppJSON: json.RawMessage. It is the JSON data that is to be sent to the next stage.
 type OutgoingData struct {
-	NodeId    string         `json:"nodeId"`
-	ParentId  string         `json:"parentId"`
-	ChildIds  []string       `json:"childIds"`
-	NodeType  string         `json:"nodeType"`
-	Timestamp int            `json:"timestamp"`
-	AppJSON   map[string]any `json:"appJSON"`
+	NodeId    string          `json:"nodeId"`
+	ParentId  string          `json:"parentId"`
+	ChildIds  []string        `json:"childIds"`
+	NodeType  string          `json:"nodeType"`
+	Timestamp int             `json:"timestamp"`
+	AppJSON   json.RawMessage `json:"appJSON"`
 }
 
 // IncomingData is a struct that is used to hold the incoming data from the previous stage
@@ -70,15 +72,54 @@ type OutgoingData struct {
 //
 // 6. Timestamp: int. It is the timestamp of the node. Optional.
 //
-// 7. AppJSON: map[string]any. It is the JSON data that is to be processed and sent on.
+// 7. AppJSON: json.RawMessage. It is the JSON data that is to be sent on.
 type IncomingData struct {
-	TreeId    string
-	NodeId    string
-	ParentId  string
-	ChildIds  []string
-	NodeType  string
-	Timestamp int
-	AppJSON   map[string]any
+	TreeId    string          `json:"treeId"`
+	NodeId    string          `json:"nodeId"`
+	ParentId  string          `json:"parentId"`
+	ChildIds  []string        `json:"childIds"`
+	NodeType  string          `json:"nodeType"`
+	Timestamp int             `json:"timestamp"`
+	AppJSON   json.RawMessage `json:"appJSON"`
+}
+
+type XIncomingData IncomingData
+
+type XIncomingDataExceptions struct {
+	XIncomingData
+}
+
+// UnmarshalJSON is a method that is used to unmarshal the JSON data into the IncomingData struct raising errors if:
+//
+// 1. Extra fields are present in the JSON data.
+//
+// 2. Required fields are missing from the JSON data.
+//
+// Args:
+//
+// 1. data: []byte. It is the JSON data that is to be unmarshalled.
+//
+// Returns:
+//
+// 1. error. It returns an error if the unmarshalling fails.
+func (id *IncomingData) UnmarshalJSON(data []byte) error {
+	var xide XIncomingDataExceptions
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&xide); err != nil {
+		return err
+	}
+	if xide.TreeId == "" {
+		return errors.New("TreeId is required")
+	}
+	if xide.NodeId == "" {
+		return errors.New("NodeId is required")
+	}
+	if xide.AppJSON == nil {
+		return errors.New("AppJSON is required")
+	}
+	*id = IncomingData(xide.XIncomingData)
+	return nil
 }
 
 // Task is a struct that is used to hold the task that is to be performed by the GroupAndVerify
@@ -458,7 +499,11 @@ func treeHandler(taskChan chan *Task, config *GroupAndVerifyConfig, pushable Ser
 		outgoingData = append(outgoingData, outgoingNode)
 	}
 	// create AppData and send to pushable
-	appData := Server.NewAppData(outgoingData, "")
+	jsonData, err := json.Marshal(outgoingData)
+	if err != nil {
+		return tasks, err
+	}
+	appData := Server.NewAppData(jsonData, "")
 	return tasks, pushable.SendTo(appData)
 }
 
@@ -481,12 +526,12 @@ func outgoingDataFromIncomingDataHolder(incomingDataHolder *incomingDataHolder, 
 	}
 	backwardsLinks := incomingDataHolder.backwardsLinks
 	outgoingNode := &OutgoingData{
-		NodeId:          incomingData.NodeId,
-		ParentId:        incomingData.ParentId,
-		ChildIds: make([]string, 0),
-		NodeType:        incomingData.NodeType,
-		Timestamp:       incomingData.Timestamp,
-		AppJSON:         incomingData.AppJSON,
+		NodeId:    incomingData.NodeId,
+		ParentId:  incomingData.ParentId,
+		ChildIds:  make([]string, 0),
+		NodeType:  incomingData.NodeType,
+		Timestamp: incomingData.Timestamp,
+		AppJSON:   incomingData.AppJSON,
 	}
 	if _, ok := parentVerifySet[incomingData.NodeType]; ok {
 		if len(backwardsLinks) > 1 {
@@ -873,11 +918,8 @@ func (gav *GroupAndVerify) SendTo(data *Server.AppData) (err error) {
 	if err != nil {
 		return err
 	}
-	mapData, ok := gotData.(map[string]any)
-	if !ok {
-		return errors.New("data is not a map")
-	}
-	incomingData, err := incomingDataFromMap(mapData)
+	var incomingData *IncomingData
+	err = json.Unmarshal(gotData, &incomingData)
 	if err != nil {
 		return err
 	}
@@ -894,74 +936,4 @@ func (gav *GroupAndVerify) SendTo(data *Server.AppData) (err error) {
 	gav.taskChan <- task
 	err = <-task.errChan
 	return err
-}
-
-// incomingDataFromMap is a function that is used to convert the incoming data from a map to a struct.
-//
-// Args:
-//
-// 1. incomingDataMap: map[string]any. It is the incoming data that is to be processed.
-//
-// Returns:
-//
-// 1. *IncomingData. It returns the incoming data.
-//
-// 2. error. It returns an error if there is a problem with the data.
-func incomingDataFromMap(incomingDataMap map[string]any) (*IncomingData, error) {
-	if incomingDataMap == nil {
-		return nil, errors.New("incomingDataMap is nil")
-	}
-	treeId, ok := incomingDataMap["treeId"].(string)
-	if !ok {
-		return nil, errors.New("TreeId does not exist or is not a string")
-	}
-	nodeId, ok := incomingDataMap["nodeId"].(string)
-	if !ok {
-		return nil, errors.New("NodeId does not exist or is not a string")
-	}
-	parentId, ok := incomingDataMap["parentId"].(string)
-	if !ok {
-		return nil, errors.New("ParentId does not exist or is not a string")
-	}
-	childIdsRaw, ok := incomingDataMap["childIds"].([]any)
-	if !ok {
-		return nil, errors.New("ChildIds does not exist or is not an array")
-	}
-	var childIds []string
-	for i, value := range childIdsRaw {
-		childId, ok := value.(string)
-		if !ok {
-			return nil, fmt.Errorf("ChildIds[%d] is not a string", i)
-		}
-		childIds = append(childIds, childId)
-	}
-	nodeType, ok := incomingDataMap["nodeType"].(string)
-	if !ok {
-		return nil, errors.New("NodeType does not exist or is not a string")
-	}
-	var timestamp int
-	if timestampFloat, ok := incomingDataMap["timestamp"].(float64); ok {
-		timestamp = int(timestampFloat)
-	} else {
-		timestamp, ok = incomingDataMap["timestamp"].(int)
-		if !ok {
-			return nil, errors.New("Timestamp does not exist or is not an int")
-		}
-	}
-	if !ok {
-		return nil, errors.New("Timestamp does not exist or is not an int")
-	}
-	appJSONRaw, ok := incomingDataMap["appJSON"].(map[string]any)
-	if !ok {
-		return nil, errors.New("AppJSON does not exist or is not a map")
-	}
-	return &IncomingData{
-		TreeId:    treeId,
-		NodeId:    nodeId,
-		ParentId:  parentId,
-		ChildIds:  childIds,
-		NodeType:  nodeType,
-		Timestamp: timestamp,
-		AppJSON:   appJSONRaw,
-	}, nil
 }

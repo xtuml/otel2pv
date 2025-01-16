@@ -2,6 +2,7 @@ package Server
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -135,7 +136,7 @@ func TestPushable(t *testing.T) {
 		}
 
 		appData := &AppData{
-			data:    "test data",
+			data: []byte("test data"),
 		}
 		err := pushable.SendTo(appData)
 		if err != nil {
@@ -150,7 +151,7 @@ func TestPushable(t *testing.T) {
 			isSendToError: true,
 		}
 		appData := AppData{
-			data:    "test data",
+			data: []byte("test data"),
 		}
 
 		err := pushable.SendTo(&appData)
@@ -201,7 +202,7 @@ func TestPullable(t *testing.T) {
 			t.Errorf("Expected Pushable to be set, got %v", pullable.Pushable)
 		}
 		appData := &AppData{
-			data:    "test data",
+			data: []byte("test data"),
 		}
 		_ = pullable.Pushable.SendTo(appData)
 		if mockPushable.incomingData != appData {
@@ -280,7 +281,7 @@ func TestSourceServer(t *testing.T) {
 			t.Errorf("Expected Pushable to be set, got %v", sourceServer.Pushable)
 		}
 		appData := &AppData{
-			data:    "test data",
+			data: []byte("test data"),
 		}
 		err = sourceServer.Pushable.SendTo(appData)
 		if err != nil {
@@ -366,7 +367,7 @@ func TestSinkServer(t *testing.T) {
 		}
 
 		appData := &AppData{
-			data:    "test data",
+			data: []byte("test data"),
 		}
 		err = sinkServer.SendTo(appData)
 		if err != nil {
@@ -388,7 +389,7 @@ func TestSinkServer(t *testing.T) {
 		}
 
 		appData := AppData{
-			data:    "test data",
+			data: []byte("test data"),
 		}
 		err = sinkServer.SendTo(&appData)
 		if err == nil {
@@ -698,7 +699,7 @@ func TestMapSinkServer(t *testing.T) {
 		}
 		// Tests success case
 		appData := &AppData{
-			data:    "value",
+			data:       []byte("value"),
 			routingKey: "test",
 		}
 		err := mapSinkServer.SendTo(appData)
@@ -709,11 +710,11 @@ func TestMapSinkServer(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected no error from GetData, got %v", err)
 		}
-		if sinkServerMapTestData != "value" {
+		if !reflect.DeepEqual(sinkServerMapTestData, []byte("value")) {
 			t.Errorf("Expected data to be sent to SinkServer, got %v", sinkServerMapTestData)
 		}
 		appData = &AppData{
-			data:    "value2",
+			data:       []byte("value2"),
 			routingKey: "test2",
 		}
 		err = mapSinkServer.SendTo(appData)
@@ -724,12 +725,12 @@ func TestMapSinkServer(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected no error from GetData, got %v", err)
 		}
-		if sinkServerMapTestData != "value2" {
+		if !reflect.DeepEqual(sinkServerMapTestData, []byte("value2")) {
 			t.Errorf("Expected data to be sent to SinkServer, got %v", sinkServerMapTestData)
 		}
 		// Tests error case where incoming data map has a key not present in sinkServerMap
 		appData = &AppData{
-			data:    "value3",
+			data:       []byte("value3"),
 			routingKey: "test3",
 		}
 		err = mapSinkServer.SendTo(appData)
@@ -739,7 +740,7 @@ func TestMapSinkServer(t *testing.T) {
 		// Tests error case where one of the sinkServers fails
 		sinkServerMap["test2"] = &MockSinkServerForMapSinkServer{isError: true}
 		appData = &AppData{
-			data:    "value2",
+			data:       []byte("value2"),
 			routingKey: "test2",
 		}
 		err = mapSinkServer.SendTo(appData)

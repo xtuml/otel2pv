@@ -1,6 +1,8 @@
 package sequencer
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"iter"
@@ -179,7 +181,7 @@ func (s *Sequencer) Setup(config Server.Config) error {
 // 5. Timestamp: int. The timestamp of the incoming data
 //
 // 6. AppJSON: map[string]any. The outgoing app JSON of the incoming data
-type incomingData struct {
+type IncomingData struct {
 	NodeId    string
 	ParentId  string
 	ChildIds  []string
@@ -188,14 +190,54 @@ type incomingData struct {
 	AppJSON   map[string]any
 }
 
+type XIncomingData IncomingData
+
+type XIncomingDataExceptions struct {
+	XIncomingData
+	TreeId string `json:"treeId"`
+}
+
+// UnmarshalJSON is a method that is used to unmarshal the JSON data into the IncomingData struct raising errors if:
+//
+// 1. Extra fields are present in the JSON data.
+//
+// 2. Required fields are missing from the JSON data.
+//
+// Args:
+//
+// 1. data: []byte. It is the JSON data that is to be unmarshalled.
+//
+// Returns:
+//
+// 1. error. It returns an error if the unmarshalling fails.
+func (id *IncomingData) UnmarshalJSON(data []byte) error {
+	var xide XIncomingDataExceptions
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&xide); err != nil {
+		return errors.New("input JSON does not match the IncomingData format with strictly disallowed unknown fields except \"treeId\"")
+	}
+	if xide.NodeId == "" {
+		return errors.New("nodeId is required")
+	}
+	if xide.AppJSON == nil {
+		return errors.New("appJSON is required")
+	}
+	*id = IncomingData(xide.XIncomingData)
+	return nil
+}
+
+// UnmarshalJSON is a method that will unmarshal the JSON data
+// into the incomingData struct
+
 // stackIncomingData is a single incomingData when it is used for sequencing
 // It has the following fields:
 //
-// 1. embedded *incomingData. Pointer to the incoming data
+// 1. embedded *IncomingData. Pointer to the incoming data
 //
 // 2. currentChildIdIndex: int. The current child id index
 type stackIncomingData struct {
-	*incomingData
+	*IncomingData
 	currentChildIdIndex int
 }
 
@@ -222,37 +264,37 @@ func (sid *stackIncomingData) nextChildId() (string, error) {
 //
 // Args:
 //
-// 1. rootNode: *incomingData. The root node of the incoming data
+// 1. rootNode: *IncomingData. The root node of the incoming data
 //
-// 2. nodeIdToIncomingDataMap: map[string]*incomingData. The map of node ids to incoming data
+// 2. nodeIdToIncomingDataMap: map[string]*IncomingData. The map of node ids to incoming data
 //
 // Returns:
 //
-// 1. iter.Seq2[*incomingData, error]. The sequenced data as a generator
-func sequenceWithStack(rootNode *incomingData, nodeIdToIncomingDataMap map[string]*incomingData) iter.Seq2[*incomingData, error] {
+// 1. iter.Seq2[*IncomingData, error]. The sequenced data as a generator
+func sequenceWithStack(rootNode *IncomingData, nodeIdToIncomingDataMap map[string]*IncomingData) iter.Seq2[*IncomingData, error] {
 	if rootNode == nil {
-		return func(yield func(*incomingData, error) bool) {
+		return func(yield func(*IncomingData, error) bool) {
 			yield(nil, errors.New("root node not set"))
 		}
 	}
 	if nodeIdToIncomingDataMap == nil {
-		return func(yield func(*incomingData, error) bool) {
+		return func(yield func(*IncomingData, error) bool) {
 			yield(nil, errors.New("nodeIdToIncomingDataMap not set"))
 		}
 	}
 	stack := []*stackIncomingData{
 		{
-			incomingData:        rootNode,
+			IncomingData:        rootNode,
 			currentChildIdIndex: 0,
 		},
 	}
-	return func(yield func(*incomingData, error) bool) {
+	return func(yield func(*IncomingData, error) bool) {
 		for len(stack) > 0 {
 			top := stack[len(stack)-1]
 			childId, err := top.nextChildId()
 			if err != nil {
 				stack = stack[:len(stack)-1]
-				if !yield(top.incomingData, nil) {
+				if !yield(top.IncomingData, nil) {
 					return
 				}
 				continue
@@ -267,51 +309,11 @@ func sequenceWithStack(rootNode *incomingData, nodeIdToIncomingDataMap map[strin
 				return
 			}
 			stack = append(stack, &stackIncomingData{
-				incomingData:        childNode,
+				IncomingData:        childNode,
 				currentChildIdIndex: 0,
 			})
 		}
 	}
-}
-
-// convertRawDataMapToIncomingData
-// Returns an error if the conversion fails
-//
-// Args:
-//
-// 1. rawDataMap: map[string]any. The data to convert
-//
-// Returns:
-//
-// 1. *incomingData. The converted data
-//
-// 2. error. The error if the conversion fails
-func convertRawDataMapToIncomingData(rawDataMap map[string]any) (*incomingData, error) {
-	nodeId, ok := rawDataMap["nodeId"].(string)
-	if !ok {
-		return nil, errors.New("nodeId must be set and must be a string")
-	}
-	rawOrderedChildIds, ok := rawDataMap["childIds"].([]any)
-	if !ok {
-		return nil, errors.New("childIds must be set and must be an array of strings")
-	}
-	orderedChildIds := []string{}
-	for _, rawOrderedChildId := range rawOrderedChildIds {
-		orderedChildId, ok := rawOrderedChildId.(string)
-		if !ok {
-			return nil, errors.New("childIds must be set and must be an array of strings")
-		}
-		orderedChildIds = append(orderedChildIds, orderedChildId)
-	}
-	appJSON, ok := rawDataMap["appJSON"].(map[string]any)
-	if !ok {
-		return nil, errors.New("appJSON must be set and must be a map")
-	}
-	return &incomingData{
-		NodeId:   nodeId,
-		ChildIds: orderedChildIds,
-		AppJSON:  appJSON,
-	}, nil
 }
 
 // convertToIncomingDataMapAndRootNodes
@@ -325,30 +327,23 @@ func convertRawDataMapToIncomingData(rawDataMap map[string]any) (*incomingData, 
 //
 // Returns:
 //
-// 1. map[string]*incomingData. The converted data mapping node id to incoming data
+// 1. map[string]*IncomingData. The converted data mapping node id to incoming data
 //
-// 2. map[string]*incomingData. The converted data mapping node id to incoming data with no forward references i.e. root nodes
+// 2. map[string]*IncomingData. The converted data mapping node id to incoming data with no forward references i.e. root nodes
 //
 // 3. error. The error if the conversion fails
-func convertToIncomingDataMapAndRootNodes(rawData any) (map[string]*incomingData, map[string]*incomingData, error) {
-	rawDataArray, ok := rawData.([]any)
-	if !ok {
-		return nil, nil, errors.New("data must be an array of maps")
-	}
-	nodeIdToIncomingDataMap := make(map[string]*incomingData)
-	nodeIdToNoForwardRefMap := make(map[string]*incomingData)
+func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage) (map[string]*IncomingData, map[string]*IncomingData, error) {
+	nodeIdToIncomingDataMap := make(map[string]*IncomingData)
+	nodeIdToNoForwardRefMap := make(map[string]*IncomingData)
 	nodeIdToForwardRefMap := make(map[string]bool)
-	for _, rawDataAny := range rawDataArray {
-		rawDataMap, ok := rawDataAny.(map[string]any)
-		if !ok {
-			return nil, nil, errors.New("data must be an array of maps")
-		}
-		incomingData, err := convertRawDataMapToIncomingData(rawDataMap)
+	for _, rawData := range rawDataArray {
+		incomingData := &IncomingData{}
+		err := json.Unmarshal(rawData, incomingData)
 		if err != nil {
 			return nil, nil, err
 		}
 		nodeIdToIncomingDataMap[incomingData.NodeId] = incomingData
-		_, ok = nodeIdToForwardRefMap[incomingData.NodeId]
+		_, ok := nodeIdToForwardRefMap[incomingData.NodeId]
 		if !ok {
 			nodeIdToNoForwardRefMap[incomingData.NodeId] = incomingData
 		}
@@ -369,7 +364,7 @@ func convertToIncomingDataMapAndRootNodes(rawData any) (map[string]*incomingData
 //
 // Args:
 //
-// 1. prevIncomingData: *incomingData. The previous incoming data
+// 1. prevIncomingData: *IncomingData. The previous incoming data
 //
 // 2. outputAppFieldSequenceIdMap: string. The field in the output app schema that will be used to
 // to replace the node id with, if at all. If "" then just uses nodeId field.
@@ -379,7 +374,7 @@ func convertToIncomingDataMapAndRootNodes(rawData any) (map[string]*incomingData
 // 1. string. The previous id
 //
 // 2. error. The error if the previous id is not found
-func getPrevIdFromPrevIncomingData(prevIncomingData *incomingData, outputAppFieldSequenceIdMap string) (string, error) {
+func getPrevIdFromPrevIncomingData(prevIncomingData *IncomingData, outputAppFieldSequenceIdMap string) (string, error) {
 	if outputAppFieldSequenceIdMap != "" {
 		prevIDUnTyped, ok := prevIncomingData.AppJSON[outputAppFieldSequenceIdMap]
 		if !ok {
@@ -403,7 +398,7 @@ func getPrevIdFromPrevIncomingData(prevIncomingData *incomingData, outputAppFiel
 //
 // Args:
 //
-// 1. prevIncomingData: *incomingData. The previous incoming data
+// 1. prevIncomingData: *IncomingData. The previous incoming data
 //
 // 2. config: *SequencerConfig. The configuration for the Sequencer
 //
@@ -412,7 +407,7 @@ func getPrevIdFromPrevIncomingData(prevIncomingData *incomingData, outputAppFiel
 // 1. any. The previous id (string or []string)
 //
 // 2. error. The error if the process fails
-func getPrevIdData(prevIncomingData *incomingData, config *SequencerConfig) (any, error) {
+func getPrevIdData(prevIncomingData *IncomingData, config *SequencerConfig) (any, error) {
 	prevID, err := getPrevIdFromPrevIncomingData(prevIncomingData, config.outputAppFieldSequenceIdMap)
 	if err != nil {
 		return nil, err
@@ -452,7 +447,12 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 	if err != nil {
 		return err
 	}
-	nodeIdToIncomingDataMap, rootNodes, err := convertToIncomingDataMapAndRootNodes(rawData)
+	var rawDataArray []json.RawMessage
+	err = json.Unmarshal(rawData, &rawDataArray)
+	if err != nil {
+		return errors.New("incoming data is not an array")
+	}
+	nodeIdToIncomingDataMap, rootNodes, err := convertToIncomingDataMapAndRootNodes(rawDataArray)
 	if err != nil {
 		return err
 	}
@@ -461,7 +461,7 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 	}
 	appJSONArray := []map[string]any{}
 	for _, rootIncomingData := range rootNodes {
-		var prevIncomingData *incomingData
+		var prevIncomingData *IncomingData
 		for incomingData, err := range sequenceWithStack(rootIncomingData, nodeIdToIncomingDataMap) {
 			if err != nil {
 				return err
@@ -478,6 +478,10 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 			prevIncomingData = incomingData
 		}
 	}
-	appData := Server.NewAppData(appJSONArray, "")
+	jsonData, err := json.Marshal(appJSONArray)
+	if err != nil {
+		return err
+	}
+	appData := Server.NewAppData(jsonData, "")
 	return s.pushable.SendTo(appData)
 }

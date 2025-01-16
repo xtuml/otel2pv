@@ -338,29 +338,29 @@ func SetupAndRunApp(
 //
 // 1. error. An error if anything fails.
 func RunAppFromConfigPath(
-    configPath string,
-    pipeServer PipeServer,
-    pipeServerConfig Config,
-    producerConfigMap map[string]func() Config,
-    consumerConfigMap map[string]func() Config,
-    producerMap map[string]func() SinkServer,
-    consumerMap map[string]func() SourceServer,
+	configPath string,
+	pipeServer PipeServer,
+	pipeServerConfig Config,
+	producerConfigMap map[string]func() Config,
+	consumerConfigMap map[string]func() Config,
+	producerMap map[string]func() SinkServer,
+	consumerMap map[string]func() SourceServer,
 ) error {
-    config, err := ReadConfigJSON(configPath)
-    if err != nil {
-        return errors.New("Error reading config file:\n" + err.Error())
-    }
-    err = SetupAndRunApp(
-        config,
-        pipeServer,
-        pipeServerConfig,
-        producerConfigMap,
-        consumerConfigMap,
-        producerMap,
-        consumerMap,
-    )
-    if err != nil {
-        return errors.New("Error setting up and running app:\n" + err.Error())
-    }
-    return nil
+	config, err := ReadConfigJSON(configPath)
+	if err != nil {
+		return errors.New("Error reading config file:\n" + err.Error())
+	}
+	err = SetupAndRunApp(
+		config,
+		pipeServer,
+		pipeServerConfig,
+		producerConfigMap,
+		consumerConfigMap,
+		producerMap,
+		consumerMap,
+	)
+	if err != nil {
+		return errors.New("Error setting up and running app:\n" + err.Error())
+	}
+	return nil
 }
