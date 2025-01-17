@@ -57,141 +57,6 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 				t.Errorf("expected false, got true")
 			}
 		})
-		t.Run("updateGroupApplies", func(t *testing.T) {
-			// test error case when groupApplies is not an array
-			config := map[string]any{
-				"groupApplies": "not an array",
-			}
-			gavc := GroupAndVerifyConfig{}
-			err := gavc.updateGroupApplies(config)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-			if err.Error() != "groupApplies is not an array" {
-				t.Errorf("expected groupApplies is not an array, got %v", err)
-			}
-			// test error case when groupApplies is not an array of maps
-			config = map[string]any{
-				"groupApplies": []any{"not a map"},
-			}
-			gavc = GroupAndVerifyConfig{}
-			err = gavc.updateGroupApplies(config)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-			if err.Error() != "groupApplies[0] is not a map" {
-				t.Errorf("expected groupApplies[0] is not a map, got %v", err)
-			}
-			// test error case when FieldToShare does not exist or is not a string
-			config = map[string]any{
-				"groupApplies": []any{
-					map[string]any{},
-				},
-			}
-			gavc = GroupAndVerifyConfig{}
-			err = gavc.updateGroupApplies(config)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-			if err.Error() != "FieldToShare does not exist or is not a string for groupApplies[0]" {
-				t.Errorf("expected FieldToShare does not exist or is not a string for groupApplies[0], got %v", err)
-			}
-			// test error case when IdentifyingField does not exist or is not a string
-			config = map[string]any{
-				"groupApplies": []any{
-					map[string]any{
-						"FieldToShare": "field",
-					},
-				},
-			}
-			gavc = GroupAndVerifyConfig{}
-			err = gavc.updateGroupApplies(config)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-			if err.Error() != "IdentifyingField does not exist or is not a string for groupApplies[0]" {
-				t.Errorf("expected IdentifyingField does not exist or is not a string for groupApplies[0], got %v", err)
-			}
-			// test error case when ValueOfIdentifyingField does not exist or is not a string
-			config = map[string]any{
-				"groupApplies": []any{
-					map[string]any{
-						"FieldToShare":     "field",
-						"IdentifyingField": "field",
-					},
-				},
-			}
-			gavc = GroupAndVerifyConfig{}
-			err = gavc.updateGroupApplies(config)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-			if err.Error() != "ValueOfIdentifyingField does not exist or is not a string for groupApplies[0]" {
-				t.Errorf("expected ValueOfIdentifyingField does not exist or is not a string for groupApplies[0], got %v", err)
-			}
-			// test error case when FieldToShare already exists in groupApplies
-			config = map[string]any{
-				"groupApplies": []any{
-					map[string]any{
-						"FieldToShare":            "field",
-						"IdentifyingField":        "field",
-						"ValueOfIdentifyingField": "field",
-					},
-					map[string]any{
-						"FieldToShare":            "field",
-						"IdentifyingField":        "field",
-						"ValueOfIdentifyingField": "field",
-					},
-				},
-			}
-			gavc = GroupAndVerifyConfig{}
-			err = gavc.updateGroupApplies(config)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-			if err.Error() != "FieldToShare field already exists in groupApplies" {
-				t.Errorf("expected FieldToShare field already exists in groupApplies, got %v", err)
-			}
-			// test case when groupApplies input is valid
-			config = map[string]any{
-				"groupApplies": []any{
-					map[string]any{
-						"FieldToShare":            "field",
-						"IdentifyingField":        "field",
-						"ValueOfIdentifyingField": "field",
-					},
-				},
-			}
-			gavc = GroupAndVerifyConfig{}
-			err = gavc.updateGroupApplies(config)
-			if err != nil {
-				t.Fatalf("expected nil, got %v", err)
-			}
-			if len(gavc.groupApplies) != 1 {
-				t.Fatalf("expected 1, got %d", len(gavc.groupApplies))
-			}
-			if _, ok := gavc.groupApplies["field"]; !ok {
-				t.Errorf("expected field, got %v", gavc.groupApplies)
-			}
-			expected := GroupApply{
-				FieldToShare:            "field",
-				IdentifyingField:        "field",
-				ValueOfIdentifyingField: "field",
-			}
-			if gavc.groupApplies["field"] != expected {
-				t.Errorf("expected %v, got %v", expected, gavc.groupApplies["field"])
-			}
-			// test default case when groupApplies is not present
-			config = map[string]any{}
-			gavc = GroupAndVerifyConfig{}
-			err = gavc.updateGroupApplies(config)
-			if err != nil {
-				t.Fatalf("expected nil, got %v", err)
-			}
-			if len(gavc.groupApplies) != 0 {
-				t.Fatalf("expected 0, got %d", len(gavc.groupApplies))
-			}
-		})
 		t.Run("updateParentVerifySet", func(t *testing.T) {
 			// test error case when parentVerifySet is not an array
 			config := map[string]any{
@@ -310,15 +175,6 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}
-			// test error case when updateGroupApplies returns an error
-			config = map[string]any{
-				"groupApplies": "not an array",
-			}
-			gavc = GroupAndVerifyConfig{}
-			err = gavc.IngestConfig(config)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
 			// test error case when updateParentVerifySet returns an error
 			config = map[string]any{
 				"parentVerifySet": "not an array",
@@ -340,13 +196,6 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 			// test case when all update functions return no error
 			config = map[string]any{
 				"orderChildrenByTimestamp": true,
-				"groupApplies": []any{
-					map[string]any{
-						"FieldToShare":            "field",
-						"IdentifyingField":        "field",
-						"ValueOfIdentifyingField": "field",
-					},
-				},
 				"parentVerifySet": []any{"string"},
 				"Timeout":         1,
 			}
@@ -357,20 +206,6 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 			}
 			if !gavc.orderChildrenByTimestamp {
 				t.Errorf("expected true, got false")
-			}
-			if len(gavc.groupApplies) != 1 {
-				t.Fatalf("expected 1, got %d", len(gavc.groupApplies))
-			}
-			if _, ok := gavc.groupApplies["field"]; !ok {
-				t.Errorf("expected field, got %v", gavc.groupApplies)
-			}
-			expected := GroupApply{
-				FieldToShare:            "field",
-				IdentifyingField:        "field",
-				ValueOfIdentifyingField: "field",
-			}
-			if gavc.groupApplies["field"] != expected {
-				t.Errorf("expected %v, got %v", expected, gavc.groupApplies["field"])
 			}
 			if len(gavc.parentVerifySet) != 1 {
 				t.Fatalf("expected 1, got %d", len(gavc.parentVerifySet))

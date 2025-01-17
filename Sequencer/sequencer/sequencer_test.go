@@ -175,6 +175,141 @@ func TestSequencerConfig(t *testing.T) {
 				}
 			})
 		}
+		t.Run("updateGroupApplies", func(t *testing.T) {
+			// test error case when groupApplies is not an array
+			config := map[string]any{
+				"groupApplies": "not an array",
+			}
+			sequencer := SequencerConfig{}
+			err := sequencer.updateGroupApplies(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "groupApplies is not an array" {
+				t.Errorf("expected groupApplies is not an array, got %v", err)
+			}
+			// test error case when groupApplies is not an array of maps
+			config = map[string]any{
+				"groupApplies": []any{"not a map"},
+			}
+			sequencer = SequencerConfig{}
+			err = sequencer.updateGroupApplies(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "groupApplies[0] is not a map" {
+				t.Errorf("expected groupApplies[0] is not a map, got %v", err)
+			}
+			// test error case when FieldToShare does not exist or is not a string
+			config = map[string]any{
+				"groupApplies": []any{
+					map[string]any{},
+				},
+			}
+			sequencer = SequencerConfig{}
+			err = sequencer.updateGroupApplies(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "FieldToShare does not exist or is not a string for groupApplies[0]" {
+				t.Errorf("expected FieldToShare does not exist or is not a string for groupApplies[0], got %v", err)
+			}
+			// test error case when IdentifyingField does not exist or is not a string
+			config = map[string]any{
+				"groupApplies": []any{
+					map[string]any{
+						"FieldToShare": "field",
+					},
+				},
+			}
+			sequencer = SequencerConfig{}
+			err = sequencer.updateGroupApplies(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "IdentifyingField does not exist or is not a string for groupApplies[0]" {
+				t.Errorf("expected IdentifyingField does not exist or is not a string for groupApplies[0], got %v", err)
+			}
+			// test error case when ValueOfIdentifyingField does not exist or is not a string
+			config = map[string]any{
+				"groupApplies": []any{
+					map[string]any{
+						"FieldToShare":     "field",
+						"IdentifyingField": "field",
+					},
+				},
+			}
+			sequencer = SequencerConfig{}
+			err = sequencer.updateGroupApplies(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "ValueOfIdentifyingField does not exist or is not a string for groupApplies[0]" {
+				t.Errorf("expected ValueOfIdentifyingField does not exist or is not a string for groupApplies[0], got %v", err)
+			}
+			// test error case when FieldToShare already exists in groupApplies
+			config = map[string]any{
+				"groupApplies": []any{
+					map[string]any{
+						"FieldToShare":            "field",
+						"IdentifyingField":        "field",
+						"ValueOfIdentifyingField": "field",
+					},
+					map[string]any{
+						"FieldToShare":            "field",
+						"IdentifyingField":        "field",
+						"ValueOfIdentifyingField": "field",
+					},
+				},
+			}
+			sequencer = SequencerConfig{}
+			err = sequencer.updateGroupApplies(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "FieldToShare field already exists in groupApplies" {
+				t.Errorf("expected FieldToShare field already exists in groupApplies, got %v", err)
+			}
+			// test case when groupApplies input is valid
+			config = map[string]any{
+				"groupApplies": []any{
+					map[string]any{
+						"FieldToShare":            "field",
+						"IdentifyingField":        "field",
+						"ValueOfIdentifyingField": "field",
+					},
+				},
+			}
+			sequencer = SequencerConfig{}
+			err = sequencer.updateGroupApplies(config)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if len(sequencer.groupApplies) != 1 {
+				t.Fatalf("expected 1, got %d", len(sequencer.groupApplies))
+			}
+			if _, ok := sequencer.groupApplies["field"]; !ok {
+				t.Errorf("expected field, got %v", sequencer.groupApplies)
+			}
+			expected := GroupApply{
+				FieldToShare:            "field",
+				IdentifyingField:        "field",
+				ValueOfIdentifyingField: "field",
+			}
+			if sequencer.groupApplies["field"] != expected {
+				t.Errorf("expected %v, got %v", expected, sequencer.groupApplies["field"])
+			}
+			// test default case when groupApplies is not present
+			config = map[string]any{}
+			sequencer = SequencerConfig{}
+			err = sequencer.updateGroupApplies(config)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if len(sequencer.groupApplies) != 0 {
+				t.Fatalf("expected 0, got %d", len(sequencer.groupApplies))
+			}
+		})
 	})
 }
 
@@ -392,6 +527,13 @@ func TestSequencer(t *testing.T) {
 				config: &SequencerConfig{
 					outputAppFieldSequenceType: String,
 					outputAppSequenceField:     "SeqField",
+					groupApplies: map[string]GroupApply{
+						"share": {
+							FieldToShare:            "share",
+							IdentifyingField:        "field",
+							ValueOfIdentifyingField: "2",
+						},
+					},
 				},
 				pushable: &MockPushable{
 					incomingData: pushableChan,
@@ -407,7 +549,7 @@ func TestSequencer(t *testing.T) {
 					map[string]any{
 						"nodeId":   "2",
 						"childIds": []any{},
-						"appJSON":  map[string]any{"field": "2"},
+						"appJSON":  map[string]any{"field": "2", "share": "was shared"},
 					},
 					map[string]any{
 						"nodeId":   "3",
@@ -465,6 +607,16 @@ func TestSequencer(t *testing.T) {
 			}
 			if len(expectedSeqFields) != 0 {
 				t.Errorf("Expected all SeqFields to be used")
+			}
+			// make sure the shared field is shared
+			for _, record := range gotDataArray {
+				shared, ok := record["share"].(string)
+				if !ok {
+					t.Fatalf("Expected share to exist and be a string")
+				}
+				if shared != "was shared" {
+					t.Errorf("Expected share to be 'was shared', got %v", shared)
+				}
 			}
 		})
 	})
@@ -1011,5 +1163,100 @@ func TestSeqeuncerRunApp(t *testing.T) {
 	}
 	if counter != 1 {
 		t.Errorf("Expected 1 data points, got %d", counter)
+	}
+}
+
+// Test getGroupApplyValueFromAppJSON
+func TestGetGroupApplyValueFromAppJSON(t *testing.T) {
+	// Test case: groupApply.IdentifyingField not in appJSON
+	groupApply := GroupApply{
+		IdentifyingField: "key",
+	}
+	appJSON := map[string]any{}
+	_, err := getGroupApplyValueFromAppJSON(appJSON, groupApply)
+	if err == nil {
+		t.Fatalf("Expected error from getGroupApplyValueFromAppJSON, got nil")
+	}
+	if err.Error() != "groupApplies identifying field not found in appJSON or identifying value not a string" {
+		t.Errorf("Expected error message 'groupApplies identifying field not found in appJSON or identifying value not a string', got %v", err.Error())
+	}
+	// Test case: groupApply.IdentifyingField in appJSON but value is not a string
+	groupApply = GroupApply{
+		IdentifyingField: "key",
+	}
+	appJSON = map[string]any{
+		"key": 1,
+	}
+	_, err = getGroupApplyValueFromAppJSON(appJSON, groupApply)
+	if err == nil {
+		t.Fatalf("Expected error from getGroupApplyValueFromAppJSON, got nil")
+	}
+	if err.Error() != "groupApplies identifying field not found in appJSON or identifying value not a string" {
+		t.Errorf("Expected error message 'groupApplies identifying field not found in appJSON or identifying value not a string', got %v", err.Error())
+	}
+	// Test case: groupApply.IdentifyingField in appJSON and value is a string but does not match groupApply.ValueOfIdentifyingField
+	groupApply = GroupApply{
+		IdentifyingField:        "key",
+		ValueOfIdentifyingField: "value",
+	}
+	appJSON = map[string]any{
+		"key": "notValue",
+	}
+	_, err = getGroupApplyValueFromAppJSON(appJSON, groupApply)
+	if err == nil {
+		t.Fatalf("Expected error from getGroupApplyValueFromAppJSON, got nil")
+	}
+	if err.Error() != "groupApplies identifying field value does not match" {
+		t.Errorf("Expected error message 'groupApplies identifying field value does not match', got %v", err.Error())
+	}
+	// Test case: groupApply.IdentifyingField in appJSON and value is a string and matches groupApply.ValueOfIdentifyingField but groupApply.FieldToShare is not in appJSON
+	groupApply = GroupApply{
+		IdentifyingField:        "key",
+		ValueOfIdentifyingField: "value",
+		FieldToShare:            "field",
+	}
+	appJSON = map[string]any{
+		"key": "value",
+	}
+	_, err = getGroupApplyValueFromAppJSON(appJSON, groupApply)
+	if err == nil {
+		t.Fatalf("Expected error from getGroupApplyValueFromAppJSON, got nil")
+	}
+	if err.Error() != "groupApplies field to share value not found or not a string" {
+		t.Errorf("Expected error message 'groupApplies field to share value not found or not a string', got %v", err.Error())
+	}
+	// Test case: groupApply.IdentifyingField in appJSON and value is a string and matches groupApply.ValueOfIdentifyingField and groupApply.FieldToShare is in appJSON but not a string
+	groupApply = GroupApply{
+		IdentifyingField:        "key",
+		ValueOfIdentifyingField: "value",
+		FieldToShare:            "field",
+	}
+	appJSON = map[string]any{
+		"key":   "value",
+		"field": 1,
+	}
+	_, err = getGroupApplyValueFromAppJSON(appJSON, groupApply)
+	if err == nil {
+		t.Fatalf("Expected error from getGroupApplyValueFromAppJSON, got nil")
+	}
+	if err.Error() != "groupApplies field to share value not found or not a string" {
+		t.Errorf("Expected error message 'groupApplies field to share value not found or not a string', got %v", err.Error())
+	}
+	// Test case: everything works fine
+	groupApply = GroupApply{
+		IdentifyingField:        "key",
+		ValueOfIdentifyingField: "value",
+		FieldToShare:            "field",
+	}
+	appJSON = map[string]any{
+		"key":   "value",
+		"field": "fieldValue",
+	}
+	value, err := getGroupApplyValueFromAppJSON(appJSON, groupApply)
+	if err != nil {
+		t.Fatalf("Expected no error from getGroupApplyValueFromAppJSON, got %v", err)
+	}
+	if value != "fieldValue" {
+		t.Errorf("Expected value to be 'fieldValue', got %v", value)
 	}
 }

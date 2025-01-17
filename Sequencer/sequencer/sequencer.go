@@ -45,6 +45,25 @@ func GetOutputAppFieldSequenceType(s string) (OutputAppFieldSequenceType, error)
 	}
 }
 
+// GroupApply is a struct that is used by config to hold information
+// on a field from the appJSON to share with all other grouped nodes
+// in the same group identified by a field with a specific value
+// in the appJSON. It has the following fields:
+//
+// 1. FieldToShare: string. It is the field from the appJSON whose value will be shared
+// across all grouped nodes.
+//
+// 2. IdentifyingField: string. It is the field from the appJSON that will be used to
+// identify the specific node.
+//
+// 3. ValueOfIdentifyingField: string. It is the value of the IdentifyingField that will
+// be used to identify the specific node.
+type GroupApply struct {
+	FieldToShare            string
+	IdentifyingField        string
+	ValueOfIdentifyingField string
+}
+
 // SequencerConfig is a struct that represents the configuration for a Sequencer.
 // It has the following fields:
 //
@@ -55,10 +74,72 @@ func GetOutputAppFieldSequenceType(s string) (OutputAppFieldSequenceType, error)
 // to replace the node id with, if at all. If null then just uses nodeId field.
 //
 // 3. outputAppFieldSequenceType: OutputAppFieldSequenceType. The type that will be used for the sequence field in the output app schema.
+//
+// 4. groupApplies: map[string]GroupApply. It is a map that holds the GroupApply structs for each
+// to map from one to many in the appJSON.
 type SequencerConfig struct {
 	outputAppSequenceField      string
 	outputAppFieldSequenceIdMap string
 	outputAppFieldSequenceType  OutputAppFieldSequenceType
+	groupApplies                map[string]GroupApply
+}
+
+// updateGroupApplies is a method that is used to update the groupApplies field of the SequencerConfig
+// struct from config.
+//
+// Args:
+//
+// 1. config: map[string]any. It is a map that holds the raw configuration.
+//
+// Returns:
+//
+// 1. error. It returns an error if the configuration is invalid in any way.
+func (s *SequencerConfig) updateGroupApplies(config map[string]any) error {
+	groupAppliesRaw, ok := config["groupApplies"]
+	var groupApplies []any
+	if ok {
+		groupApplies, ok = groupAppliesRaw.([]any)
+		if !ok {
+			return errors.New("groupApplies is not an array")
+		}
+	}
+	s.groupApplies = make(map[string]GroupApply)
+	for i, value := range groupApplies {
+		groupApplyMap, ok := value.(map[string]any)
+		if !ok {
+			return fmt.Errorf("groupApplies[%d] is not a map", i)
+		}
+		fieldToShare, ok := groupApplyMap["FieldToShare"].(string)
+		if !ok {
+			return fmt.Errorf("FieldToShare does not exist or is not a string for groupApplies[%d]", i)
+		}
+		if fieldToShare == "" {
+			return fmt.Errorf("FieldToShare is empty for groupApplies[%d]", i)
+		}
+		identifyingField, ok := groupApplyMap["IdentifyingField"].(string)
+		if !ok {
+			return fmt.Errorf("IdentifyingField does not exist or is not a string for groupApplies[%d]", i)
+		}
+		if identifyingField == "" {
+			return fmt.Errorf("IdentifyingField is empty for groupApplies[%d]", i)
+		}
+		valueOfIdentifyingField, ok := groupApplyMap["ValueOfIdentifyingField"].(string)
+		if !ok {
+			return fmt.Errorf("ValueOfIdentifyingField does not exist or is not a string for groupApplies[%d]", i)
+		}
+		if valueOfIdentifyingField == "" {
+			return fmt.Errorf("ValueOfIdentifyingField is empty for groupApplies[%d]", i)
+		}
+		if _, ok := s.groupApplies[fieldToShare]; ok {
+			return fmt.Errorf("FieldToShare %s already exists in groupApplies", fieldToShare)
+		}
+		s.groupApplies[fieldToShare] = GroupApply{
+			FieldToShare:            fieldToShare,
+			IdentifyingField:        identifyingField,
+			ValueOfIdentifyingField: valueOfIdentifyingField,
+		}
+	}
+	return nil
 }
 
 // IngestConfig ingests the configuration for the SequencerConfig.
@@ -98,6 +179,10 @@ func (sc *SequencerConfig) IngestConfig(config map[string]any) error {
 			return fmt.Errorf("invalid outputAppFieldSequenceType - %s", err)
 		}
 		sc.outputAppFieldSequenceType = ofst
+	}
+	err := sc.updateGroupApplies(config)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -460,6 +545,7 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 		return errors.New("no root nodes")
 	}
 	appJSONArray := []map[string]any{}
+	groupAppliesMap := make(map[string]string)
 	for _, rootIncomingData := range rootNodes {
 		var prevIncomingData *IncomingData
 		for incomingData, err := range sequenceWithStack(rootIncomingData, nodeIdToIncomingDataMap) {
@@ -474,8 +560,24 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 				}
 				appJSON[s.config.outputAppSequenceField] = prevID
 			}
+			// GroupApplies get data
+			for fieldToShare, groupApply := range s.config.groupApplies {
+				if _, ok := groupAppliesMap[fieldToShare]; !ok {
+					fieldValue, err := getGroupApplyValueFromAppJSON(appJSON, groupApply)
+					if err != nil {
+						continue
+					}
+					groupAppliesMap[fieldToShare] = fieldValue
+				}
+			}
 			appJSONArray = append(appJSONArray, appJSON)
 			prevIncomingData = incomingData
+		}
+	}
+	// GroupApplies set data
+	for fieldToShare, fieldValue := range groupAppliesMap {
+		for _, appJSON := range appJSONArray {
+			appJSON[fieldToShare] = fieldValue
 		}
 	}
 	jsonData, err := json.Marshal(appJSONArray)
@@ -484,4 +586,33 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 	}
 	appData := Server.NewAppData(jsonData, "")
 	return s.pushable.SendTo(appData)
+}
+
+// getGroupAppliesValueFromAppJSON is a helper function that will get the value of the fieldToShare,
+// if it exists, from the appJSON. It returns an error if the value is not found or it is not a string.
+//
+// Args:
+//
+// 1. appJSON: map[string]any. The appJSON to get the value from.
+//
+// 2. groupApply: GroupApply. The GroupApply struct that holds the information on the field to get.
+//
+// Returns:
+//
+// 1. string. The value of the fieldToShare.
+//
+// 2. error. The error if the value is not found or it is not a string.
+func getGroupApplyValueFromAppJSON(appJSON map[string]any, groupApply GroupApply) (string, error) {
+	identifyingValue, ok := appJSON[groupApply.IdentifyingField].(string)
+	if !ok {
+		return "", errors.New("groupApplies identifying field not found in appJSON or identifying value not a string")
+	}
+	if identifyingValue != groupApply.ValueOfIdentifyingField {
+		return "", errors.New("groupApplies identifying field value does not match")
+	}
+	fieldValue, ok := appJSON[groupApply.FieldToShare].(string)
+	if !ok {
+		return "", errors.New("groupApplies field to share value not found or not a string")
+	}
+	return fieldValue, nil
 }

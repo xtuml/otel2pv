@@ -13,25 +13,6 @@ import (
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
 )
 
-// GroupApply is a struct that is used by config to hold information
-// on a field from the appJSON to share with all other grouped nodes
-// in the same group identified by a field with a specific value
-// in the appJSON. It has the following fields:
-//
-// 1. FieldToShare: string. It is the field from the appJSON whose value will be shared
-// across all grouped nodes.
-//
-// 2. IdentifyingField: string. It is the field from the appJSON that will be used to
-// identify the specific node.
-//
-// 3. ValueOfIdentifyingField: string. It is the value of the IdentifyingField that will
-// be used to identify the specific node.
-type GroupApply struct {
-	FieldToShare            string
-	IdentifyingField        string
-	ValueOfIdentifyingField string
-}
-
 // OutgoingData that is used to hold the outgoing data from the GroupAndVerify
 // component. It has the following fields:
 //
@@ -139,16 +120,12 @@ type Task struct {
 // 1. orderChildrenByTimestamp: bool. It is a boolean that determines if the orderedChildIds array
 // should be ordered on the basis of timestamp.
 //
-// 2. groupApplies: map[string]GroupApply. It is a map that holds the GroupApply structs for each
-// to map from one to many in the appJSON.
-//
-// 3. parentVerifySet: map[string]bool. It is a map that holds the identifiers of the nodes (NodeTypes)
+// 2. parentVerifySet: map[string]bool. It is a map that holds the identifiers of the nodes (NodeTypes)
 // that do not require bidirectional confirmation.
 //
-// 4. Timeout: int. It is the time out for the processing of the tree.
+// 3. Timeout: int. It is the time out for the processing of the tree.
 type GroupAndVerifyConfig struct {
 	orderChildrenByTimestamp bool
-	groupApplies             map[string]GroupApply
 	parentVerifySet          map[string]bool
 	Timeout                  int
 }
@@ -172,55 +149,6 @@ func (gavc *GroupAndVerifyConfig) updateOrderChildrenByTimestamp(config map[stri
 			return errors.New("orderChildrenByTimestamp is not a boolean")
 		}
 		gavc.orderChildrenByTimestamp = orderChildrenByTimestamp
-	}
-	return nil
-}
-
-// updateGroupApplies is a method that is used to update the groupApplies field of the GroupAndVerifyConfig
-// struct from config.
-//
-// Args:
-//
-// 1. config: map[string]any. It is a map that holds the raw configuration.
-//
-// Returns:
-//
-// 1. error. It returns an error if the configuration is invalid in any way.
-func (gavc *GroupAndVerifyConfig) updateGroupApplies(config map[string]any) error {
-	groupAppliesRaw, ok := config["groupApplies"]
-	var groupApplies []any
-	if ok {
-		groupApplies, ok = groupAppliesRaw.([]any)
-		if !ok {
-			return errors.New("groupApplies is not an array")
-		}
-	}
-	gavc.groupApplies = make(map[string]GroupApply)
-	for i, value := range groupApplies {
-		groupApplyMap, ok := value.(map[string]any)
-		if !ok {
-			return fmt.Errorf("groupApplies[%d] is not a map", i)
-		}
-		fieldToShare, ok := groupApplyMap["FieldToShare"].(string)
-		if !ok {
-			return fmt.Errorf("FieldToShare does not exist or is not a string for groupApplies[%d]", i)
-		}
-		identifyingField, ok := groupApplyMap["IdentifyingField"].(string)
-		if !ok {
-			return fmt.Errorf("IdentifyingField does not exist or is not a string for groupApplies[%d]", i)
-		}
-		valueOfIdentifyingField, ok := groupApplyMap["ValueOfIdentifyingField"].(string)
-		if !ok {
-			return fmt.Errorf("ValueOfIdentifyingField does not exist or is not a string for groupApplies[%d]", i)
-		}
-		if _, ok := gavc.groupApplies[fieldToShare]; ok {
-			return fmt.Errorf("FieldToShare %s already exists in groupApplies", fieldToShare)
-		}
-		gavc.groupApplies[fieldToShare] = GroupApply{
-			FieldToShare:            fieldToShare,
-			IdentifyingField:        identifyingField,
-			ValueOfIdentifyingField: valueOfIdentifyingField,
-		}
 	}
 	return nil
 }
@@ -299,10 +227,6 @@ func (gavc *GroupAndVerifyConfig) IngestConfig(config map[string]any) error {
 		return errors.New("config is nil")
 	}
 	err := gavc.updateOrderChildrenByTimestamp(config)
-	if err != nil {
-		return err
-	}
-	err = gavc.updateGroupApplies(config)
 	if err != nil {
 		return err
 	}
