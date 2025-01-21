@@ -3,6 +3,7 @@ package Server
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -768,27 +769,46 @@ func handleMessageDownStreamError(ctx context.Context, inErr error, message *amq
 	errorType, _ := GetErrorType(inErr)
 	switch errorType {
 	case InvalidErrorType:
-		return receiver.RejectMessage(ctx, message, &amqp.Error{
+		slog.Info("Invalid message - rejecting", "details", inErr)
+		err := receiver.RejectMessage(ctx, message, &amqp.Error{
 			Condition:   "invalid",
 			Description: inErr.Error(),
 		})
+		if err != nil {
+			slog.Error("Error rejecting message - fatal", "details", err)
+		}
+		return err
 	case FullErrorType:
-		return receiver.ReleaseMessage(ctx, message)
+		slog.Info("Server full - sending back to queue", "details", inErr)
+		err := receiver.ReleaseMessage(ctx, message)
+		if err != nil {
+			slog.Error("Error releasing message - fatal", "details", err)
+		}
+		return err
 	case SendErrorType:
+		slog.Error("Error sending message - fatal", "details", inErr)
 		err := receiver.ModifyMessage(ctx, message, &amqp.ModifyMessageOptions{
 			DeliveryFailed: true,
 		})
 		if err != nil {
+			slog.Error("Error modifying message - fatal", "details", err)
 			return err
 		}
 	case ProcessErrorType:
-		return receiver.AcceptMessage(ctx, message)
+		slog.Info("Error processing message - notifying", "details", inErr)
+		err := receiver.AcceptMessage(ctx, message)
+		if err != nil {
+			slog.Error("Error in message acceptance", "details", err)
+		}
+		return err
 	default:
 		err := receiver.ModifyMessage(ctx, message, &amqp.ModifyMessageOptions{
 			DeliveryFailed:    true,
 			UndeliverableHere: true,
 		})
+		slog.Error("Unknown error occured - fatal", "details", inErr)
 		if err != nil {
+			slog.Error("Error modifying message - fatal", "details", err)
 			return err
 		}
 	}

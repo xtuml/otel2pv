@@ -313,6 +313,188 @@ func TestSequencerConfig(t *testing.T) {
 	})
 }
 
+// Tests for IncomingData
+func TestIncomingData (t *testing.T) {
+	t.Run("UnmarshalJSON", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			data    []byte
+			wantErr bool
+			errMessage string
+			expected *IncomingData
+		}{
+			{
+				name: "validAllFieldsPresent",
+				data: []byte(`{"nodeId":"1","parentId":"3","childIds":["2"], "nodeType":"type", "timestamp":1, "appJSON":{}}`),
+				wantErr: false,
+				errMessage: "",
+				expected: &IncomingData{
+					NodeId: "1",
+					ParentId: "3",
+					ChildIds: []string{"2"},
+					NodeType: "type",
+					Timestamp: 1,
+					AppJSON: map[string]any{},
+				},
+			},
+			{
+				name: "validAllOptionalFieldsNotPresent",
+				data: []byte(`{"nodeId":"1","appJSON":{}}`),
+				wantErr: false,
+				errMessage: "",
+				expected: &IncomingData{
+					NodeId: "1",
+					ParentId: "",
+					ChildIds: []string{},
+					NodeType: "",
+					Timestamp: 0,
+					AppJSON: map[string]any{},
+				},
+			},
+			{
+				name: "validAllOptionalFieldsNull",
+				data: []byte(`{"nodeId":"1","parentId":null,"childIds":null,"nodeType":null,"timestamp":null,"appJSON":{}}`),
+				wantErr: false,
+				errMessage: "",
+				expected: &IncomingData{
+					NodeId: "1",
+					ParentId: "",
+					ChildIds: []string{},
+					NodeType: "",
+					Timestamp: 0,
+					AppJSON: map[string]any{},
+				},
+			},
+			{
+				name: "validTreeIdPresent",
+				data: []byte(`{"nodeId":"1", "appJSON":{},"treeId":"tree"}`),
+				wantErr: false,
+				errMessage: "",
+				expected: &IncomingData{
+					NodeId: "1",
+					ParentId: "",
+					ChildIds: []string{},
+					NodeType: "",
+					Timestamp: 0,
+					AppJSON: map[string]any{},
+				},
+			},
+			{
+				name: "invalidNodeIdNotString",
+				data: []byte(`{"nodeId":1,"appJSON":{}}`),
+				wantErr: true,
+				errMessage: "json: cannot unmarshal number into Go struct field IncomingData.nodeId of type string",
+				expected: nil,
+			},
+			{
+				name: "invalidParentIdNotString",
+				data: []byte(`{"nodeId":"1","parentId":1,"appJSON":{}}`),
+				wantErr: true,
+				errMessage: "json: cannot unmarshal number into Go struct field IncomingData.parentId of type string",
+				expected: nil,
+			},
+			{
+				name: "invalidChildIdsNotArray",
+				data: []byte(`{"nodeId":"1","childIds":1,"appJSON":{}}`),
+				wantErr: true,
+				errMessage: "json: cannot unmarshal number into Go struct field IncomingData.childIds of type []string",
+				expected: nil,
+			},
+			{
+				name: "invalidChildIdsNotString",
+				data: []byte(`{"nodeId":"1","childIds":[1],"appJSON":{}}`),
+				wantErr: true,
+				errMessage: "json: cannot unmarshal number into Go struct field IncomingData.childIds of type string",
+				expected: nil,
+			},
+			{
+				name: "invalidNodeTypeNotString",
+				data: []byte(`{"nodeId":"1","nodeType":1,"appJSON":{}}`),
+				wantErr: true,
+				errMessage: "json: cannot unmarshal number into Go struct field IncomingData.nodeType of type string",
+				expected: nil,
+			},
+			{
+				name: "invalidTimestampNotNumber",
+				data: []byte(`{"nodeId":"1","timestamp":"1","appJSON":{}}`),
+				wantErr: true,
+				errMessage: "json: cannot unmarshal string into Go struct field IncomingData.timestamp of type int",
+				expected: nil,
+			},
+			{
+				name: "invalidAppJSONNotMap",
+				data: []byte(`{"nodeId":"1","appJSON":1}`),
+				wantErr: true,
+				errMessage: "json: cannot unmarshal number into Go struct field IncomingData.appJSON of type map[string]interface {}",
+				expected: nil,
+			},
+			{
+				name: "invalidUnknownField",
+				data: []byte(`{"nodeId":"1","unknown":1,"appJSON":{}}`),
+				wantErr: true,
+				errMessage: "json: unknown field \"unknown\"",
+				expected: nil,
+			},
+			{
+				name: "invalidNodeIdNotPresent",
+				data: []byte(`{"appJSON":{}}`),
+				wantErr: true,
+				errMessage: "nodeId is required",
+				expected: nil,
+			},
+			{
+				name: "invalidAppJSONNotPresent",
+				data: []byte(`{"nodeId":"1"}`),
+				wantErr: true,
+				errMessage: "appJSON is required",
+				expected: nil,
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				id := &IncomingData{}
+				err := json.Unmarshal(tt.data, id)
+				if err == nil {
+					if tt.wantErr {
+						t.Fatalf("IncomingData.UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
+					}
+					if tt.expected.NodeId != id.NodeId {
+						t.Fatalf("IncomingData.UnmarshalJSON() = %v, want %v", id, tt.expected)
+					}
+					if tt.expected.ParentId != id.ParentId {
+						t.Fatalf("IncomingData.UnmarshalJSON() = %v, want %v", id, tt.expected)
+					}
+					if tt.expected.NodeType != id.NodeType {
+						t.Fatalf("IncomingData.UnmarshalJSON() = %v, want %v", id, tt.expected)
+					}
+					if tt.expected.Timestamp != id.Timestamp {
+						t.Fatalf("IncomingData.UnmarshalJSON() = %v, want %v", id, tt.expected)
+					}
+					if !reflect.DeepEqual(tt.expected.AppJSON, id.AppJSON) {
+						t.Fatalf("IncomingData.UnmarshalJSON() = %v, want %v", id, tt.expected)
+					}
+					if len(tt.expected.ChildIds) == 0 {
+						if len(id.ChildIds) != 0 {
+							t.Fatalf("IncomingData.UnmarshalJSON() = %v, want %v", id, tt.expected)
+						}
+					} else {
+						if !reflect.DeepEqual(tt.expected.ChildIds, id.ChildIds) {
+							t.Fatalf("IncomingData.UnmarshalJSON() = %v, want %v", id, tt.expected)
+						}
+					}
+				} else {
+					if !tt.wantErr{
+						t.Fatalf("IncomingData.UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
+					}
+					if err.Error() != tt.errMessage {
+						t.Fatalf("IncomingData.UnmarshalJSON() error = %v, wantErr %v", err, tt.errMessage)
+					}
+				}
+			})
+		}
+	})
+}
+
 // MockPushable is a mock implementation of the Pushable interface
 type MockPushable struct {
 	isSendToError bool
@@ -439,8 +621,8 @@ func TestSequencer(t *testing.T) {
 			if err == nil {
 				t.Fatalf("Expected error from SendTo, got nil")
 			}
-			if err.Error() != "input JSON does not match the IncomingData format with strictly disallowed unknown fields except \"treeId\"" {
-				t.Errorf("Expected error message 'input JSON does not match the IncomingData format with strictly disallowed unknown fields except \"treeId\"', got %v", err.Error())
+			if err.Error() != "json: cannot unmarshal number into Go value of type sequencer.IncomingData" {
+				t.Errorf("Expected error message 'json: cannot unmarshal number into Go value of type sequencer.IncomingData', got %v", err.Error())
 			}
 			// check error case where there are no root nodes
 			sequencer.config = &SequencerConfig{}
@@ -806,8 +988,8 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Expected error from convertAppDataToIncomingDataMapAndRootNodes, got nil")
 		}
-		if err.Error() != "input JSON does not match the IncomingData format with strictly disallowed unknown fields except \"treeId\"" {
-			t.Errorf("Expected error message 'input JSON does not match the IncomingData format with strictly disallowed unknown fields except \"treeId\"', got %v", err.Error())
+		if err.Error() != "json: cannot unmarshal number into Go value of type sequencer.IncomingData" {
+			t.Errorf("Expected error message 'json: cannot unmarshal number into Go value of type sequencer.IncomingData', got %v", err.Error())
 		}
 	})
 	t.Run("valid", func(t *testing.T) {

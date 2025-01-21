@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"strings"
 
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
 )
@@ -267,12 +268,12 @@ func (s *Sequencer) Setup(config Server.Config) error {
 //
 // 6. AppJSON: map[string]any. The outgoing app JSON of the incoming data
 type IncomingData struct {
-	NodeId    string
-	ParentId  string
-	ChildIds  []string
-	NodeType  string
-	Timestamp int
-	AppJSON   map[string]any
+	NodeId    string         `json:"nodeId"`
+	ParentId  string         `json:"parentId"`
+	ChildIds  []string       `json:"childIds"`
+	NodeType  string         `json:"nodeType"`
+	Timestamp int            `json:"timestamp"`
+	AppJSON   map[string]any `json:"appJSON"`
 }
 
 type XIncomingData IncomingData
@@ -300,7 +301,7 @@ func (id *IncomingData) UnmarshalJSON(data []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&xide); err != nil {
-		return errors.New("input JSON does not match the IncomingData format with strictly disallowed unknown fields except \"treeId\"")
+		return errors.New(strings.Replace(err.Error(), "XIncomingDataExceptions", "IncomingData", 1))
 	}
 	if xide.NodeId == "" {
 		return errors.New("nodeId is required")
@@ -533,7 +534,7 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 		return err
 	}
 	var rawDataArray []json.RawMessage
-	err = json.Unmarshal(rawData, &rawDataArray) 
+	err = json.Unmarshal(rawData, &rawDataArray)
 	if err != nil {
 		return Server.NewInvalidError("incoming data is not an array")
 	}
