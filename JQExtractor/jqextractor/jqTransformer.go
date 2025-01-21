@@ -174,12 +174,12 @@ func (jqt *JQTransformer) SendTo(data *Server.AppData) error {
 	var unmarshalledData any
 	err = json.Unmarshal(dataToExtract, &unmarshalledData)
 	if err != nil {
-		return err
+		return Server.NewInvalidErrorFromError(err)
 	}
 	iter := jqt.jqProgram.Run(unmarshalledData)
 	outData, err := getDataFromJQIterator(&iter)
 	if err != nil {
-		return err
+		return Server.NewInvalidErrorFromError(err)
 	}
 	wg := &sync.WaitGroup{}
 	ctx, cancel := context.WithCancelCause(context.Background())
@@ -196,7 +196,7 @@ func (jqt *JQTransformer) SendTo(data *Server.AppData) error {
 				appData := Server.NewAppData(jsonData, key)
 				err = jqt.pushable.SendTo(appData)
 				if err != nil {
-					cancel(err)
+					cancel(Server.NewSendErrorFromError(err))
 				}
 			}()
 		}

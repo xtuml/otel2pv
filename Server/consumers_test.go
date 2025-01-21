@@ -761,9 +761,16 @@ func (p *MockPushableForAMQPOneConsumer) SendTo(data *AppData) error {
 type MockAMQPOneReceiver struct {
 	isReceiveError  bool
 	isAcceptError   bool
+	isRejectError   bool
+	isReleaseError  bool
+	isModifyError   bool
 	receiveData     chan *amqp.Message
 	cancel          context.CancelFunc
 	receiverOptions *amqp.ReceiverOptions
+	Released        bool
+	Rejected        bool
+	Modified        bool
+	Accepted        bool
 }
 
 func (r *MockAMQPOneReceiver) Receive(ctx context.Context, opts *amqp.ReceiveOptions) (*amqp.Message, error) {
@@ -792,6 +799,31 @@ func (r *MockAMQPOneReceiver) AcceptMessage(ctx context.Context, msg *amqp.Messa
 	if r.isAcceptError {
 		return errors.New("accept error")
 	}
+	r.Accepted = true
+	return nil
+}
+
+func (r *MockAMQPOneReceiver) RejectMessage(ctx context.Context, msg *amqp.Message, e *amqp.Error) error {
+	if r.isRejectError {
+		return errors.New("reject error")
+	}
+	r.Rejected = true
+	return nil
+}
+
+func (r *MockAMQPOneReceiver) ReleaseMessage(ctx context.Context, msg *amqp.Message) error {
+	if r.isReleaseError {
+		return errors.New("release error")
+	}
+	r.Released = true
+	return nil
+}
+
+func (r *MockAMQPOneReceiver) ModifyMessage(ctx context.Context, msg *amqp.Message, options *amqp.ModifyMessageOptions) error {
+	if r.isModifyError {
+		return errors.New("modify error")
+	}
+	r.Modified = true
 	return nil
 }
 
@@ -1236,4 +1268,125 @@ func TestConvertAndSendAMQPMessageToPushable(t *testing.T) {
 	if !reflect.DeepEqual(gotAppData, []byte(`{"key":"value"}`)) {
 		t.Errorf("Expected data to be %v, got %v", []byte(`{"key":"value"}`), gotAppData)
 	}
+}
+
+// Tests handleMessageDownStreamError
+func TestHandleMessageDownStreamError(t *testing.T) {
+	t.Run("error is nil", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("Expected panic from handleMessageDownStreamError, got %v", r)
+			}
+		}()
+		_ = handleMessageDownStreamError(context.TODO(), nil, &amqp.Message{}, &MockAMQPOneReceiver{})
+	})
+	t.Run("message is nil", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("Expected panic from handleMessageDownStreamError, got %v", r)
+			}
+		}()
+		_ = handleMessageDownStreamError(context.TODO(), errors.New(""), nil, &MockAMQPOneReceiver{})
+	})
+	t.Run("receiver is nil", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("Expected panic from handleMessageDownStreamError, got %v", r)
+			}
+		}()
+		_ = handleMessageDownStreamError(context.TODO(), errors.New(""), &amqp.Message{}, nil)
+	})
+	t.Run("InvalidErrorType", func(t *testing.T) {
+		// error in RejectMessage
+		receiver := &MockAMQPOneReceiver{isRejectError: true}
+		err := handleMessageDownStreamError(context.TODO(), NewInvalidError("invalid"), &amqp.Message{}, receiver)
+		if err == nil {
+			t.Errorf("Expected error from handleMessageDownStreamError, got nil")
+		}
+		// correct case
+		receiver = &MockAMQPOneReceiver{}
+		err = handleMessageDownStreamError(context.TODO(), NewInvalidError("invalid"), &amqp.Message{}, receiver)
+		if err != nil {
+			t.Errorf("Expected no error from handleMessageDownStreamError, got %v", err)
+		}
+		if !receiver.Rejected {
+			t.Errorf("Expected message to be rejected")
+		}
+	})
+	t.Run("FullErrorType", func(t *testing.T) {
+		// error in ReleaseMessage
+		receiver := &MockAMQPOneReceiver{isReleaseError: true}
+		err := handleMessageDownStreamError(context.TODO(), NewFullError("full"), &amqp.Message{}, receiver)
+		if err == nil {
+			t.Errorf("Expected error from handleMessageDownStreamError, got nil")
+		}
+		// correct case
+		receiver = &MockAMQPOneReceiver{}
+		err = handleMessageDownStreamError(context.TODO(), NewFullError("full"), &amqp.Message{}, receiver)
+		if err != nil {
+			t.Errorf("Expected no error from handleMessageDownStreamError, got %v", err)
+		}
+		if !receiver.Released {
+			t.Errorf("Expected message to be released")
+		}
+	})
+	t.Run("SendErrorType", func(t *testing.T) {
+		// error in ModifyMessage
+		receiver := &MockAMQPOneReceiver{isModifyError: true}
+		err := handleMessageDownStreamError(context.TODO(), NewSendError("send on error"), &amqp.Message{}, receiver)
+		if err == nil {
+			t.Errorf("Expected error from handleMessageDownStreamError, got nil")
+		}
+		// correct case
+		sendOnError := NewSendError("send on error")
+		receiver = &MockAMQPOneReceiver{}
+		err = handleMessageDownStreamError(context.TODO(), sendOnError, &amqp.Message{}, receiver)
+		if err == nil {
+			t.Errorf("Expected error from handleMessageDownStreamError, got nil")
+		}
+		if err != sendOnError {
+			t.Errorf("Expected error to be the same as sendError, got %v", err)
+		}
+		if !receiver.Modified {
+			t.Errorf("Expected message to be modified")
+		}
+	})
+	t.Run("ProcessErrorType", func(t *testing.T) {
+		// error in AcceptMessage
+		receiver := &MockAMQPOneReceiver{isAcceptError: true}
+		err := handleMessageDownStreamError(context.TODO(), NewProcessError("process error"), &amqp.Message{}, receiver)
+		if err == nil {
+			t.Errorf("Expected error from handleMessageDownStreamError, got nil")
+		}
+		// correct case
+		receiver = &MockAMQPOneReceiver{}
+		err = handleMessageDownStreamError(context.TODO(), NewProcessError("process error"), &amqp.Message{}, receiver)
+		if err != nil {
+			t.Errorf("Expected no error from handleMessageDownStreamError, got %v", err)
+		}
+		if !receiver.Accepted {
+			t.Errorf("Expected message to be accepted")
+		}
+	})
+	t.Run("All other error types", func(t *testing.T) {
+		// error in ModifyMessage
+		receiver := &MockAMQPOneReceiver{isModifyError: true}
+		err := handleMessageDownStreamError(context.TODO(), errors.New("test error"), &amqp.Message{}, receiver)
+		if err == nil {
+			t.Errorf("Expected error from handleMessageDownStreamError, got nil")
+		}
+		// correct case
+		receiver = &MockAMQPOneReceiver{}
+		otherError := errors.New("test error")
+		err = handleMessageDownStreamError(context.TODO(), errors.New("test error"), &amqp.Message{}, receiver)
+		if err == nil {
+			t.Errorf("Expected error from handleMessageDownStreamError, got nil")
+		}
+		if err.Error() != otherError.Error() {
+			t.Errorf("Expected error to be the same as otherError, got %v", err)
+		}
+		if !receiver.Modified {
+			t.Errorf("Expected message to be modified")
+		}
+	})
 }

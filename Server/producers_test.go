@@ -183,7 +183,7 @@ func TestHTTPProducer(t *testing.T) {
 		producer.config.URL = "invalid"
 		producer.config.numRetries = 2
 		err = producer.SendTo(appData)
-		if err.Error() != "failed to send data" {
+		if err.Error() != "Failed to send data via http to invalid, with no response" {
 			t.Errorf("Expected specified error from SendTo, got '%v'", err)
 		}
 		// Error case in which http.NewRequest() returns an error

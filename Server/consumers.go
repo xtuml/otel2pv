@@ -437,6 +437,9 @@ type AMQPOneConsumerReceiver interface {
 	Receive(ctx context.Context, opts *amqp.ReceiveOptions) (*amqp.Message, error)
 	Close(ctx context.Context) error
 	AcceptMessage(ctx context.Context, msg *amqp.Message) error
+	RejectMessage(ctx context.Context, msg *amqp.Message, e *amqp.Error) error
+	ReleaseMessage(ctx context.Context, msg *amqp.Message) error
+	ModifyMessage(ctx context.Context, msg *amqp.Message, options *amqp.ModifyMessageOptions) error
 }
 
 // AMQPOneConsumerSession is an interface that represents a session for an AMQP producer.
@@ -622,7 +625,10 @@ BREAK:
 				defer wg.Done()
 				err := convertAndSendAMQPMessageToPushable(msg, a.pushable, msgConvert)
 				if err != nil {
-					sendOnCancel(err)
+					err := handleMessageDownStreamError(ctx, err, msg, receiver)
+					if err != nil {
+						sendOnCancel(err)
+					}
 					return
 				}
 				err = receiver.AcceptMessage(ctx, msg)
@@ -740,4 +746,51 @@ func convertAndSendAMQPMessageToPushable(msg *amqp.Message, pushable Pushable, c
 		return err
 	}
 	return nil
+}
+
+// handleMessageDownStreamError is a function that will handle an error from a downstream stage.
+//
+// Args:
+//
+// 1. inErr: error. The error to handle.
+//
+// 2. message: *amqp.Message. The message that caused the error.
+//
+// 3. receiver: AMQPOneConsumerReceiver. The receiver to send the error to.
+//
+// Returns:
+//
+// 1. error. An error if the process fails.
+func handleMessageDownStreamError(ctx context.Context, inErr error, message *amqp.Message, receiver AMQPOneConsumerReceiver) error {
+	if inErr == nil || message == nil || receiver == nil {
+		panic("function called with nil arguments")
+	}
+	errorType, _ := GetErrorType(inErr)
+	switch errorType {
+	case InvalidErrorType:
+		return receiver.RejectMessage(ctx, message, &amqp.Error{
+			Condition:   "invalid",
+			Description: inErr.Error(),
+		})
+	case FullErrorType:
+		return receiver.ReleaseMessage(ctx, message)
+	case SendErrorType:
+		err := receiver.ModifyMessage(ctx, message, &amqp.ModifyMessageOptions{
+			DeliveryFailed: true,
+		})
+		if err != nil {
+			return err
+		}
+	case ProcessErrorType:
+		return receiver.AcceptMessage(ctx, message)
+	default:
+		err := receiver.ModifyMessage(ctx, message, &amqp.ModifyMessageOptions{
+			DeliveryFailed:    true,
+			UndeliverableHere: true,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return inErr
 }

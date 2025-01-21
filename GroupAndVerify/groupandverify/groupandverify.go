@@ -845,7 +845,7 @@ func (gav *GroupAndVerify) SendTo(data *Server.AppData) (err error) {
 	var incomingData *IncomingData
 	err = json.Unmarshal(gotData, &incomingData)
 	if err != nil {
-		return err
+		return Server.NewInvalidErrorFromError(err)
 	}
 	task := &Task{
 		IncomingData: incomingData,

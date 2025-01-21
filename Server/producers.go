@@ -122,23 +122,27 @@ func (h *HTTPProducer) SendTo(data *AppData) error {
 	}
 	req, err := http.NewRequest("POST", h.config.URL, bytes.NewBuffer(gotData))
 	if err != nil {
-		return err
+		return NewSendErrorFromError(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	var resp *http.Response
 	for i := 0; i < h.config.numRetries; i++ {
 		// try to send the data
-		resp, err := h.client.Do(req)
+		resp, err = h.client.Do(req)
 		if err != nil {
 			continue
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
+			slog.Info("Successfully sent message", "details", fmt.Sprintf("Sent data to %s", h.config.URL))
 			return nil
 		}
 		time.Sleep(1 * time.Second)
 	}
-	err = errors.New("failed to send data")
-	return err
+	if resp == nil {
+		return NewSendError(fmt.Sprintf("Failed to send data via http to %s, with no response", h.config.URL))
+	}
+	return NewSendError(fmt.Sprintf("Failed to send data via http to %s, with response %s", h.config.URL, resp.Status))
 }
 
 // ProducerMap is a map that contains functions to get Producers.
@@ -483,11 +487,12 @@ func (r *RabbitMQProducer) SendTo(data *AppData) error {
 		ContentType: "application/json",
 		Body:        gotData,
 	})
-	slog.Info("Successfully sent message", "details", fmt.Sprintf("Sent data to exchange: %s, routing key: %s", r.config.Exchange, r.config.RoutingKey))
 	if err != nil {
+		err = NewSendErrorFromError(err)
 		r.cancel(err)
 		return err
 	}
+	slog.Info("Successfully sent message", "details", fmt.Sprintf("Sent data to exchange: %s, routing key: %s", r.config.Exchange, r.config.RoutingKey))
 	return nil
 }
 
@@ -720,10 +725,11 @@ func (a *AMQPOneProducer) SendTo(data *AppData) error {
 		ContentType: &contentType,
 	}
 	err = a.sender.Send(a.ctx, msg, nil)
-	slog.Info("Successfully sent message", "details", fmt.Sprintf("Sent data to queue: %s", a.config.Queue))
 	if err != nil {
+		err = NewSendErrorFromError(err)
 		a.cancel(err)
 		return err
 	}
+	slog.Info("Successfully sent message", "details", fmt.Sprintf("Sent data to queue: %s", a.config.Queue))
 	return nil
 }

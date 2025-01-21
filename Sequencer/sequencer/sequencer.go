@@ -425,7 +425,7 @@ func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage) (map[s
 		incomingData := &IncomingData{}
 		err := json.Unmarshal(rawData, incomingData)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, Server.NewInvalidErrorFromError(err)
 		}
 		nodeIdToIncomingDataMap[incomingData.NodeId] = incomingData
 		_, ok := nodeIdToForwardRefMap[incomingData.NodeId]
@@ -533,16 +533,16 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 		return err
 	}
 	var rawDataArray []json.RawMessage
-	err = json.Unmarshal(rawData, &rawDataArray)
+	err = json.Unmarshal(rawData, &rawDataArray) 
 	if err != nil {
-		return errors.New("incoming data is not an array")
+		return Server.NewInvalidError("incoming data is not an array")
 	}
 	nodeIdToIncomingDataMap, rootNodes, err := convertToIncomingDataMapAndRootNodes(rawDataArray)
 	if err != nil {
 		return err
 	}
 	if len(rootNodes) == 0 {
-		return errors.New("no root nodes")
+		return Server.NewInvalidError("no root nodes")
 	}
 	appJSONArray := []map[string]any{}
 	groupAppliesMap := make(map[string]string)
@@ -585,7 +585,11 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 		return err
 	}
 	appData := Server.NewAppData(jsonData, "")
-	return s.pushable.SendTo(appData)
+	err = s.pushable.SendTo(appData)
+	if err != nil {
+		return Server.NewSendErrorFromError(err)
+	}
+	return nil
 }
 
 // getGroupAppliesValueFromAppJSON is a helper function that will get the value of the fieldToShare,
