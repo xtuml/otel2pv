@@ -156,6 +156,54 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 				t.Errorf("expected 2, got %d", gavc.Timeout)
 			}
 		})
+		t.Run("updateMaxTrees", func(t *testing.T) {
+			// test error case when maxTrees is not an int
+			config := map[string]any{
+				"maxTrees": "not an int",
+			}
+			gavc := GroupAndVerifyConfig{}
+			err := gavc.updateMaxTrees(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "maxTrees must be a positive integer" {
+				t.Errorf("expected maxTrees must be a positive integer, got %v", err)
+			}
+			// test error case when maxTrees is not a positive integer
+			config = map[string]any{
+				"maxTrees": -1,
+			}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.updateMaxTrees(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "maxTrees must be a positive integer" {
+				t.Errorf("expected maxTrees must be a positive integer, got %v", err)
+			}
+			// test case when maxTrees is a positive integer
+			config = map[string]any{
+				"maxTrees": 1,
+			}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.updateMaxTrees(config)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if gavc.MaxTrees != 1 {
+				t.Errorf("expected 1, got %d", gavc.MaxTrees)
+			}
+			// test default case when maxTrees is not present
+			config = map[string]any{}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.updateMaxTrees(config)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if gavc.MaxTrees != 0 {
+				t.Errorf("expected 0, got %d", gavc.MaxTrees)
+			}
+		})
 		t.Run("IngestConfig", func(t *testing.T) {
 			// test error case when config is nil
 			gavc := GroupAndVerifyConfig{}
@@ -1381,6 +1429,67 @@ func TestTasksHandler(t *testing.T) {
 	if err.Error() != "sendTo error for pushable" {
 		t.Fatalf("expected sendTo error for pushable, got %v", err)
 	}
+	t.Run("maxTrees", func(t *testing.T) {
+		// Test case where maxTrees is reached
+		taskChan = make(chan *Task, 2)
+		task1 := &Task{IncomingData: &IncomingData{TreeId: "tree1", NodeId: "node1", ChildIds: []string{"nodeNotPresent"}, AppJSON: json.RawMessage(`{"key1":"value1"}`)}, errChan: make(chan error, 1)}
+		task2 := &Task{IncomingData: &IncomingData{TreeId: "tree2", NodeId: "node2", AppJSON: json.RawMessage(`{"key2":"value2"}`)}, errChan: make(chan error, 1)}
+		taskChan <- task1
+		taskChan <- task2
+		close(taskChan)
+		pushable = &MockChanPushable{appDataChan: make(chan *Server.AppData, 2)}
+		config = &GroupAndVerifyConfig{parentVerifySet: map[string]bool{}, Timeout: 2, MaxTrees: 1}
+		tasksHandler(taskChan, config, pushable)
+		close(pushable.appDataChan)
+		seenNodes = map[string]bool{}
+		for appData := range pushable.appDataChan {
+			if appData == nil {
+				t.Fatalf("expected appData, got nil")
+			}
+			gotDataRaw, err := appData.GetData()
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			var outgoingData []*OutgoingData
+			err = json.Unmarshal(gotDataRaw, &outgoingData)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if len(outgoingData) != 1 {
+				t.Fatalf("expected 1, got %d", len(outgoingData))
+			}
+			outgoingDataEntry := outgoingData[0]
+			if outgoingDataEntry.NodeId == "node1" {
+				if !reflect.DeepEqual(outgoingDataEntry.AppJSON, json.RawMessage(`{"key1":"value1"}`)) {
+					t.Errorf("expected %v, got %v", json.RawMessage(`{"key1":"value1"}`), outgoingDataEntry.AppJSON)
+				}
+				if !reflect.DeepEqual(outgoingDataEntry.ChildIds, []string{"nodeNotPresent"}) {
+					t.Errorf("expected [nodeNotPresent], got %v", outgoingDataEntry.ChildIds)
+				}
+				seenNodes["node1"] = true
+
+			}
+		}
+		if !reflect.DeepEqual(seenNodes, map[string]bool{"node1": true}) {
+			t.Fatalf("expected map[string]bool{\"node1\": true}, got %v", seenNodes)
+		}
+		err = <-task1.errChan
+		if err != nil {
+			t.Fatalf("expected nil, got %v", err)
+		}
+		err = <-task2.errChan
+		if err == nil {
+			t.Fatalf("expected error, got nil")
+		}
+		if err.Error() != "max trees reached. MaxTrees: 1" {
+			t.Fatalf("expected max trees reached. MaxTrees: 1, got %v", err)
+		}
+		close(task1.errChan)
+		close(task2.errChan)
+		if _, ok := err.(*Server.FullError); !ok {
+			t.Fatalf("expected FullError, got %T", err)
+		}
+	})
 }
 
 // MockSourceServer is a mock implementation of the SourceServer interface

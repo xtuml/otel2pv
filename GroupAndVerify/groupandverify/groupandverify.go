@@ -124,10 +124,13 @@ type Task struct {
 // that do not require bidirectional confirmation.
 //
 // 3. Timeout: int. It is the time out for the processing of the tree.
+//
+// 4. MaxTrees: int. It is the maximum number of trees that can be processed at a time. If 0, then there is no limit.
 type GroupAndVerifyConfig struct {
 	orderChildrenByTimestamp bool
 	parentVerifySet          map[string]bool
 	Timeout                  int
+	MaxTrees				 int
 }
 
 // updateOrderChildrenByTimestamp is a method that is used to update the orderChildrenByTimestamp field
@@ -212,6 +215,33 @@ func (gavc *GroupAndVerifyConfig) updateTimeout(config map[string]any) error {
 	return nil
 }
 
+// updateMaxTrees is a method that is used to update the MaxTrees field of the GroupAndVerifyConfig
+// struct from config.
+//
+// Args:
+//
+// 1. config: map[string]any. It is a map that holds the raw configuration.
+//
+// Returns:
+//
+// 1. error. It returns an error if the configuration is invalid in any way.
+func (gavc *GroupAndVerifyConfig) updateMaxTrees(config map[string]any) error {
+	maxTreesRaw, ok := config["maxTrees"]
+	if ok {
+		maxTrees, ok := maxTreesRaw.(int)
+		if !ok {
+			return errors.New("maxTrees must be a positive integer")
+		}
+		if maxTrees < 0 {
+			return errors.New("maxTrees must be a positive integer")
+		}
+		gavc.MaxTrees = maxTrees
+	} else {
+		gavc.MaxTrees = 0
+	}
+	return nil
+}
+
 // IngestConfig is a method that is used to set the fields of the GroupAndVerifyConfig struct.
 //
 // Args:
@@ -235,6 +265,10 @@ func (gavc *GroupAndVerifyConfig) IngestConfig(config map[string]any) error {
 		return err
 	}
 	err = gavc.updateTimeout(config)
+	if err != nil {
+		return err
+	}
+	err = gavc.updateMaxTrees(config)
 	if err != nil {
 		return err
 	}
@@ -346,6 +380,10 @@ WORK:
 			incomingData := task.IncomingData
 			treeId := incomingData.TreeId
 			if _, ok := treeToTaskChannelMap[treeId]; !ok {
+				if config.MaxTrees != 0 && len(treeToTaskChannelMap) >= config.MaxTrees {
+					task.errChan <- Server.NewFullError(fmt.Sprintf("max trees reached. MaxTrees: %d", config.MaxTrees))
+					continue
+				}
 				treeToTaskChannelMap[treeId] = make(chan *Task)
 				// handle the tree in a separate goroutine and send the errors to all tasks gathered
 				wg.Add(1)
