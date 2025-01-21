@@ -635,17 +635,6 @@ func TestSequencer(t *testing.T) {
 			if err.Error() != "no root nodes" {
 				t.Errorf("Expected error message 'no root nodes', got %v", err.Error())
 			}
-			// check error case where sequenceWithStack returns an error
-			sequencer.config = &SequencerConfig{}
-			err = sequencer.SendTo(Server.NewAppData(
-				[]byte(`[{"nodeId":"1","childIds":["2"],"appJSON":{}}]`), "",
-			))
-			if err == nil {
-				t.Fatalf("Expected error from SendTo, got nil")
-			}
-			if err.Error() != "child node not found: 2" {
-				t.Errorf("Expected error message 'child node not found: 2', got %v", err.Error())
-			}
 			// check error case where getPrevIdData returns an error
 			sequencer.config = &SequencerConfig{}
 			appData := Server.NewAppData(
@@ -800,6 +789,37 @@ func TestSequencer(t *testing.T) {
 					t.Errorf("Expected share to be 'was shared', got %v", shared)
 				}
 			}
+			// check valid case with missing child
+			pushableChan = make(chan (*Server.AppData), 1)
+			sequencer = &Sequencer{
+				config: &SequencerConfig{
+					outputAppFieldSequenceType: String,
+					outputAppSequenceField:     "SeqField",
+				},
+				pushable: &MockPushable{
+					incomingData: pushableChan,
+				},
+			}
+			appData = Server.NewAppData(
+				[]byte(`[{"nodeId":"1","childIds":["2", "3", "4"],"appJSON":{}},{"nodeId":"2","appJSON":{}},{"nodeId":"4","appJSON":{}}]`), "",
+			)
+			err = sequencer.SendTo(appData)
+			if err != nil {
+				t.Errorf("Expected no error from SendTo, got %v", err)
+			}
+			close(pushableChan)
+			receivedAppData = <-pushableChan
+			if receivedAppData == nil {
+				t.Fatalf("Expected appData to be sent")
+			}
+			gotData, err = receivedAppData.GetData()
+			if err != nil {
+				t.Fatalf("Expected no error from GetData, got %v", err)
+			}
+			expectedData = []byte(`[{},{},{"SeqField":"4"}]`)
+			if !reflect.DeepEqual(gotData, expectedData) {
+				t.Errorf("Expected appData to be %v, got %v", expectedData, gotData)
+			}
 		})
 	})
 }
@@ -900,23 +920,32 @@ func TestSequenceWithStack(t *testing.T) {
 		sequence := sequenceWithStack(rootNode, nodeIdToIncomingDataMap)
 		counter := 0
 		for node, err := range sequence {
-			if node != nil {
-				t.Errorf("Expected node to be nil, got %v", node)
+			if err != nil {
+				t.Errorf("Expected no error from sequence, got %v", err)
 			}
-			if err == nil {
-				t.Fatalf("Expected error from sequence, got nil")
+			if node == nil {
+				t.Errorf("Expected node to be non-nil")
 			}
-			if err.Error() != "child node not found: 1" {
-				t.Errorf("Expected error message 'child node not found: 1', got %v", err.Error())
+			if counter == 0 {
+				if !node.IsDummy {
+					t.Errorf("Expected node to be a dummy node")
+				}
+				if node.NodeId != "1" {
+					t.Errorf("Expected node.NodeId to be '1', got %v", node.NodeId)
+				}
+			} else {
+				if node.IncomingData != rootNode {
+					t.Errorf("Expected node.IncomingData to be rootNode")
+				}
 			}
 			counter++
 		}
-		if counter != 1 {
+		if counter != 2 {
 			t.Fatalf("Expected counter to be 1, got %v", counter)
 		}
 	})
 	t.Run("childNodeIsNil", func(t *testing.T) {
-		// check error case when child node is nil
+		// check case when child node is nil
 		nodeIdToIncomingDataMap := map[string]*IncomingData{
 			"1": nil,
 		}
@@ -926,18 +955,27 @@ func TestSequenceWithStack(t *testing.T) {
 		sequence := sequenceWithStack(rootNode, nodeIdToIncomingDataMap)
 		counter := 0
 		for node, err := range sequence {
-			if node != nil {
-				t.Errorf("Expected node to be nil, got %v", node)
+			if err != nil {
+				t.Errorf("Expected no error from sequence, got %v", err)
 			}
-			if err == nil {
-				t.Fatalf("Expected error from sequence, got nil")
+			if node == nil {
+				t.Errorf("Expected node to be non-nil")
 			}
-			if err.Error() != "child node is nil: 1" {
-				t.Errorf("Expected error message 'child node is nil: 1', got %v", err.Error())
+			if counter == 0 {
+				if !node.IsDummy {
+					t.Errorf("Expected node to be a dummy node")
+				}
+				if node.NodeId != "1" {
+					t.Errorf("Expected node.NodeId to be '1', got %v", node.NodeId)
+				}
+			} else {
+				if node.IncomingData != rootNode {
+					t.Errorf("Expected node.IncomingData to be rootNode")
+				}
 			}
 			counter++
 		}
-		if counter != 1 {
+		if counter != 2 {
 			t.Fatalf("Expected counter to be 1, got %v", counter)
 		}
 	})
@@ -965,7 +1003,8 @@ func TestSequenceWithStack(t *testing.T) {
 		sequence := sequenceWithStack(rootNode, nodeIdToIncomingDataMap)
 		counter := 0
 		expectedSequence := []string{"4", "5", "2", "6", "7", "3", "1"}
-		for node, err := range sequence {
+		for member, err := range sequence {
+			node := member.IncomingData
 			if node != nodeIdToIncomingDataMap[expectedSequence[counter]] {
 				t.Errorf("Expected node to be %v, got %v", nodeIdToIncomingDataMap[expectedSequence[counter]], node)
 			}

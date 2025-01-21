@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"log/slog"
 	"strings"
 
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
@@ -325,6 +326,7 @@ func (id *IncomingData) UnmarshalJSON(data []byte) error {
 type stackIncomingData struct {
 	*IncomingData
 	currentChildIdIndex int
+	IsDummy			 bool
 }
 
 // nextChildId returns the next child id in the stackIncomingData
@@ -357,14 +359,14 @@ func (sid *stackIncomingData) nextChildId() (string, error) {
 // Returns:
 //
 // 1. iter.Seq2[*IncomingData, error]. The sequenced data as a generator
-func sequenceWithStack(rootNode *IncomingData, nodeIdToIncomingDataMap map[string]*IncomingData) iter.Seq2[*IncomingData, error] {
+func sequenceWithStack(rootNode *IncomingData, nodeIdToIncomingDataMap map[string]*IncomingData) iter.Seq2[*stackIncomingData, error] {
 	if rootNode == nil {
-		return func(yield func(*IncomingData, error) bool) {
+		return func(yield func(*stackIncomingData, error) bool) {
 			yield(nil, errors.New("root node not set"))
 		}
 	}
 	if nodeIdToIncomingDataMap == nil {
-		return func(yield func(*IncomingData, error) bool) {
+		return func(yield func(*stackIncomingData, error) bool) {
 			yield(nil, errors.New("nodeIdToIncomingDataMap not set"))
 		}
 	}
@@ -374,25 +376,26 @@ func sequenceWithStack(rootNode *IncomingData, nodeIdToIncomingDataMap map[strin
 			currentChildIdIndex: 0,
 		},
 	}
-	return func(yield func(*IncomingData, error) bool) {
+	return func(yield func(*stackIncomingData, error) bool) {
 		for len(stack) > 0 {
 			top := stack[len(stack)-1]
 			childId, err := top.nextChildId()
 			if err != nil {
 				stack = stack[:len(stack)-1]
-				if !yield(top.IncomingData, nil) {
+				if !yield(top, nil) {
 					return
 				}
 				continue
 			}
 			childNode, ok := nodeIdToIncomingDataMap[childId]
-			if !ok {
-				yield(nil, fmt.Errorf("child node not found: %s", childId))
-				return
-			}
-			if childNode == nil {
-				yield(nil, fmt.Errorf("child node is nil: %s", childId))
-				return
+			if !ok || childNode == nil {
+				stack = append(stack, &stackIncomingData{
+					IncomingData: &IncomingData{
+						NodeId: childId,
+					},
+					IsDummy: true,
+				})
+				continue
 			}
 			stack = append(stack, &stackIncomingData{
 				IncomingData:        childNode,
@@ -549,7 +552,13 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 	groupAppliesMap := make(map[string]string)
 	for _, rootIncomingData := range rootNodes {
 		var prevIncomingData *IncomingData
-		for incomingData, err := range sequenceWithStack(rootIncomingData, nodeIdToIncomingDataMap) {
+		for stackIncomingData, err := range sequenceWithStack(rootIncomingData, nodeIdToIncomingDataMap) {
+			if stackIncomingData.IsDummy {
+				slog.Warn("child node not present in data", "details" , fmt.Sprintf("childId=%s", stackIncomingData.NodeId))
+				prevIncomingData = nil
+				continue
+			}
+			incomingData := stackIncomingData.IncomingData
 			if err != nil {
 				return err
 			}
