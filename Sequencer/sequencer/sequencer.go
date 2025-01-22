@@ -630,3 +630,43 @@ func getGroupApplyValueFromAppJSON(appJSON map[string]any, groupApply GroupApply
 	}
 	return fieldValue, nil
 }
+
+// orderChildrenByTimestamp is a helper function that will order the children of the incoming data
+// by their timestamp. It returns an error if the ordering fails.
+//
+// Args:
+//
+// 1. incomingData: *IncomingData. The incoming data to order the children of.
+//
+// 2. nodeIdToIncomingDataMap: map[string]*IncomingData. The map of node ids to incoming data.
+//
+// Returns:
+//
+// 1. error. The error if the ordering fails.
+func orderChildrenByTimestamp(incomingData *IncomingData, nodeIdToIncomingDataMap map[string]*IncomingData) error {
+	if len(incomingData.ChildIds) == 0 {
+		return nil
+	}
+	childIdToTimestampMap := make(map[string]int)
+	for _, childId := range incomingData.ChildIds {
+		childNode, ok := nodeIdToIncomingDataMap[childId]
+		if !ok || childNode == nil {
+			return fmt.Errorf("child node %s not found but attempting to order children by timestamp", childId)
+		}
+		if childNode.Timestamp == 0 {
+			return fmt.Errorf("child node %s has no timestamp but attempting to order children by timestamp", childId)
+		}
+		childIdToTimestampMap[childId] = childNode.Timestamp
+	}
+	orderedChildIds := make([]string, len(incomingData.ChildIds))
+	copy(orderedChildIds, incomingData.ChildIds)
+	for i := 0; i < len(orderedChildIds); i++ {
+		for j := i + 1; j < len(orderedChildIds); j++ {
+			if childIdToTimestampMap[orderedChildIds[i]] > childIdToTimestampMap[orderedChildIds[j]] {
+				orderedChildIds[i], orderedChildIds[j] = orderedChildIds[j], orderedChildIds[i]
+			}
+		}
+	}
+	incomingData.ChildIds = orderedChildIds
+	return nil
+}

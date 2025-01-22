@@ -1481,3 +1481,59 @@ func TestGetGroupApplyValueFromAppJSON(t *testing.T) {
 		t.Errorf("Expected value to be 'fieldValue', got %v", value)
 	}
 }
+
+// Test orderChildrenByTimestamp
+func TestOrderChildrenByTimestamp(t *testing.T) {
+	// Test case: len of children is 0
+	incomingData := &IncomingData{}
+	err := orderChildrenByTimestamp(incomingData, map[string]*IncomingData{})
+	if err != nil {
+		t.Fatalf("Expected no error from orderChildrenByTimestamp, got %v", err)
+	}
+	if len(incomingData.ChildIds) != 0 {
+		t.Errorf("Expected incomingData.ChildIds to be empty, got %v", incomingData.ChildIds)
+	}
+	// Test case: childId is not found in nodeIdToIncomingDataMap
+	incomingData = &IncomingData{
+		ChildIds: []string{"1"},
+	}
+	err = orderChildrenByTimestamp(incomingData, map[string]*IncomingData{})
+	if err == nil {
+		t.Fatalf("Expected error from orderChildrenByTimestamp, got nil")
+	}
+	if err.Error() != "child node 1 not found but attempting to order children by timestamp" {
+		t.Errorf("Expected error message 'child node 1 not found but attempting to order children by timestamp', got %v", err.Error())
+	}
+	// Test case: child Timestamp is not set
+	incomingData = &IncomingData{
+		ChildIds: []string{"1"},
+	}
+	err = orderChildrenByTimestamp(incomingData, map[string]*IncomingData{
+		"1": {
+			NodeId: "1",
+		},
+	})
+	if err == nil {
+		t.Fatalf("Expected error from orderChildrenByTimestamp, got nil")
+	}
+	if err.Error() != "child node 1 has no timestamp but attempting to order children by timestamp" {
+		t.Errorf("Expected error message 'child node 1 has no timestamp but attempting to order children by timestamp', got %v", err.Error())
+	}
+	// Test case: valid case
+	incomingData = &IncomingData{
+		ChildIds: []string{"1", "2", "3", "4"},
+	}
+	nodeIdToIncomingDataMap := map[string]*IncomingData{
+		"1": {Timestamp: 3},
+		"2": {Timestamp: 1},
+		"3": {Timestamp: 4},
+		"4": {Timestamp: 2},
+	}
+	err = orderChildrenByTimestamp(incomingData, nodeIdToIncomingDataMap)
+	if err != nil {
+		t.Fatalf("Expected no error from orderChildrenByTimestamp, got %v", err)
+	}
+	if !reflect.DeepEqual(incomingData.ChildIds, []string{"2", "4", "1", "3"}) {
+		t.Errorf("Expected incomingData.ChildIds to be ['2', '4', '1', '3'], got %v", incomingData.ChildIds)
+	}
+}

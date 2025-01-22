@@ -24,39 +24,6 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 				t.Errorf("GroupAndVerifyConfig does not implement Server.Config")
 			}
 		})
-		t.Run("updateOrderChildrenByTimestamp", func(t *testing.T) {
-			// test error case when orderChildrenByTimestamp is not a boolean
-			config := map[string]any{
-				"orderChildrenByTimestamp": "not a boolean",
-			}
-			gavc := GroupAndVerifyConfig{}
-			err := gavc.updateOrderChildrenByTimestamp(config)
-			if err == nil {
-				t.Errorf("expected error, got nil")
-			}
-			// test case when orderChildrenByTimestamp is a true boolean
-			config = map[string]any{
-				"orderChildrenByTimestamp": true,
-			}
-			gavc = GroupAndVerifyConfig{}
-			err = gavc.updateOrderChildrenByTimestamp(config)
-			if err != nil {
-				t.Errorf("expected nil, got %v", err)
-			}
-			if !gavc.orderChildrenByTimestamp {
-				t.Errorf("expected true, got false")
-			}
-			// test case when orderChildrenByTimestamp is not present and should default to false
-			config = map[string]any{}
-			gavc = GroupAndVerifyConfig{}
-			err = gavc.updateOrderChildrenByTimestamp(config)
-			if err != nil {
-				t.Errorf("expected nil, got %v", err)
-			}
-			if gavc.orderChildrenByTimestamp {
-				t.Errorf("expected false, got true")
-			}
-		})
 		t.Run("updateParentVerifySet", func(t *testing.T) {
 			// test error case when parentVerifySet is not an array
 			config := map[string]any{
@@ -214,17 +181,8 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 			if err.Error() != "config is nil" {
 				t.Errorf("expected config is nil, got %v", err)
 			}
-			// test error case when updateOrderChildrenByTimestamp returns an error
-			config := map[string]any{
-				"orderChildrenByTimestamp": "not a boolean",
-			}
-			gavc = GroupAndVerifyConfig{}
-			err = gavc.IngestConfig(config)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
 			// test error case when updateParentVerifySet returns an error
-			config = map[string]any{
+			config := map[string]any{
 				"parentVerifySet": "not an array",
 			}
 			gavc = GroupAndVerifyConfig{}
@@ -243,7 +201,6 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 			}
 			// test case when all update functions return no error
 			config = map[string]any{
-				"orderChildrenByTimestamp": true,
 				"parentVerifySet": []any{"string"},
 				"Timeout":         1,
 			}
@@ -251,9 +208,6 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 			err = gavc.IngestConfig(config)
 			if err != nil {
 				t.Fatalf("expected nil, got %v", err)
-			}
-			if !gavc.orderChildrenByTimestamp {
-				t.Errorf("expected true, got false")
 			}
 			if len(gavc.parentVerifySet) != 1 {
 				t.Fatalf("expected 1, got %d", len(gavc.parentVerifySet))

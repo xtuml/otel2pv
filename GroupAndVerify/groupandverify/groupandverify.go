@@ -117,43 +117,16 @@ type Task struct {
 // GroupAndVerifyConfig is a struct that is used to hold the configuration for the GroupAndVerify
 // component. It has the following fields:
 //
-// 1. orderChildrenByTimestamp: bool. It is a boolean that determines if the orderedChildIds array
-// should be ordered on the basis of timestamp.
-//
-// 2. parentVerifySet: map[string]bool. It is a map that holds the identifiers of the nodes (NodeTypes)
+// 1. parentVerifySet: map[string]bool. It is a map that holds the identifiers of the nodes (NodeTypes)
 // that do not require bidirectional confirmation.
 //
-// 3. Timeout: int. It is the time out for the processing of the tree.
+// 2. Timeout: int. It is the time out for the processing of the tree.
 //
-// 4. MaxTrees: int. It is the maximum number of trees that can be processed at a time. If 0, then there is no limit.
+// 3. MaxTrees: int. It is the maximum number of trees that can be processed at a time. If 0, then there is no limit.
 type GroupAndVerifyConfig struct {
-	orderChildrenByTimestamp bool
 	parentVerifySet          map[string]bool
 	Timeout                  int
 	MaxTrees				 int
-}
-
-// updateOrderChildrenByTimestamp is a method that is used to update the orderChildrenByTimestamp field
-// of the GroupAndVerifyConfig struct from config.
-//
-// Args:
-//
-// 1. config: map[string]any. It is a map that holds the raw configuration.
-//
-// Returns:
-//
-// 1. error. It returns an error if the configuration is invalid in any way.
-func (gavc *GroupAndVerifyConfig) updateOrderChildrenByTimestamp(config map[string]any) error {
-	orderChildrenByTimestampRaw, ok := config["orderChildrenByTimestamp"]
-
-	if ok {
-		orderChildrenByTimestamp, ok := orderChildrenByTimestampRaw.(bool)
-		if !ok {
-			return errors.New("orderChildrenByTimestamp is not a boolean")
-		}
-		gavc.orderChildrenByTimestamp = orderChildrenByTimestamp
-	}
-	return nil
 }
 
 // updateParentVerifySet is a method that is used to update the parentVerifySet field of the GroupAndVerifyConfig
@@ -256,11 +229,7 @@ func (gavc *GroupAndVerifyConfig) IngestConfig(config map[string]any) error {
 	if config == nil {
 		return errors.New("config is nil")
 	}
-	err := gavc.updateOrderChildrenByTimestamp(config)
-	if err != nil {
-		return err
-	}
-	err = gavc.updateParentVerifySet(config)
+	err := gavc.updateParentVerifySet(config)
 	if err != nil {
 		return err
 	}
