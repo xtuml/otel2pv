@@ -66,6 +66,18 @@ type GroupApply struct {
 	ValueOfIdentifyingField string
 }
 
+// childrenByBackwardsLink is a struct to hold the information on whether to use backwards links to set children
+// or not.
+// It has the following fields:
+//
+// 1. All: bool. If true, then perform this for all nodes.
+//
+// 2. NodeTypes: map[string]bool. If All is false, then perform this for the node types in the map.
+type childrenByBackwardsLink struct {
+	All       bool
+	NodeTypes map[string]bool
+}
+
 // SequencerConfig is a struct that represents the configuration for a Sequencer.
 // It has the following fields:
 //
@@ -84,6 +96,7 @@ type SequencerConfig struct {
 	outputAppFieldSequenceIdMap string
 	outputAppFieldSequenceType  OutputAppFieldSequenceType
 	groupApplies                map[string]GroupApply
+	ChildrenByBackwardsLink     childrenByBackwardsLink
 }
 
 // updateGroupApplies is a method that is used to update the groupApplies field of the SequencerConfig
@@ -144,6 +157,59 @@ func (s *SequencerConfig) updateGroupApplies(config map[string]any) error {
 	return nil
 }
 
+// updateChildrenByBackwardsLink is a method that is used to update the ChildrenByBackwardsLink field of the SequencerConfig
+// struct from config.
+//
+// Args:
+//
+// 1. config: map[string]any. It is a map that holds the raw configuration.
+//
+// Returns:
+//
+// 1. error. It returns an error if the configuration is invalid in any way.
+func (s *SequencerConfig) updateChildrenByBackwardsLink(config map[string]any) error {
+	childrenByBackwardsLinkRaw, ok := config["childrenByBackwardsLink"]
+	if !ok {
+		s.ChildrenByBackwardsLink = childrenByBackwardsLink{
+			NodeTypes: map[string]bool{},
+		}
+		return nil
+	}
+	childrenByBackwardsLinkMap, ok := childrenByBackwardsLinkRaw.(map[string]any)
+	if !ok {
+		return errors.New("childrenByBackwardsLink is not a map")
+	}
+	var all bool
+	allRaw, ok := childrenByBackwardsLinkMap["all"]
+	if ok {
+		all, ok = allRaw.(bool)
+		if !ok {
+			return errors.New("field \"all\" in childrenByBackwardsLink is not a boolean")
+		}
+	}
+	nodeTypesMap := make(map[string]bool)
+	nodeTypesRaw, ok := childrenByBackwardsLinkMap["nodeTypes"]
+	if ok {
+		nodeTypes, ok := nodeTypesRaw.([]any)
+		if !ok {
+			return errors.New("nodeTypes in childrenByBackwardsLink is not an array of strings")
+		}
+		for _, nodeType := range nodeTypes {
+			nodeTypeString, ok := nodeType.(string)
+			if !ok {
+				return errors.New("nodeTypes in childrenByBackwardsLink is not an array of strings")
+			}
+
+			nodeTypesMap[nodeTypeString] = true
+		}
+	}
+	s.ChildrenByBackwardsLink = childrenByBackwardsLink{
+		All:       all,
+		NodeTypes: nodeTypesMap,
+	}
+	return nil
+}
+
 // IngestConfig ingests the configuration for the SequencerConfig.
 // Returns an error if the configuration is invalid.
 //
@@ -183,6 +249,10 @@ func (sc *SequencerConfig) IngestConfig(config map[string]any) error {
 		sc.outputAppFieldSequenceType = ofst
 	}
 	err := sc.updateGroupApplies(config)
+	if err != nil {
+		return err
+	}
+	err = sc.updateChildrenByBackwardsLink(config)
 	if err != nil {
 		return err
 	}
@@ -326,7 +396,7 @@ func (id *IncomingData) UnmarshalJSON(data []byte) error {
 type stackIncomingData struct {
 	*IncomingData
 	currentChildIdIndex int
-	IsDummy			 bool
+	IsDummy             bool
 }
 
 // nextChildId returns the next child id in the stackIncomingData
@@ -421,15 +491,30 @@ func sequenceWithStack(rootNode *IncomingData, nodeIdToIncomingDataMap map[strin
 // 2. map[string]*IncomingData. The converted data mapping node id to incoming data with no forward references i.e. root nodes
 //
 // 3. error. The error if the conversion fails
-func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage) (map[string]*IncomingData, map[string]*IncomingData, error) {
+func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage, childrenBybackwardsLink *childrenByBackwardsLink) (map[string]*IncomingData, map[string]*IncomingData, error) {
 	nodeIdToIncomingDataMap := make(map[string]*IncomingData)
 	nodeIdToNoForwardRefMap := make(map[string]*IncomingData)
 	nodeIdToForwardRefMap := make(map[string]bool)
+	backwardsLinks := make(map[string][]string)
+	nodeTypeToNodeMap := make(map[string][]*IncomingData)
 	for _, rawData := range rawDataArray {
 		incomingData := &IncomingData{}
 		err := json.Unmarshal(rawData, incomingData)
 		if err != nil {
 			return nil, nil, Server.NewInvalidErrorFromError(err)
+		}
+		if incomingData.ParentId != "" {
+			_, ok := backwardsLinks[incomingData.ParentId]
+			if !ok {
+				backwardsLinks[incomingData.ParentId] = []string{}
+			}
+			backwardsLinks[incomingData.ParentId] = append(backwardsLinks[incomingData.ParentId], incomingData.NodeId)
+		}
+		if _, ok := childrenBybackwardsLink.NodeTypes[incomingData.NodeType]; ok && !childrenBybackwardsLink.All {
+			if !ok {
+				nodeTypeToNodeMap[incomingData.NodeType] = []*IncomingData{}
+			}
+			nodeTypeToNodeMap[incomingData.NodeType] = append(nodeTypeToNodeMap[incomingData.NodeType], incomingData)
 		}
 		nodeIdToIncomingDataMap[incomingData.NodeId] = incomingData
 		_, ok := nodeIdToForwardRefMap[incomingData.NodeId]
@@ -443,7 +528,47 @@ func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage) (map[s
 				delete(nodeIdToNoForwardRefMap, childId)
 			}
 		}
-
+	}
+	if childrenBybackwardsLink.All {
+		for parentId, childIds := range backwardsLinks {
+			parentNode, ok := nodeIdToIncomingDataMap[parentId]
+			if !ok {
+				for _, childId := range childIds {
+					nodeIdToNoForwardRefMap[childId] = nodeIdToIncomingDataMap[childId]
+				}
+				continue
+			}
+			parentNode.ChildIds = childIds
+			for _, childId := range childIds {
+				if _, ok := nodeIdToIncomingDataMap[childId]; ok {
+					delete(nodeIdToNoForwardRefMap, childId)
+				}
+			}
+			err := orderChildrenByTimestamp(parentNode, nodeIdToIncomingDataMap)
+			if err != nil {
+				return nil, nil, Server.NewInvalidErrorFromError(err)
+			}
+		}
+	} else if len(childrenBybackwardsLink.NodeTypes) != 0 {
+		for _, nodes := range nodeTypeToNodeMap {
+			for _, node := range nodes {
+				childIds, ok := backwardsLinks[node.NodeId]
+				if !ok {
+					node.ChildIds = []string{}
+				} else {
+					node.ChildIds = childIds
+				}
+				for _, childId := range node.ChildIds {
+					if _, ok := nodeIdToIncomingDataMap[childId]; ok {
+						delete(nodeIdToNoForwardRefMap, childId)
+					}
+				}
+				err := orderChildrenByTimestamp(node, nodeIdToIncomingDataMap)
+				if err != nil {
+					return nil, nil, Server.NewInvalidErrorFromError(err)
+				}
+			}
+		}
 	}
 	return nodeIdToIncomingDataMap, nodeIdToNoForwardRefMap, nil
 }
@@ -541,7 +666,7 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 	if err != nil {
 		return Server.NewInvalidError("incoming data is not an array")
 	}
-	nodeIdToIncomingDataMap, rootNodes, err := convertToIncomingDataMapAndRootNodes(rawDataArray)
+	nodeIdToIncomingDataMap, rootNodes, err := convertToIncomingDataMapAndRootNodes(rawDataArray, &s.config.ChildrenByBackwardsLink)
 	if err != nil {
 		return err
 	}
@@ -554,7 +679,7 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 		var prevIncomingData *IncomingData
 		for stackIncomingData, err := range sequenceWithStack(rootIncomingData, nodeIdToIncomingDataMap) {
 			if stackIncomingData.IsDummy {
-				slog.Warn("child node not present in data", "details" , fmt.Sprintf("childId=%s", stackIncomingData.NodeId))
+				slog.Warn("child node not present in data", "details", fmt.Sprintf("childId=%s", stackIncomingData.NodeId))
 				prevIncomingData = nil
 				continue
 			}

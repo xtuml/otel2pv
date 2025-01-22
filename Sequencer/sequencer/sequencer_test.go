@@ -310,144 +310,235 @@ func TestSequencerConfig(t *testing.T) {
 				t.Fatalf("expected 0, got %d", len(sequencer.groupApplies))
 			}
 		})
+		t.Run("updateChildrenByBackwardsLink", func(t *testing.T) {
+			// test error case when childrenByBackwardsLink is not a map
+			config := map[string]any{
+				"childrenByBackwardsLink": "not map",
+			}
+			sequencer := SequencerConfig{}
+			err := sequencer.updateChildrenByBackwardsLink(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "childrenByBackwardsLink is not a map" {
+				t.Errorf("expected childrenByBackwardsLink is not a map, got %v", err)
+			}
+			// test error when the map contains the field "all" but it is not a boolean
+			config = map[string]any{
+				"childrenByBackwardsLink": map[string]any{
+					"all": "not boolean",
+				},
+			}
+			sequencer = SequencerConfig{}
+			err = sequencer.updateChildrenByBackwardsLink(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "field \"all\" in childrenByBackwardsLink is not a boolean" {
+				t.Errorf("expected field \"all\" in childrenByBackwardsLink is not a boolean, got %v", err)
+			}
+			// test error when nodeTypes field exists but it is not an array of strings
+			config = map[string]any{
+				"childrenByBackwardsLink": map[string]any{
+					"nodeTypes": "not array",
+				},
+			}
+			sequencer = SequencerConfig{}
+			err = sequencer.updateChildrenByBackwardsLink(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "nodeTypes in childrenByBackwardsLink is not an array of strings" {
+				t.Errorf("expected nodeTypes in childrenByBackwardsLink is not an array of strings, got %v", err)
+			}
+			// test default case when childrenByBackwardsLink is not present
+			config = map[string]any{}
+			sequencer = SequencerConfig{}
+			err = sequencer.updateChildrenByBackwardsLink(config)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if sequencer.ChildrenByBackwardsLink.All {
+				t.Fatalf("expected false, got %v", sequencer.ChildrenByBackwardsLink.All)
+			}
+			if len(sequencer.ChildrenByBackwardsLink.NodeTypes) != 0 {
+				t.Fatalf("expected 0, got %d", len(sequencer.ChildrenByBackwardsLink.NodeTypes))
+			}
+			// test defaults when childrenByBackwardsLink is present
+			config = map[string]any{
+				"childrenByBackwardsLink": map[string]any{},
+			}
+			sequencer = SequencerConfig{}
+			err = sequencer.updateChildrenByBackwardsLink(config)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if sequencer.ChildrenByBackwardsLink.All {
+				t.Fatalf("expected false, got %v", sequencer.ChildrenByBackwardsLink.All)
+			}
+			if len(sequencer.ChildrenByBackwardsLink.NodeTypes) != 0 {
+				t.Fatalf("expected 0, got %d", len(sequencer.ChildrenByBackwardsLink.NodeTypes))
+			}
+			// test case when seeting "all" and "nodeTypes"
+			config = map[string]any{
+				"childrenByBackwardsLink": map[string]any{
+					"all":       true,
+					"nodeTypes": []any{"type1", "type2"},
+				},
+			}
+			sequencer = SequencerConfig{}
+			err = sequencer.updateChildrenByBackwardsLink(config)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if !sequencer.ChildrenByBackwardsLink.All {
+				t.Fatalf("expected true, got %v", sequencer.ChildrenByBackwardsLink.All)
+			}
+			if !reflect.DeepEqual(sequencer.ChildrenByBackwardsLink.NodeTypes, map[string]bool{
+				"type1": true,
+				"type2": true,
+			}) {
+				t.Fatalf("expected map[string]bool{\"type1\": true, \"type2\": true}, got %v", sequencer.ChildrenByBackwardsLink.NodeTypes)
+			}
+		})
 	})
 }
 
 // Tests for IncomingData
-func TestIncomingData (t *testing.T) {
+func TestIncomingData(t *testing.T) {
 	t.Run("UnmarshalJSON", func(t *testing.T) {
 		tests := []struct {
-			name    string
-			data    []byte
-			wantErr bool
+			name       string
+			data       []byte
+			wantErr    bool
 			errMessage string
-			expected *IncomingData
+			expected   *IncomingData
 		}{
 			{
-				name: "validAllFieldsPresent",
-				data: []byte(`{"nodeId":"1","parentId":"3","childIds":["2"], "nodeType":"type", "timestamp":1, "appJSON":{}}`),
-				wantErr: false,
+				name:       "validAllFieldsPresent",
+				data:       []byte(`{"nodeId":"1","parentId":"3","childIds":["2"], "nodeType":"type", "timestamp":1, "appJSON":{}}`),
+				wantErr:    false,
 				errMessage: "",
 				expected: &IncomingData{
-					NodeId: "1",
-					ParentId: "3",
-					ChildIds: []string{"2"},
-					NodeType: "type",
+					NodeId:    "1",
+					ParentId:  "3",
+					ChildIds:  []string{"2"},
+					NodeType:  "type",
 					Timestamp: 1,
-					AppJSON: map[string]any{},
+					AppJSON:   map[string]any{},
 				},
 			},
 			{
-				name: "validAllOptionalFieldsNotPresent",
-				data: []byte(`{"nodeId":"1","appJSON":{}}`),
-				wantErr: false,
+				name:       "validAllOptionalFieldsNotPresent",
+				data:       []byte(`{"nodeId":"1","appJSON":{}}`),
+				wantErr:    false,
 				errMessage: "",
 				expected: &IncomingData{
-					NodeId: "1",
-					ParentId: "",
-					ChildIds: []string{},
-					NodeType: "",
+					NodeId:    "1",
+					ParentId:  "",
+					ChildIds:  []string{},
+					NodeType:  "",
 					Timestamp: 0,
-					AppJSON: map[string]any{},
+					AppJSON:   map[string]any{},
 				},
 			},
 			{
-				name: "validAllOptionalFieldsNull",
-				data: []byte(`{"nodeId":"1","parentId":null,"childIds":null,"nodeType":null,"timestamp":null,"appJSON":{}}`),
-				wantErr: false,
+				name:       "validAllOptionalFieldsNull",
+				data:       []byte(`{"nodeId":"1","parentId":null,"childIds":null,"nodeType":null,"timestamp":null,"appJSON":{}}`),
+				wantErr:    false,
 				errMessage: "",
 				expected: &IncomingData{
-					NodeId: "1",
-					ParentId: "",
-					ChildIds: []string{},
-					NodeType: "",
+					NodeId:    "1",
+					ParentId:  "",
+					ChildIds:  []string{},
+					NodeType:  "",
 					Timestamp: 0,
-					AppJSON: map[string]any{},
+					AppJSON:   map[string]any{},
 				},
 			},
 			{
-				name: "validTreeIdPresent",
-				data: []byte(`{"nodeId":"1", "appJSON":{},"treeId":"tree"}`),
-				wantErr: false,
+				name:       "validTreeIdPresent",
+				data:       []byte(`{"nodeId":"1", "appJSON":{},"treeId":"tree"}`),
+				wantErr:    false,
 				errMessage: "",
 				expected: &IncomingData{
-					NodeId: "1",
-					ParentId: "",
-					ChildIds: []string{},
-					NodeType: "",
+					NodeId:    "1",
+					ParentId:  "",
+					ChildIds:  []string{},
+					NodeType:  "",
 					Timestamp: 0,
-					AppJSON: map[string]any{},
+					AppJSON:   map[string]any{},
 				},
 			},
 			{
-				name: "invalidNodeIdNotString",
-				data: []byte(`{"nodeId":1,"appJSON":{}}`),
-				wantErr: true,
+				name:       "invalidNodeIdNotString",
+				data:       []byte(`{"nodeId":1,"appJSON":{}}`),
+				wantErr:    true,
 				errMessage: "json: cannot unmarshal number into Go struct field IncomingData.nodeId of type string",
-				expected: nil,
+				expected:   nil,
 			},
 			{
-				name: "invalidParentIdNotString",
-				data: []byte(`{"nodeId":"1","parentId":1,"appJSON":{}}`),
-				wantErr: true,
+				name:       "invalidParentIdNotString",
+				data:       []byte(`{"nodeId":"1","parentId":1,"appJSON":{}}`),
+				wantErr:    true,
 				errMessage: "json: cannot unmarshal number into Go struct field IncomingData.parentId of type string",
-				expected: nil,
+				expected:   nil,
 			},
 			{
-				name: "invalidChildIdsNotArray",
-				data: []byte(`{"nodeId":"1","childIds":1,"appJSON":{}}`),
-				wantErr: true,
+				name:       "invalidChildIdsNotArray",
+				data:       []byte(`{"nodeId":"1","childIds":1,"appJSON":{}}`),
+				wantErr:    true,
 				errMessage: "json: cannot unmarshal number into Go struct field IncomingData.childIds of type []string",
-				expected: nil,
+				expected:   nil,
 			},
 			{
-				name: "invalidChildIdsNotString",
-				data: []byte(`{"nodeId":"1","childIds":[1],"appJSON":{}}`),
-				wantErr: true,
+				name:       "invalidChildIdsNotString",
+				data:       []byte(`{"nodeId":"1","childIds":[1],"appJSON":{}}`),
+				wantErr:    true,
 				errMessage: "json: cannot unmarshal number into Go struct field IncomingData.childIds of type string",
-				expected: nil,
+				expected:   nil,
 			},
 			{
-				name: "invalidNodeTypeNotString",
-				data: []byte(`{"nodeId":"1","nodeType":1,"appJSON":{}}`),
-				wantErr: true,
+				name:       "invalidNodeTypeNotString",
+				data:       []byte(`{"nodeId":"1","nodeType":1,"appJSON":{}}`),
+				wantErr:    true,
 				errMessage: "json: cannot unmarshal number into Go struct field IncomingData.nodeType of type string",
-				expected: nil,
+				expected:   nil,
 			},
 			{
-				name: "invalidTimestampNotNumber",
-				data: []byte(`{"nodeId":"1","timestamp":"1","appJSON":{}}`),
-				wantErr: true,
+				name:       "invalidTimestampNotNumber",
+				data:       []byte(`{"nodeId":"1","timestamp":"1","appJSON":{}}`),
+				wantErr:    true,
 				errMessage: "json: cannot unmarshal string into Go struct field IncomingData.timestamp of type int",
-				expected: nil,
+				expected:   nil,
 			},
 			{
-				name: "invalidAppJSONNotMap",
-				data: []byte(`{"nodeId":"1","appJSON":1}`),
-				wantErr: true,
+				name:       "invalidAppJSONNotMap",
+				data:       []byte(`{"nodeId":"1","appJSON":1}`),
+				wantErr:    true,
 				errMessage: "json: cannot unmarshal number into Go struct field IncomingData.appJSON of type map[string]interface {}",
-				expected: nil,
+				expected:   nil,
 			},
 			{
-				name: "invalidUnknownField",
-				data: []byte(`{"nodeId":"1","unknown":1,"appJSON":{}}`),
-				wantErr: true,
+				name:       "invalidUnknownField",
+				data:       []byte(`{"nodeId":"1","unknown":1,"appJSON":{}}`),
+				wantErr:    true,
 				errMessage: "json: unknown field \"unknown\"",
-				expected: nil,
+				expected:   nil,
 			},
 			{
-				name: "invalidNodeIdNotPresent",
-				data: []byte(`{"appJSON":{}}`),
-				wantErr: true,
+				name:       "invalidNodeIdNotPresent",
+				data:       []byte(`{"appJSON":{}}`),
+				wantErr:    true,
 				errMessage: "nodeId is required",
-				expected: nil,
+				expected:   nil,
 			},
 			{
-				name: "invalidAppJSONNotPresent",
-				data: []byte(`{"nodeId":"1"}`),
-				wantErr: true,
+				name:       "invalidAppJSONNotPresent",
+				data:       []byte(`{"nodeId":"1"}`),
+				wantErr:    true,
 				errMessage: "appJSON is required",
-				expected: nil,
+				expected:   nil,
 			},
 		}
 		for _, tt := range tests {
@@ -483,7 +574,7 @@ func TestIncomingData (t *testing.T) {
 						}
 					}
 				} else {
-					if !tt.wantErr{
+					if !tt.wantErr {
 						t.Fatalf("IncomingData.UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
 					}
 					if err.Error() != tt.errMessage {
@@ -1023,7 +1114,7 @@ func TestSequenceWithStack(t *testing.T) {
 func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 	t.Run("invalidData", func(t *testing.T) {
 		// check error case where unmarshalling returns an error
-		_, _, err := convertToIncomingDataMapAndRootNodes([]json.RawMessage{json.RawMessage(`1`)})
+		_, _, err := convertToIncomingDataMapAndRootNodes([]json.RawMessage{json.RawMessage(`1`)}, &childrenByBackwardsLink{})
 		if err == nil {
 			t.Fatalf("Expected error from convertAppDataToIncomingDataMapAndRootNodes, got nil")
 		}
@@ -1059,7 +1150,7 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Expected no error from Unmarshal, got %v", err)
 		}
-		incomingDataMap, rootNodes, err := convertToIncomingDataMapAndRootNodes(rawDataArray)
+		incomingDataMap, rootNodes, err := convertToIncomingDataMapAndRootNodes(rawDataArray, &childrenByBackwardsLink{})
 		if err != nil {
 			t.Errorf("Expected no error from convertAppDataToIncomingDataMapAndRootNodes, got %v", err)
 		}
@@ -1095,6 +1186,135 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 		}
 		if rootNode != incomingDataMap["1"] {
 			t.Errorf("Expected rootNode to be %v, got %v", incomingDataMap["1"], rootNode)
+		}
+	})
+	t.Run("childrenByBackwardsLink", func(t *testing.T) {
+		tests := []struct {
+			name                    string
+			childrenByBackwardsLink *childrenByBackwardsLink
+		}{
+			{
+				name: "allSetToTrue",
+				childrenByBackwardsLink: &childrenByBackwardsLink{
+					All: true,
+				},
+			},
+			{
+				name: "allSetToFalseNodeTypesGiven",
+				childrenByBackwardsLink: &childrenByBackwardsLink{
+					All: false,
+					NodeTypes: map[string]bool{
+						"1": true,
+					},
+				},
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				// valid case
+				nodes := []any{
+					map[string]any{
+						"nodeId":    "1",
+						"nodeType":  "1",
+						"timestamp": 4,
+						"appJSON":   map[string]any{},
+					},
+					map[string]any{
+						"nodeId":    "2",
+						"parentId":  "1",
+						"timestamp": 2,
+						"appJSON":   map[string]any{},
+					},
+					map[string]any{
+						"nodeId":    "3",
+						"parentId":  "1",
+						"timestamp": 3,
+						"appJSON":   map[string]any{},
+					},
+				}
+				for _, testCase := range []string{"noChildren", "children"} {
+					if testCase == "children" {
+						nodes[0].(map[string]any)["childIds"] = []any{"2", "3"}
+					}
+
+					jsonBytes, err := json.Marshal(nodes)
+					if err != nil {
+						t.Fatalf("Expected no error from Marshal, got %v", err)
+					}
+					var rawDataArray []json.RawMessage
+					err = json.Unmarshal(jsonBytes, &rawDataArray)
+					if err != nil {
+						t.Fatalf("Expected no error from Unmarshal, got %v", err)
+					}
+					incomingDataMap, rootNodes, err := convertToIncomingDataMapAndRootNodes(rawDataArray, tt.childrenByBackwardsLink)
+					if err != nil {
+						t.Fatalf("Expected no error from Marshal, got %v", err)
+					}
+					if err != nil {
+						t.Errorf("Expected no error from convertAppDataToIncomingDataMapAndRootNodes, got %v", err)
+					}
+					if len(incomingDataMap) != 3 {
+						t.Errorf("Expected incomingDataMap to have 3 elements, got %v", len(incomingDataMap))
+					}
+					if len(rootNodes) != 1 {
+						t.Errorf("Expected rootNodes to have 1 element, got %v", len(rootNodes))
+					}
+					if _, ok := rootNodes["1"]; !ok {
+						t.Errorf("Expected rootNodes to have key '1'")
+					}
+					expectedRootNode := &IncomingData{
+						NodeId:    "1",
+						Timestamp: 4,
+						NodeType:  "1",
+						AppJSON:   map[string]any{},
+						ChildIds:  []string{"2", "3"},
+					}
+					if !reflect.DeepEqual(rootNodes["1"], expectedRootNode) {
+						t.Errorf("Expected root node to be %v, got %v", expectedRootNode, rootNodes["1"])
+					}
+					if rootNode, ok := incomingDataMap["1"]; !ok {
+						t.Errorf("Expected incomingDataMap to have key '1'")
+					} else {
+						if rootNode != rootNodes["1"] {
+							t.Errorf("Expected rootNode to be rootNodes['1']")
+						}
+					}
+					for i := 2; i < 4; i++ {
+						nodeId := strconv.Itoa(i)
+						if node, ok := incomingDataMap[nodeId]; !ok {
+							t.Errorf("Expected incomingDataMap to have key '2'")
+						} else {
+							if node.NodeId != nodeId || node.Timestamp != i || len(node.AppJSON) != 0 || node.ParentId != "1" || len(node.ChildIds) != 0 {
+								t.Errorf("Expected node to be %v, got %v", map[string]any{
+									"nodeId":    nodeId,
+									"timestamp": i,
+									"appJSON":   map[string]any{},
+									"parentId":  "1",
+									"childIds":  []string{},
+								}, node)
+							}
+						}
+					}
+				}
+				// timestamp missing in one child node
+				delete(nodes[1].(map[string]any), "timestamp")
+				jsonBytes, err := json.Marshal(nodes)
+				if err != nil {
+					t.Fatalf("Expected no error from Marshal, got %v", err)
+				}
+				var rawDataArray2 []json.RawMessage
+				err = json.Unmarshal(jsonBytes, &rawDataArray2)
+				if err != nil {
+					t.Fatalf("Expected no error from Unmarshal, got %v", err)
+				}
+				_, _, err = convertToIncomingDataMapAndRootNodes(rawDataArray2, tt.childrenByBackwardsLink)
+				if err == nil {
+					t.Fatalf("Expected error from convertAppDataToIncomingDataMapAndRootNodes, got nil")
+				}
+				if err.Error() != "child node 2 has no timestamp but attempting to order children by timestamp" {
+					t.Errorf("Expected error message 'child node 2 has no timestamp but attempting to order children by timestamp', got %v", err.Error())
+				}
+			})
 		}
 	})
 }
