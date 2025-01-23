@@ -8,6 +8,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"sync"
 	"testing"
 
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
@@ -1462,8 +1463,11 @@ func (mss *MockSourceServer) AddPushable(pushable Server.Pushable) error {
 func (mss *MockSourceServer) Serve() error {
 	errChan := make(chan error, len(mss.dataToSend))
 	defer close(errChan)
+	wg := sync.WaitGroup{}
 	for _, data := range mss.dataToSend {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			jsonBytes, err := json.Marshal(data)
 			if err != nil {
 				errChan <- err
@@ -1473,6 +1477,7 @@ func (mss *MockSourceServer) Serve() error {
 			errChan <- err
 		}()
 	}
+	wg.Wait()
 	for range mss.dataToSend {
 		err := <-errChan
 		if err != nil {
@@ -1493,6 +1498,7 @@ type MockSinkServer struct {
 	expectedCount int
 	receivedCount int
 	taskChan      chan *Task
+	mu 		  sync.Mutex
 }
 
 // SendTo is a method that sends data to the SinkServer
@@ -1505,10 +1511,12 @@ func (mss *MockSinkServer) SendTo(data *Server.AppData) error {
 		return err
 	}
 	mss.dataReceived <- gotData
+	mss.mu.Lock()
 	mss.receivedCount++
 	if mss.receivedCount == mss.expectedCount {
 		close(mss.taskChan)
 	}
+	mss.mu.Unlock()
 	return nil
 }
 
@@ -1561,6 +1569,7 @@ func TestGroupAndVerifyRunApp(t *testing.T) {
 		dataReceived:  chanForData,
 		taskChan:      gav.taskChan,
 		expectedCount: 5,
+		mu: sync.Mutex{},
 	}
 	producerConfigMap := map[string]func() Server.Config{
 		"MockSink": func() Server.Config {
@@ -1678,5 +1687,103 @@ func TestGroupAndVerifyRunApp(t *testing.T) {
 	}
 	if !reflect.DeepEqual(seenJobIds, map[string]int{"0": 1, "1": 1, "2": 1, "3": 1, "4": 1}) {
 		t.Fatalf("expected map[string]int{\"0\": 1, \"1\": 1, \"2\": 1, \"3\": 1, \"4\": 1}, got %v", seenJobIds)
+	}
+}
+
+// Benchmark RunApp with 100 trees each with 10 nodes i.e. 1000 nodes
+func BenchmarkGroupAndVerifyRunApp(b *testing.B) {
+	dataToSend := []any{}
+	numTrees := 100
+	numNodes := 10
+	for j := 0; j < numNodes; j++ {
+		for i := 0; i < numTrees; i++ {
+			mapToSend := map[string]any{
+				"treeId": fmt.Sprintf("%d", i),
+				"nodeId": fmt.Sprintf("%d", j),
+				"appJSON": map[string]interface{}{
+					"jobId": fmt.Sprintf("%d", i),
+				},
+				"nodeType":  "type",
+				"timestamp": j,
+			}
+			if j == 0 {
+				mapToSend["parentId"] = fmt.Sprintf("%d", j+1)
+				mapToSend["childIds"] = []any{}
+			} else if j == numNodes-1 {
+				mapToSend["parentId"] = ""
+				mapToSend["childIds"] = []any{fmt.Sprintf("%d", j-1)}
+			} else {
+				mapToSend["parentId"] = fmt.Sprintf("%d", j+1)
+				mapToSend["childIds"] = []any{fmt.Sprintf("%d", j-1)}
+			}
+			dataToSend = append(dataToSend, mapToSend)
+		}
+	}
+	// set config file
+	tmpFile, err := os.CreateTemp("", "config.json")
+	if err != nil {
+		b.Errorf("Error creating temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	data := []byte(
+		`{"AppConfig":{"Timeout":10},"ProducersSetup":{"ProducerConfigs":[{"Type":"MockSink","ProducerConfig":{}}]},"ConsumersSetup":{"ConsumerConfigs":[{"Type":"MockSource","ConsumerConfig":{}}]}}`,
+	)
+	err = os.WriteFile(tmpFile.Name(), data, 0644)
+	if err != nil {
+		b.Errorf("Error writing to temp file: %v", err)
+	}
+	err = flag.Set("config", tmpFile.Name())
+	if err != nil {
+		b.Errorf("Error setting flag: %v", err)
+	}
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		gav := &GroupAndVerify{
+			taskChan: make(chan *Task, numTrees*numNodes),
+		}
+		gavConfig := &GroupAndVerifyConfig{
+			parentVerifySet: map[string]bool{},
+		}
+		mockSourceServer := &MockSourceServer{
+			dataToSend: dataToSend,
+		}
+		chanForData := make(chan ([]byte), numTrees*numNodes)
+		mockSinkServer := &MockSinkServer{
+			dataReceived:  chanForData,
+			taskChan:      gav.taskChan,
+			expectedCount: numTrees,
+			mu: sync.Mutex{},
+		}
+		producerConfigMap := map[string]func() Server.Config{
+			"MockSink": func() Server.Config {
+				return &MockConfig{}
+			},
+		}
+		consumerConfigMap := map[string]func() Server.Config{
+			"MockSource": func() Server.Config {
+				return &MockConfig{}
+			},
+		}
+		producerMap := map[string]func() Server.SinkServer{
+			"MockSink": func() Server.SinkServer {
+				return mockSinkServer
+			},
+		}
+		consumerMap := map[string]func() Server.SourceServer{
+			"MockSource": func() Server.SourceServer {
+				return mockSourceServer
+			},
+		}
+		// Run the app
+		b.StartTimer()
+		err = Server.RunApp(
+			gav, gavConfig,
+			producerConfigMap, consumerConfigMap,
+			producerMap, consumerMap,
+		)
+		if err != nil {
+			b.Fatalf("Error: %v", err)
+		}
+		close(chanForData)
 	}
 }

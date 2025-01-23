@@ -176,7 +176,11 @@ func (gavc *GroupAndVerifyConfig) updateTimeout(config map[string]any) error {
 	if ok {
 		timeout, ok := timeoutRaw.(int)
 		if !ok {
-			return errors.New("Timeout must be a positive integer")
+			if timeoutFloat, ok := timeoutRaw.(float64); !ok {
+				return errors.New("Timeout must be a positive integer")
+			} else {
+				timeout = int(timeoutFloat)
+			}
 		}
 		if timeout < 0 {
 			return errors.New("Timeout must be a positive integer")
