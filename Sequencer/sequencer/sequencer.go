@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"iter"
 	"log/slog"
+	"reflect"
 	"strings"
 
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
@@ -347,6 +348,45 @@ type IncomingData struct {
 	AppJSON   map[string]any `json:"appJSON"`
 }
 
+// incomingDataEquality is a method that is used to check if two incoming data are equal
+//
+// Args:
+//
+// 1. id1: *IncomingData. The first incoming data
+//
+// 2. id2: *IncomingData. The second incoming data
+//
+// Returns:
+//
+// 1. bool. It returns true if the incoming data are equal, false otherwise
+func incomingDataEquality(id1 *IncomingData, id2 *IncomingData) bool {
+	if id1.NodeId != id2.NodeId {
+		return false
+	}
+	if id1.ParentId != id2.ParentId {
+		return false
+	}
+	if len(id1.ChildIds) != len(id2.ChildIds) {
+		return false
+	}
+	for i, childId := range id1.ChildIds {
+		if childId != id2.ChildIds[i] {
+			return false
+		}
+	}
+	if id1.NodeType != id2.NodeType {
+		return false
+	}
+	if id1.Timestamp != id2.Timestamp {
+		return false
+	}
+	if !reflect.DeepEqual(id1.AppJSON, id2.AppJSON) {
+		return false
+	}
+	return true
+}
+
+
 type XIncomingData IncomingData
 
 type XIncomingDataExceptions struct {
@@ -384,8 +424,17 @@ func (id *IncomingData) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UnmarshalJSON is a method that will unmarshal the JSON data
-// into the incomingData struct
+// incomingDataWithDuplicates is a struct that is used to hold the incoming data and any duplicates found
+// in the incoming data.
+// It has the following fields:
+//
+// 1. incomingData: *IncomingData. The incoming data.
+//
+// 2. duplicates: []*IncomingData. The duplicates found in the incoming data.
+type incomingDataWithDuplicates struct {
+	*IncomingData
+	Duplicates   []*IncomingData
+}
 
 // stackIncomingData is a single incomingData when it is used for sequencing
 // It has the following fields:
@@ -394,7 +443,7 @@ func (id *IncomingData) UnmarshalJSON(data []byte) error {
 //
 // 2. currentChildIdIndex: int. The current child id index
 type stackIncomingData struct {
-	*IncomingData
+	*incomingDataWithDuplicates
 	currentChildIdIndex int
 	IsDummy             bool
 }
@@ -429,7 +478,7 @@ func (sid *stackIncomingData) nextChildId() (string, error) {
 // Returns:
 //
 // 1. iter.Seq2[*IncomingData, error]. The sequenced data as a generator
-func sequenceWithStack(rootNode *IncomingData, nodeIdToIncomingDataMap map[string]*IncomingData) iter.Seq2[*stackIncomingData, error] {
+func sequenceWithStack(rootNode *incomingDataWithDuplicates, nodeIdToIncomingDataMap map[string]*incomingDataWithDuplicates) iter.Seq2[*stackIncomingData, error] {
 	if rootNode == nil {
 		return func(yield func(*stackIncomingData, error) bool) {
 			yield(nil, errors.New("root node not set"))
@@ -442,7 +491,7 @@ func sequenceWithStack(rootNode *IncomingData, nodeIdToIncomingDataMap map[strin
 	}
 	stack := []*stackIncomingData{
 		{
-			IncomingData:        rootNode,
+			incomingDataWithDuplicates:        rootNode,
 			currentChildIdIndex: 0,
 		},
 	}
@@ -460,15 +509,17 @@ func sequenceWithStack(rootNode *IncomingData, nodeIdToIncomingDataMap map[strin
 			childNode, ok := nodeIdToIncomingDataMap[childId]
 			if !ok || childNode == nil {
 				stack = append(stack, &stackIncomingData{
-					IncomingData: &IncomingData{
-						NodeId: childId,
+					incomingDataWithDuplicates: &incomingDataWithDuplicates{
+						IncomingData: &IncomingData{
+							NodeId: childId,
+						},
 					},
 					IsDummy: true,
 				})
 				continue
 			}
 			stack = append(stack, &stackIncomingData{
-				IncomingData:        childNode,
+				incomingDataWithDuplicates:        childNode,
 				currentChildIdIndex: 0,
 			})
 		}
@@ -491,17 +542,29 @@ func sequenceWithStack(rootNode *IncomingData, nodeIdToIncomingDataMap map[strin
 // 2. map[string]*IncomingData. The converted data mapping node id to incoming data with no forward references i.e. root nodes
 //
 // 3. error. The error if the conversion fails
-func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage, childrenBybackwardsLink *childrenByBackwardsLink) (map[string]*IncomingData, map[string]*IncomingData, error) {
-	nodeIdToIncomingDataMap := make(map[string]*IncomingData)
-	nodeIdToNoForwardRefMap := make(map[string]*IncomingData)
+func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage, childrenBybackwardsLink *childrenByBackwardsLink) (map[string]*incomingDataWithDuplicates, map[string]*incomingDataWithDuplicates, bool, error) {
+	nodeIdToIncomingDataMap := make(map[string]*incomingDataWithDuplicates)
+	nodeIdToNoForwardRefMap := make(map[string]*incomingDataWithDuplicates)
 	nodeIdToForwardRefMap := make(map[string]bool)
 	backwardsLinks := make(map[string][]string)
-	nodeTypeToNodeMap := make(map[string][]*IncomingData)
+	nodeTypeToNodeMap := make(map[string][]*incomingDataWithDuplicates)
+	hasUnequalDuplicates := false
 	for _, rawData := range rawDataArray {
 		incomingData := &IncomingData{}
 		err := json.Unmarshal(rawData, incomingData)
 		if err != nil {
-			return nil, nil, Server.NewInvalidErrorFromError(err)
+			return nil, nil, hasUnequalDuplicates, Server.NewInvalidErrorFromError(err)
+		}
+		if firstNode, ok := nodeIdToIncomingDataMap[incomingData.NodeId]; ok {
+			if !incomingDataEquality(firstNode.IncomingData, incomingData) {
+				hasUnequalDuplicates = true
+			}
+			firstNode.Duplicates = append(firstNode.Duplicates, incomingData)
+			continue
+		}
+		incomingDataDuplicate := &incomingDataWithDuplicates{
+			IncomingData: incomingData,
+			Duplicates:   []*IncomingData{},
 		}
 		if incomingData.ParentId != "" {
 			_, ok := backwardsLinks[incomingData.ParentId]
@@ -512,14 +575,14 @@ func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage, childr
 		}
 		if _, ok := childrenBybackwardsLink.NodeTypes[incomingData.NodeType]; ok && !childrenBybackwardsLink.All {
 			if !ok {
-				nodeTypeToNodeMap[incomingData.NodeType] = []*IncomingData{}
+				nodeTypeToNodeMap[incomingData.NodeType] = []*incomingDataWithDuplicates{}
 			}
-			nodeTypeToNodeMap[incomingData.NodeType] = append(nodeTypeToNodeMap[incomingData.NodeType], incomingData)
+			nodeTypeToNodeMap[incomingData.NodeType] = append(nodeTypeToNodeMap[incomingData.NodeType], incomingDataDuplicate)
 		}
-		nodeIdToIncomingDataMap[incomingData.NodeId] = incomingData
+		nodeIdToIncomingDataMap[incomingData.NodeId] = incomingDataDuplicate
 		_, ok := nodeIdToForwardRefMap[incomingData.NodeId]
 		if !ok {
-			nodeIdToNoForwardRefMap[incomingData.NodeId] = incomingData
+			nodeIdToNoForwardRefMap[incomingData.NodeId] = incomingDataDuplicate
 		}
 		for _, childId := range incomingData.ChildIds {
 			nodeIdToForwardRefMap[childId] = true
@@ -546,7 +609,7 @@ func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage, childr
 			}
 			err := orderChildrenByTimestamp(parentNode, nodeIdToIncomingDataMap)
 			if err != nil {
-				return nil, nil, Server.NewInvalidErrorFromError(err)
+				return nil, nil, hasUnequalDuplicates, Server.NewInvalidErrorFromError(err)
 			}
 		}
 	} else if len(childrenBybackwardsLink.NodeTypes) != 0 {
@@ -565,12 +628,12 @@ func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage, childr
 				}
 				err := orderChildrenByTimestamp(node, nodeIdToIncomingDataMap)
 				if err != nil {
-					return nil, nil, Server.NewInvalidErrorFromError(err)
+					return nil, nil, hasUnequalDuplicates ,Server.NewInvalidErrorFromError(err)
 				}
 			}
 		}
 	}
-	return nodeIdToIncomingDataMap, nodeIdToNoForwardRefMap, nil
+	return nodeIdToIncomingDataMap, nodeIdToNoForwardRefMap, hasUnequalDuplicates, nil
 }
 
 // getPrevIdFromPrevIncomingData
@@ -666,7 +729,7 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 	if err != nil {
 		return Server.NewInvalidError("incoming data is not an array")
 	}
-	nodeIdToIncomingDataMap, rootNodes, err := convertToIncomingDataMapAndRootNodes(rawDataArray, &s.config.ChildrenByBackwardsLink)
+	nodeIdToIncomingDataMap, rootNodes, hasUnequalDuplicates, err := convertToIncomingDataMapAndRootNodes(rawDataArray, &s.config.ChildrenByBackwardsLink)
 	if err != nil {
 		return err
 	}
@@ -683,13 +746,13 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 				prevIncomingData = nil
 				continue
 			}
-			incomingData := stackIncomingData.IncomingData
 			if err != nil {
 				return err
 			}
-			appJSON := incomingData.AppJSON
-			if prevIncomingData != nil {
-				prevID, err := getPrevIdData(prevIncomingData, s.config)
+			appJSON := stackIncomingData.AppJSON
+			var prevID any
+			if prevIncomingData != nil && !hasUnequalDuplicates {
+				prevID, err = getPrevIdData(prevIncomingData, s.config)
 				if err != nil {
 					return err
 				}
@@ -706,7 +769,19 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 				}
 			}
 			appJSONArray = append(appJSONArray, appJSON)
-			prevIncomingData = incomingData
+			// update duplicate nodes
+			for _, duplicate := range stackIncomingData.Duplicates {
+				appJSON := duplicate.AppJSON
+				if !incomingDataEquality(duplicate, stackIncomingData.IncomingData) {
+					slog.Warn("duplicate node not equal to original node", "details", fmt.Sprintf("nodeId=%s", duplicate.NodeId))
+				}
+				if prevIncomingData != nil && !hasUnequalDuplicates {
+					appJSON[s.config.outputAppSequenceField] = prevID
+				}
+				appJSONArray = append(appJSONArray, appJSON)
+			}
+
+			prevIncomingData = stackIncomingData.IncomingData
 		}
 	}
 	// GroupApplies set data
@@ -768,7 +843,7 @@ func getGroupApplyValueFromAppJSON(appJSON map[string]any, groupApply GroupApply
 // Returns:
 //
 // 1. error. The error if the ordering fails.
-func orderChildrenByTimestamp(incomingData *IncomingData, nodeIdToIncomingDataMap map[string]*IncomingData) error {
+func orderChildrenByTimestamp(incomingData *incomingDataWithDuplicates, nodeIdToIncomingDataMap map[string]*incomingDataWithDuplicates) error {
 	if len(incomingData.ChildIds) == 0 {
 		return nil
 	}
