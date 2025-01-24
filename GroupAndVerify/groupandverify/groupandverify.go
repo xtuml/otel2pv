@@ -6,36 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"sync"
 	"time"
 
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
 )
-
-// OutgoingData that is used to hold the outgoing data from the GroupAndVerify
-// component. It has the following fields:
-//
-// 1. NodeId: string. It is the identifier of the node.
-//
-// 2. ParentId: string. It is the identifier of the parent of the node.
-//
-// 3. ChildIds: []string. It is the list of identifiers of the children of the node
-//
-// 4. NodeType: string. It is the type of the node. This can be used to identify if
-// bidirectional confirmation is required. Optional.
-//
-// 5. Timestamp: int. It is the timestamp of the node. Optional.
-//
-// 6. AppJSON: json.RawMessage. It is the JSON data that is to be sent to the next stage.
-type OutgoingData struct {
-	NodeId    string          `json:"nodeId"`
-	ParentId  string          `json:"parentId"`
-	ChildIds  []string        `json:"childIds"`
-	NodeType  string          `json:"nodeType"`
-	Timestamp int             `json:"timestamp"`
-	AppJSON   json.RawMessage `json:"appJSON"`
-}
 
 // IncomingData is a struct that is used to hold the incoming data from the previous stage
 // in the GroupAndVerify component. It has the following fields:
@@ -124,9 +101,9 @@ type Task struct {
 //
 // 3. MaxTrees: int. It is the maximum number of trees that can be processed at a time. If 0, then there is no limit.
 type GroupAndVerifyConfig struct {
-	parentVerifySet          map[string]bool
-	Timeout                  int
-	MaxTrees				 int
+	parentVerifySet map[string]bool
+	Timeout         int
+	MaxTrees        int
 }
 
 // updateParentVerifySet is a method that is used to update the parentVerifySet field of the GroupAndVerifyConfig
@@ -425,13 +402,10 @@ func treeHandler(taskChan chan *Task, config *GroupAndVerifyConfig, pushable Ser
 	if err != nil {
 		return tasks, err
 	}
-	var outgoingData []*OutgoingData
+	var outgoingData []*IncomingData
 	for _, node := range verifiedNodes {
-		outgoingNode, err := outgoingDataFromIncomingDataHolder(node, config.parentVerifySet)
-		if err != nil {
-			return tasks, err
-		}
-		outgoingData = append(outgoingData, outgoingNode)
+		outgoingData = append(outgoingData, node.incomingData)
+		outgoingData = append(outgoingData, node.Duplicates...)
 	}
 	// create AppData and send to pushable
 	jsonData, err := json.Marshal(outgoingData)
@@ -440,43 +414,6 @@ func treeHandler(taskChan chan *Task, config *GroupAndVerifyConfig, pushable Ser
 	}
 	appData := Server.NewAppData(jsonData, "")
 	return tasks, pushable.SendTo(appData)
-}
-
-// outgoingDataFromIncomingDataHolder is a function that is used to convert the incoming data to outgoing data.
-//
-// Args:
-//
-// 1. incomingDataHolder: *incomingDataHolder. It is the incoming data that is to be processed.
-//
-// Returns:
-//
-// 1. *OutgoingData. It returns the outgoing data.
-func outgoingDataFromIncomingDataHolder(incomingDataHolder *incomingDataHolder, parentVerifySet map[string]bool) (*OutgoingData, error) {
-	if incomingDataHolder == nil {
-		return nil, errors.New("incomingDataHolder is nil")
-	}
-	incomingData := incomingDataHolder.incomingData
-	if incomingData == nil {
-		return nil, errors.New("incomingData is nil")
-	}
-	backwardsLinks := incomingDataHolder.backwardsLinks
-	outgoingNode := &OutgoingData{
-		NodeId:    incomingData.NodeId,
-		ParentId:  incomingData.ParentId,
-		ChildIds:  make([]string, 0),
-		NodeType:  incomingData.NodeType,
-		Timestamp: incomingData.Timestamp,
-		AppJSON:   incomingData.AppJSON,
-	}
-	if _, ok := parentVerifySet[incomingData.NodeType]; ok {
-		if len(backwardsLinks) > 1 {
-			return nil, fmt.Errorf("node should have exactly one edge. NodeId: %s", incomingData.NodeId)
-		}
-		outgoingNode.ChildIds = append(outgoingNode.ChildIds, backwardsLinks...)
-	} else {
-		outgoingNode.ChildIds = append(outgoingNode.ChildIds, incomingData.ChildIds...)
-	}
-	return outgoingNode, nil
 }
 
 // childBalance is a struct that is used to hold the verification status of the child node.
@@ -739,8 +676,20 @@ func (vsh *verificationStatusHolder) CheckVerificationStatus() bool {
 //
 // 2. backwardsLinks: []string. It is the list of identifiers of the parent nodes.
 type incomingDataHolder struct {
-	incomingData   *IncomingData
-	backwardsLinks []string
+	incomingData      *IncomingData
+	Duplicates        []*IncomingData
+}
+
+// AddDuplicate is a method that is used to add a duplicate to the incomingDataHolder.
+//
+// Args:
+//
+// 1. duplicate: *IncomingData. It is the duplicate that is to be added.
+func (idh *incomingDataHolder) AddDuplicate(duplicate *IncomingData) {
+	idh.Duplicates = append(idh.Duplicates, duplicate)
+	if !reflect.DeepEqual(idh.incomingData, duplicate) {
+		slog.Warn("incomingData already exists and is not equal", "details", fmt.Sprintf("nodeId=\"%s\", treeId=\"%s\"", idh.incomingData.NodeId, idh.incomingData.TreeId))
+	}
 }
 
 // updateIncomingDataHolderMap is a method that is used to update the incomingDataHolder map.
@@ -764,9 +713,8 @@ func updateIncomingDataHolderMap(incomingDataHolderMap map[string]*incomingDataH
 		}
 	} else {
 		if incomingDataHolderMap[incomingData.NodeId].incomingData != nil {
-			if !reflect.DeepEqual(incomingDataHolderMap[incomingData.NodeId].incomingData, incomingData) {
-				return fmt.Errorf("incomingData already exists for id: \"%s\"", incomingData.NodeId)
-			}
+			incomingDataHolderMap[incomingData.NodeId].AddDuplicate(incomingData)
+			return nil
 		} else {
 			incomingDataHolderMap[incomingData.NodeId].incomingData = incomingData
 		}
@@ -775,7 +723,6 @@ func updateIncomingDataHolderMap(incomingDataHolderMap map[string]*incomingDataH
 		if _, ok := incomingDataHolderMap[incomingData.ParentId]; !ok {
 			incomingDataHolderMap[incomingData.ParentId] = &incomingDataHolder{}
 		}
-		incomingDataHolderMap[incomingData.ParentId].backwardsLinks = append(incomingDataHolderMap[incomingData.ParentId].backwardsLinks, incomingData.NodeId)
 	}
 	return nil
 }
