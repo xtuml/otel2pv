@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"github.com/itchyny/gojq"
+	"github.com/santhosh-tekuri/jsonschema/v5"
+
 
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
 )
@@ -31,6 +33,7 @@ type JQTransformerConfig struct {
 	// It has the following fields:
 	// 1. JQQueryStrings: map[string]string. A map that contains the JQ programs
 	JQQueryStrings map[string]string
+	ValidatorInfo map[string]validationInfo
 }
 
 // getJQStringFromInput is a helper function that will handle the input type for the JQTransformer
@@ -77,6 +80,39 @@ func getJQStringFromInput(jqStringDataMapRaw any) (string, error) {
 	}
 }
 
+// validationInfo is a type that is used to define what to use for validation
+// It has the following fields:
+//
+// 1. validate: bool. A boolean that is used to define if validation is required
+//
+// 2. schema: string. A file path that is used to define the schema
+type validationInfo struct {
+	validate bool
+	schema   string
+}
+
+func getValidationSchemaMap(jqQueryStringMapRaw any) (validationInfo, error) {
+	// getValidationSchemaMap is a helper function that will get the validation schema map
+	// It returns the validation schema map and an error if the map is invalid
+	jqQueryStringMap, ok := jqQueryStringMapRaw.(map[string]any)
+	if !ok {
+		return validationInfo{}, errors.New("invalid JQQueryStrings map in config. Must map a string identifier to a string")
+	}
+	validationFilePathRaw, ok := jqQueryStringMap["validation"]
+	if !ok {
+		return validationInfo{validate: false}, nil
+	}
+	validationFilePath, ok := validationFilePathRaw.(string)
+	if !ok {
+		return validationInfo{}, errors.New("invalid JQQueryStrings map in config. If field \"validation\" is present it must be a valid file path")
+	}
+	_, err := os.Stat(validationFilePath)
+	if err != nil {
+		return validationInfo{}, fmt.Errorf("invalid JQQueryStrings map in config. If field \"validation\" is present it must be a valid file path: %s", err.Error())
+	}
+	return validationInfo{validate: true, schema: validationFilePath}, nil
+}
+
 func (jqt *JQTransformerConfig) IngestConfig(config map[string]any) error {
 	// IngestConfig is a method that will ingest the configuration for the JQTransformer
 	// It takes in a map[string]any and returns an error if the configuration is invalid
@@ -88,14 +124,21 @@ func (jqt *JQTransformerConfig) IngestConfig(config map[string]any) error {
 		return errors.New("JQQueryStrings map is empty")
 	}
 	jqQueryStringsMap := make(map[string]string)
+	validationInfoMap := make(map[string]validationInfo)
 	for key, value := range jqQueryStrings {
 		jqString, err := getJQStringFromInput(value)
 		if err != nil {
 			return fmt.Errorf("%s. Key: %s", err.Error(), key)
 		}
 		jqQueryStringsMap[key] = jqString
+		validation, err := getValidationSchemaMap(value)
+		if err != nil {
+			return fmt.Errorf("%s. Key: %s", err.Error(), key)
+		}
+		validationInfoMap[key] = validation
 	}
 	jqt.JQQueryStrings = jqQueryStringsMap
+	jqt.ValidatorInfo = validationInfoMap
 	return nil
 }
 
@@ -138,13 +181,18 @@ func getDataFromJQIterator(iter *gojq.Iter) (map[string][]any, error) {
 	return mapDataArray, nil
 }
 
+// JQTransformer is a struct that contains the required fields for the JQTransformer
+// It has the following fields:
+//
+// 1. jqProgram: Code. It is the JQ program that will be used to transform the input JSON
+//
+// 2. pushable: Pushable. Pushable to send data onto the next stage
+//
+// 3. validatorMap: map[string]Validator. A map that contains the validators
 type JQTransformer struct {
-	// JQTransformer is a struct that contains the required fields for the JQTransformer
-	// It has the following fields:
-	// 1. jqProgram: Code. It is the JQ program that will be used to transform the input JSON
-	// 2. pushable: Pushable. Pushable to send data onto the next stage
 	jqProgram *gojq.Code
 	pushable  Server.Pushable
+	validatorMap map[string]Server.Validator
 }
 
 func (jqt *JQTransformer) AddPushable(pushable Server.Pushable) error {
@@ -167,6 +215,9 @@ func (jqt *JQTransformer) SendTo(data *Server.AppData) error {
 	if jqt.pushable == nil {
 		return errors.New("pushable not set")
 	}
+	if jqt.validatorMap == nil {
+		return errors.New("validator map not set")
+	}
 	dataToExtract, err := data.GetData()
 	if err != nil {
 		return err
@@ -188,6 +239,13 @@ func (jqt *JQTransformer) SendTo(data *Server.AppData) error {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
+				if jqt.validatorMap[key] != nil {
+					err := jqt.validatorMap[key].Validate(val)
+					if err != nil {
+						cancel(Server.NewInvalidErrorFromError(err))
+						return
+					}
+				}
 				jsonData, err := json.Marshal(val)
 				if err != nil {
 					cancel(err)
@@ -219,6 +277,9 @@ func (jqt *JQTransformer) Serve() error {
 	}
 	if jqt.jqProgram == nil {
 		return errors.New("jq program not set")
+	}
+	if jqt.validatorMap == nil {
+		return errors.New("validator map not set")
 	}
 	return nil
 }
@@ -260,5 +321,23 @@ func (jqt *JQTransformer) Setup(config Server.Config) error {
 		return err
 	}
 	jqt.jqProgram = jqProgram
+	// Set up the validators
+	if jqtConfig.ValidatorInfo == nil {
+		return errors.New("ValidatorInfo not set")
+	}
+	jqt.validatorMap = make(map[string]Server.Validator)
+	for key, value := range jqtConfig.ValidatorInfo {
+		if !value.validate {
+			jqt.validatorMap[key] = Server.DummyValidator{}
+		} else {
+			schema, err := jsonschema.Compile(value.schema)
+			if err != nil {
+				return err
+			}
+			jqt.validatorMap[key] = schema
+		}
+	}
+
+
 	return nil
 }

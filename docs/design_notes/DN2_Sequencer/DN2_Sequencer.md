@@ -42,8 +42,12 @@ The incoming data will be required have the following format:
 ```json
 [
     {
+        "treeId": "<string>", // optional
         "nodeId": "<string>",
-        "orderedChildIds": ["<string>"],
+        "parentNodeId": "<string>", // optional
+        "childIds": ["<string>"], // optional
+        "nodeType": "<string>", // optional
+        "timestamp": "<timestamp field>", // optional
         "appJSON": {
             <arbitrary fields>
         } 
@@ -52,6 +56,11 @@ The incoming data will be required have the following format:
 ]
 ```
 The appJSON is arbitrary JSON object that the previous node id field will be added to once sequencing is complete.
+
+The `childIds` is the default way to sequence the data, and it is assumed they are an ordered list of children.
+
+The `parentNodeId` is optional but is used if `childIds` is not present and config has been set to inform the app that a specific `nodeType` is expecting the sequencing to be performed like this; with their "children" being sequenced in order of their timestamp field.
+
 
 ### Outgoing Data Format
 The outgoing data will be an array of JSON objects that follow the Protocol Verifier audit event sequences format as described in the Problem section (for now). However, it is envisaged that this format may develop in the future and therefore the configuration will allow for the mapping of the incoming data to the outgoing data. For now however the outgoing data will be in the following format as an array of JSON objects:

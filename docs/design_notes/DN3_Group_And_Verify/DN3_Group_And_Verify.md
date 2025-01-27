@@ -57,7 +57,7 @@ The incoming data will be required have the following format:
     "parentNodeId": "<string>",
     "childIds": ["<string>"],
     "nodeType": "<string>",
-    "timestamp": "<timestamp field>",  // optional
+    "timestamp": "<timestamp field>",
     "appJSON": {
         <arbitrary fields>
     } 
@@ -65,7 +65,7 @@ The incoming data will be required have the following format:
 ```
 The appJSON is arbitrary JSON object that holds the data that the user wants to be passed through the system (this can be updated by the system).
 
-The `timestamp` field is optional and is used to order the children in the tree. If the config specifies that the children should be ordered by timestamp then the children will be ordered by the timestamp field, otherwise the children are are assumed to be in the order they appear in the `childIds` list.
+The `timestamp` field is not used but is passed onto the net stage. 
 
 The `nodeType` field is used to determine if the node has a forward link to it. If the node type is in the list of node types that do not have a forward link to them then within the code this node will be assumed to have a forward link to it.
 
@@ -74,12 +74,16 @@ So that data can be passed to the sequencer the outgoing data will be in the fol
 ```json
 [
     {
+        "treeId": "<string>",
         "nodeId": "<string>",
-        "orderedChildIds": ["<string>"],
+        "parentNodeId": "<string>",
+        "childIds": ["<string>"],
+        "nodeType": "<string>",
+        "timestamp": "<timestamp field>",
         "appJSON": {
             <arbitrary fields>
-        } 
-    },
+        }
+    }, 
     ...
 ]
 ```

@@ -93,6 +93,54 @@ func TestJQTransformerConfig(t *testing.T) {
 			t.Errorf("Expected jqString to be \"value\", got %v", jqString)
 		}
 	})
+	t.Run("getValidationSchemaFromMap", func(t *testing.T) {
+		// Tests when the input is not a map
+		_, err := getValidationSchemaMap(1)
+		if err == nil {
+			t.Errorf("Expected error from getValidationSchemaMap, got nil")
+		}
+		if err.Error() != "invalid JQQueryStrings map in config. Must map a string identifier to a string" {
+			t.Errorf("Expected error message to be \"invalid JQQueryStrings map in config. Must map a string identifier to a string\", got %v", err)
+		}
+		// Tests when the input is a map but the "validation" field is not a string
+		_, err = getValidationSchemaMap(map[string]any{"validation": 1})
+		if err == nil {
+			t.Errorf("Expected error from getValidationSchemaMap, got nil")
+		}
+		if err.Error() != "invalid JQQueryStrings map in config. If field \"validation\" is present it must be a valid file path" {
+			t.Errorf("Expected error message to be \"invalid JQQueryStrings map in config. If field \"validation\" is present it must be a valid file path\", got %v", err)
+		}
+		// Tests when the input is a map but the "validation" field is a string but the file does not exist
+		_, err = getValidationSchemaMap(map[string]any{"validation": "invalid"})
+		if err == nil {
+			t.Errorf("Expected error from getValidationSchemaMap, got nil")
+		}
+		if err.Error() != "invalid JQQueryStrings map in config. If field \"validation\" is present it must be a valid file path: stat invalid: no such file or directory" {
+			t.Errorf("Expected error message to be \"invalid JQQueryStrings map in config. If field \"validation\" is present it must be a valid file path: stat invalid: no such file or directory\", got %v", err)	
+		}
+		// Tests when the input is a map and the "validation" field is a string and the file exists
+		tmpFile, err := os.CreateTemp("", "testfile")
+		if err != nil {
+			t.Errorf("Error creating temp file: %v", err)
+		}
+		defer os.Remove(tmpFile.Name())
+		validationSchemaMap, err := getValidationSchemaMap(map[string]any{"validation": tmpFile.Name()})
+		if err != nil {
+			t.Errorf("Expected no error from getValidationSchemaMap, got %v", err)
+		}
+		if validationSchemaMap != (validationInfo{validate: true, schema: tmpFile.Name()}) {
+			t.Errorf("Expected validationSchemaMap to be validationInfo{validate: true, schema: tmpFile.Name()}, got %v", validationSchemaMap)
+		}
+		// Test when validation field is not present
+		validationSchemaMap, err = getValidationSchemaMap(map[string]any{})
+		if err != nil {
+			t.Errorf("Expected no error from getValidationSchemaMap, got %v", err)
+		}
+		if validationSchemaMap != (validationInfo{validate: false}) {
+			t.Errorf("Expected validationSchemaMap to be validationInfo{validate: false}, got %v", validationSchemaMap)
+		}
+	})
+
 	t.Run("IngestConfig", func(t *testing.T) {
 		jqtConfig := JQTransformerConfig{}
 		// Test when the config is invalid
@@ -120,6 +168,14 @@ func TestJQTransformerConfig(t *testing.T) {
 		err = jqtConfig.IngestConfig(map[string]interface{}{"JQQueryStrings": map[string]any{}})
 		if err == nil {
 			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		// Test when there is an error in getValidationSchemaMap
+		err = jqtConfig.IngestConfig(map[string]interface{}{"JQQueryStrings": map[string]any{"key": map[string]any{"jq": ".key", "validation": 1}}})
+		if err == nil {
+			t.Errorf("Expected error from IngestConfig, got nil")
+		}
+		if err.Error() != "invalid JQQueryStrings map in config. If field \"validation\" is present it must be a valid file path. Key: key" {
+			t.Errorf("Expected error message to be \"invalid JQQueryStrings map in config. If field \"validation\" is present it must be a valid file path. Key: key\", got %v", err)
 		}
 	})
 }
@@ -249,7 +305,14 @@ func TestJQTransformer(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error from SendTo, got nil")
 		}
+		// Test when validatorMap is nil
+		jqTransformer.pushable = &Pushable
+		err = jqTransformer.SendTo(&Server.AppData{})
+		if err == nil {
+			t.Errorf("Expected error from SendTo, got nil")
+		}
 		// Tests when jqProgram and pushable are set but GetData returns an error
+		jqTransformer.validatorMap = map[string]Server.Validator{"key": Server.DummyValidator{}}
 		jqTransformer.pushable = &Pushable
 		err = jqTransformer.SendTo(&Server.AppData{})
 		if err == nil {
@@ -269,6 +332,7 @@ func TestJQTransformer(t *testing.T) {
 		Pushable.isSendToError = true
 		// this provides a test that the gojq parser can handle comments and new lines
 		// i.e. such as in a file
+		jqTransformer.validatorMap = map[string]Server.Validator{"X": Server.DummyValidator{}}
 		newjqQuery, err := gojq.Parse("{\"X\": [(.|###\n .key)]}")
 		if err != nil {
 			t.Errorf("Error parsing JQ program: %v", err)
@@ -316,8 +380,14 @@ func TestJQTransformer(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error from Serve, got %v", err)
 		}
-		// Test when all fields are set
+		// Test when validatorMap is nil
 		jqTransformer.jqProgram = jqProgram
+		err = jqTransformer.Serve()
+		if err == nil {
+			t.Errorf("Expected error from Serve, got nil")
+		}
+		// Test when all fields are set
+		jqTransformer.validatorMap = map[string]Server.Validator{}
 		err = jqTransformer.Serve()
 		if err != nil {
 			t.Errorf("Expected no error from Serve, got %v", err)
@@ -356,8 +426,41 @@ func TestJQTransformer(t *testing.T) {
 		if !strings.Contains(err.Error(), "The following JQ string for key \"key\" failed to be compiled correctly") {
 			t.Errorf("Expected error message to contain \"The following JQ string for key \"key\" failed to be compiled correctly\", got %v", err)
 		}
-		// Test when config is JQTransformerConfig and JQQueryStrings is set
-		err = jqTransformer.Setup(&JQTransformerConfig{JQQueryStrings: map[string]string{"key": ".key", "key2": ".key2"}})
+		// Test when ValidatorInfo is not set on the JQTransformerConfig
+		err = jqTransformer.Setup(&JQTransformerConfig{JQQueryStrings: map[string]string{"key": ".key"}})
+		if err == nil {
+			t.Errorf("Expected error from Setup, got nil")
+		}
+		if err.Error() != "ValidatorInfo not set" {
+			t.Errorf("Expected error message to be \"ValidatorInfo is not set\", got %v", err)
+		}
+		// Test when ValidatorInfo is set on the JQTransformerConfig but there is an error in the compile of the schema
+		err = jqTransformer.Setup(
+			&JQTransformerConfig{
+				JQQueryStrings: map[string]string{"key": ".key"}, 
+				ValidatorInfo: map[string]validationInfo{"key": {validate: true, schema: "file that does not exist"}}},
+		)
+		if err == nil {
+			t.Errorf("Expected error from Setup, got nil")
+		}
+		if !strings.Contains(err.Error(), "no such file or directory") {
+			t.Errorf("Expected error message to contain \"no such file or directory\", got %v", err)
+		}
+		// Test when config is JQTransformerConfig and JQQueryStrings is set and a valid schema file exists
+		tmpFile, err := os.CreateTemp("", "testfile")
+		if err != nil {
+			t.Errorf("Error creating temp file: %v", err)
+		}
+		defer os.Remove(tmpFile.Name())
+		data := []byte(`{"type": "object"}`)
+		err = os.WriteFile(tmpFile.Name(), data, 0644)
+		if err != nil {
+			t.Errorf("Error writing to temp file: %v", err)
+		}
+		err = jqTransformer.Setup(&JQTransformerConfig{
+			JQQueryStrings: map[string]string{"key": ".key"},
+			ValidatorInfo: map[string]validationInfo{"key": {validate: true, schema: tmpFile.Name()}},
+		})
 		if err != nil {
 			t.Errorf("Expected no error from Setup, got %v", err)
 		}

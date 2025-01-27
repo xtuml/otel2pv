@@ -68,3 +68,16 @@ func ReadConfigJSON(path string) (map[string]any, error) {
 	}
 	return convertBytesToMap(data)
 }
+
+// Validator is an interface that defines a Validate method.
+type Validator interface {
+	Validate(v any) error
+}
+
+// DummyValidator is a struct that implements the Validator interface.
+type DummyValidator struct{}
+
+// Validate is a method that validates a value.
+func (d DummyValidator) Validate(v any) error {
+	return nil
+}
