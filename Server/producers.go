@@ -134,7 +134,9 @@ func (h *HTTPProducer) SendTo(data *AppData) error {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
-			slog.Info("Successfully sent message", "details", fmt.Sprintf("Sent data to %s", h.config.URL))
+			Logger.Info("Successfully sent message", slog.Group(
+				"details", slog.String("producer", "HTTP"), slog.String("url", h.config.URL),
+			))
 			return nil
 		}
 		time.Sleep(1 * time.Second)
@@ -492,7 +494,9 @@ func (r *RabbitMQProducer) SendTo(data *AppData) error {
 		r.cancel(err)
 		return err
 	}
-	slog.Info("Successfully sent message", "details", fmt.Sprintf("Sent data to exchange: %s, routing key: %s", r.config.Exchange, r.config.RoutingKey))
+	Logger.Info("Successfully sent message", slog.Group(
+		"details", slog.String("producer", "RabbitMQ"), slog.String("exchange", r.config.Exchange), slog.String("routing_key", r.config.RoutingKey),
+	))
 	return nil
 }
 
@@ -730,6 +734,8 @@ func (a *AMQPOneProducer) SendTo(data *AppData) error {
 		a.cancel(err)
 		return err
 	}
-	slog.Info("Successfully sent message", "details", fmt.Sprintf("Sent data to queue: %s", a.config.Queue))
+	Logger.Info("Successfully sent message", slog.Group(
+		"details", slog.String("producer", "AMQP1.0"), slog.String("connection", a.config.Connection),  slog.String("queue", a.config.Queue),
+	))
 	return nil
 }

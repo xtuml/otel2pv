@@ -19,8 +19,8 @@ func main() {
 		Server.PRODUCERMAP, Server.CONSUMERMAP,
 	)
 	if err != nil {
-		slog.Error("Error running Sequencer", "details", err.Error())
+		Server.Logger.Error("Error running Sequencer", slog.String("err", err.Error()))
 	} else {
-		slog.Info("Sequencer ran successfully")
+		Server.Logger.Info("Sequencer ran successfully")
 	}
 }

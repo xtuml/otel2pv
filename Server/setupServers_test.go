@@ -97,7 +97,8 @@ func TestAppConfig(t *testing.T) {
 						"Connection": "amqp://localhost:5672",
 						"Queue":      "test",
 					}},
-				}}}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP)
+				}},
+		}, PRODUCERCONFIGMAP, CONSUMERCONFIGMAP)
 		if err != nil {
 			t.Errorf("Expected no error from IngestConfig, got %v", err)
 		}
@@ -506,8 +507,8 @@ func TestSetupAndRunApp(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected error from SetupAndRunApp, got nil")
 	}
-	if err.Error() != "AppConfig not set correctly - must map fields to values" {
-		t.Errorf("Expected error message to be 'AppConfig not set correctly - must map fields to values', got %v", err.Error())
+	if err.Error() != "Error ingesting config: AppConfig not set correctly - must map fields to values" {
+		t.Errorf("Expected error message to be 'Error ingesting config: AppConfig not set correctly - must map fields to values', got %v", err.Error())
 	}
 	// tests the case where the SetupApp method returns an error
 	config = map[string]any{
@@ -532,7 +533,7 @@ func TestSetupAndRunApp(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected error from SetupAndRunApp, got nil")
 	}
-	if err.Error() != "test error" {
+	if err.Error() != "Error setting up app: test error" {
 		t.Errorf("Expected error message to be 'test error', got %v", err.Error())
 	}
 	// Tests the case when ServersRun returns an error
@@ -544,7 +545,7 @@ func TestSetupAndRunApp(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected error from SetupAndRunApp, got nil")
 	}
-	if err.Error() != "test error" {
+	if err.Error() != "Error running app: test error" {
 		t.Errorf("Expected error message to be 'test error', got %v", err.Error())
 	}
 	// test case when everything runs correctly
@@ -584,8 +585,8 @@ func TestRunAppFromConfigPath(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected error from RunAppFromConfigPath, got nil")
 	}
-	if err.Error() != "Error reading config file:\nopen : no such file or directory" {
-		t.Errorf("Expected error message to be 'Error reading config file:\nopen : no such file or directory', got %v", err.Error())
+	if err.Error() != "Error reading config file: open : no such file or directory" {
+		t.Errorf("Expected error message to be 'Error reading config file: open : no such file or directory', got %v", err.Error())
 	}
 	// Tests the case where SetupAndRunApp returns an error
 	tmpFile1, err := os.CreateTemp("", "test.json")
@@ -602,8 +603,8 @@ func TestRunAppFromConfigPath(t *testing.T) {
 	if err == nil {
 		t.Errorf("Expected error from RunAppFromConfigPath, got nil")
 	}
-	if err.Error() != "Error setting up and running app:\nAppConfig not set correctly - must map fields to values" {
-		t.Errorf("Expected error message to be 'Error setting up and running app:\nAppConfig not set correctly - must map fields to values', got %v", err.Error())
+	if err.Error() != "Error ingesting config: AppConfig not set correctly - must map fields to values" {
+		t.Errorf("Expected error message to be 'Error ingesting config: AppConfig not set correctly - must map fields to values', got %v", err.Error())
 	}
 	// Tests the case where everything runs correctly
 	tmpFile2, err := os.CreateTemp("", "test2.json")

@@ -13,6 +13,17 @@ import (
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
 )
 
+var sequencerLogger slog.Logger
+
+func init() {
+	sequencerLogger = *Server.Logger.With(
+		slog.Group(
+			"logger_info",
+			slog.String("logger_name", "Sequencer"),
+		),
+	)
+}
+
 // OutputAppFieldSequenceType is a type that represents the type
 // that will be used for the sequence field in the output app schema.
 // It has the following constants:
@@ -516,6 +527,7 @@ func sequenceWithStack(rootNode *incomingDataWithDuplicates, nodeIdToIncomingDat
 					},
 					IsDummy: true,
 				})
+				sequencerLogger.Warn("child node not present in data", slog.Group("details", slog.String("nodeId", top.NodeId), slog.String("childId", childId)))
 				continue
 			}
 			stack = append(stack, &stackIncomingData{
@@ -628,7 +640,7 @@ func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage, childr
 				}
 				err := orderChildrenByTimestamp(node, nodeIdToIncomingDataMap)
 				if err != nil {
-					return nil, nil, hasUnequalDuplicates ,Server.NewInvalidErrorFromError(err)
+					return nil, nil, hasUnequalDuplicates, Server.NewInvalidErrorFromError(err)
 				}
 			}
 		}
@@ -742,7 +754,6 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 		var prevIncomingData *IncomingData
 		for stackIncomingData, err := range sequenceWithStack(rootIncomingData, nodeIdToIncomingDataMap) {
 			if stackIncomingData.IsDummy {
-				slog.Warn("child node not present in data", "details", fmt.Sprintf("childId=%s", stackIncomingData.NodeId))
 				prevIncomingData = nil
 				continue
 			}
@@ -773,7 +784,7 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 			for _, duplicate := range stackIncomingData.Duplicates {
 				appJSON := duplicate.AppJSON
 				if !incomingDataEquality(duplicate, stackIncomingData.IncomingData) {
-					slog.Warn("duplicate node not equal to original node", "details", fmt.Sprintf("nodeId=%s", duplicate.NodeId))
+					sequencerLogger.Warn("duplicate node not equal to original node", slog.Group("details", slog.String("nodeId", duplicate.NodeId)))
 				}
 				if prevIncomingData != nil && !hasUnequalDuplicates {
 					appJSON[s.config.outputAppSequenceField] = prevID

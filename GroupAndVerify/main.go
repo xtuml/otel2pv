@@ -19,8 +19,8 @@ func main() {
 		Server.PRODUCERMAP, Server.CONSUMERMAP,
 	)
 	if err != nil {
-		slog.Error("Error running GroupAndVerify", "details", err.Error())
+		Server.Logger.Error("Error running GroupAndVerify", slog.String("err", err.Error()))
 	} else {
-		slog.Info("GroupAndVerify ran successfully")
+		Server.Logger.Info("GroupAndVerify ran successfully")
 	}
 }

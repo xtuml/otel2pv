@@ -19,8 +19,8 @@ func main() {
 		Server.PRODUCERMAP, Server.CONSUMERMAP,
 	)
 	if err != nil {
-		slog.Error("Error running JQExtractor", "details", err.Error())
+		Server.Logger.Error("Error running JQExtractor", slog.String("err", err.Error()))
 	} else {
-		slog.Info("JQExtractor ran successfully")
+		Server.Logger.Info("JQExtractor ran successfully")
 	}
 }

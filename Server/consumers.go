@@ -769,36 +769,36 @@ func handleMessageDownStreamError(ctx context.Context, inErr error, message *amq
 	errorType, _ := GetErrorType(inErr)
 	switch errorType {
 	case InvalidErrorType:
-		slog.Info("Invalid message - rejecting", "details", inErr)
+		Logger.Warn("Invalid message - rejecting", slog.String("details", inErr.Error()))
 		err := receiver.RejectMessage(ctx, message, &amqp.Error{
 			Condition:   "invalid",
 			Description: inErr.Error(),
 		})
 		if err != nil {
-			slog.Error("Error rejecting message - fatal", "details", err)
+			Logger.Error("Error rejecting message - fatal", slog.String("err", err.Error()))
 		}
 		return err
 	case FullErrorType:
-		slog.Info("Server full - sending back to queue", "details", inErr)
+		Logger.Warn("Server full - sending back to queue", slog.String("details", inErr.Error()))
 		err := receiver.ReleaseMessage(ctx, message)
 		if err != nil {
-			slog.Error("Error releasing message - fatal", "details", err)
+			Logger.Error("Error releasing message - fatal", slog.String("err", err.Error()))
 		}
 		return err
 	case SendErrorType:
-		slog.Error("Error sending message - fatal", "details", inErr)
+		Logger.Error("Error sending message - fatal", slog.String("err", inErr.Error()))
 		err := receiver.ModifyMessage(ctx, message, &amqp.ModifyMessageOptions{
 			DeliveryFailed: true,
 		})
 		if err != nil {
-			slog.Error("Error modifying message - fatal", "details", err)
+			Logger.Error("Error modifying message - fatal", slog.String("err", err.Error()))
 			return err
 		}
 	case ProcessErrorType:
-		slog.Info("Error processing message - notifying", "details", inErr)
+		Logger.Warn("Error processing message - notifying", slog.String("details", inErr.Error()))
 		err := receiver.AcceptMessage(ctx, message)
 		if err != nil {
-			slog.Error("Error in message acceptance", "details", err)
+			Logger.Error("Error in message acceptance", slog.String("err", err.Error()))
 		}
 		return err
 	default:
@@ -806,9 +806,9 @@ func handleMessageDownStreamError(ctx context.Context, inErr error, message *amq
 			DeliveryFailed:    true,
 			UndeliverableHere: true,
 		})
-		slog.Error("Unknown error occured - fatal", "details", inErr)
+		Logger.Error("Unknown error occured - fatal", slog.String("err", inErr.Error()))
 		if err != nil {
-			slog.Error("Error modifying message - fatal", "details", err)
+			Logger.Error("Error modifying message - fatal", slog.String("err", err.Error()))
 			return err
 		}
 	}

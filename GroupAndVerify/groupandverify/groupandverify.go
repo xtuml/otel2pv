@@ -14,6 +14,16 @@ import (
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
 )
 
+var groupAndVerifyLogger slog.Logger
+
+func init() {
+	groupAndVerifyLogger = *Server.Logger.With(
+		slog.Group(
+			"logger",
+			slog.String("logger_name", "GroupAndVerify"),
+		),
+	)
+}
 // IncomingData is a struct that is used to hold the incoming data from the previous stage
 // in the GroupAndVerify component. It has the following fields:
 //
@@ -688,7 +698,7 @@ type incomingDataHolder struct {
 func (idh *incomingDataHolder) AddDuplicate(duplicate *IncomingData) {
 	idh.Duplicates = append(idh.Duplicates, duplicate)
 	if !reflect.DeepEqual(idh.incomingData, duplicate) {
-		slog.Warn("incomingData already exists and is not equal", "details", fmt.Sprintf("nodeId=\"%s\", treeId=\"%s\"", idh.incomingData.NodeId, idh.incomingData.TreeId))
+		groupAndVerifyLogger.Warn("incomingData already exists and is not equal", slog.Group("details", slog.String("nodeId", idh.incomingData.NodeId), slog.String("treeId", idh.incomingData.TreeId)))
 	}
 }
 

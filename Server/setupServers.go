@@ -2,7 +2,71 @@ package Server
 
 import (
 	"errors"
+	"os"
+	"strings"
+
+	"log/slog"
 )
+var lvl *slog.LevelVar
+var handlerOptions *slog.HandlerOptions
+var Logger *slog.Logger
+var handler slog.Handler
+func init() {
+	envLogLevel, ok := os.LookupEnv("LOG_LEVEL")
+	if !ok {
+		envLogLevel = "DEBUG"
+	}
+	logLevel, err := getLogLevel(envLogLevel)
+	if err != nil {
+		panic(err)
+	}
+	lvl = new(slog.LevelVar)
+	lvl.Set(logLevel)
+	handlerOptions = &slog.HandlerOptions{
+		Level: lvl,
+	}
+	envLogFile, ok := os.LookupEnv("LOG_FILE")
+	if ok {
+		file, err := os.OpenFile(envLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			panic(err)
+		}
+		handler = slog.NewJSONHandler(file, handlerOptions)
+	} else {
+		handler = slog.NewJSONHandler(os.Stderr, handlerOptions)
+	}
+	Logger = slog.New(handler)
+}
+
+
+
+// getLogLevel is a function that will return the log level
+// based on the log level string.
+//
+// Args:
+//
+// 1. logLevelStr: string. The log level string.
+//
+// Returns:
+//
+// 1. Logger.Level. The log level.
+//
+// 2. error. An error if the log level string is invalid.
+func getLogLevel(logLevelStr string) (slog.Level, error) {
+	logLevelStr = strings.ToUpper(logLevelStr)
+	switch logLevelStr {
+	case "DEBUG":
+		return slog.LevelDebug, nil
+	case "INFO":
+		return slog.LevelInfo, nil
+	case "WARN":
+		return slog.LevelWarn, nil
+	case "ERROR":
+		return slog.LevelError, nil
+	default:
+		return slog.LevelInfo, errors.New("Invalid log level: " + logLevelStr)
+	}
+}
 
 type AppConfig struct {
 	PipeServerConfig     Config
@@ -307,13 +371,17 @@ func SetupAndRunApp(
 	}
 	err := appConfig.IngestConfig(config, producerConfigMap, consumerConfigMap)
 	if err != nil {
-		return err
+		return errors.New("Error ingesting config: " + err.Error())
 	}
 	consumerServer, producerServer, err := SetupApp(appConfig, pipeServer, consumerMap, producerMap)
 	if err != nil {
-		return err
+		return errors.New("Error setting up app: " + err.Error())
 	}
-	return ServersRun(consumerServer, pipeServer, producerServer)
+	err = ServersRun(consumerServer, pipeServer, producerServer)
+	if err != nil {
+		return errors.New("Error running app: " + err.Error())
+	}
+	return nil
 }
 
 // RunAppCLI is a function that will run the application with
@@ -348,7 +416,7 @@ func RunAppFromConfigPath(
 ) error {
 	config, err := ReadConfigJSON(configPath)
 	if err != nil {
-		return errors.New("Error reading config file:\n" + err.Error())
+		return errors.New("Error reading config file: " + err.Error())
 	}
 	err = SetupAndRunApp(
 		config,
@@ -360,7 +428,7 @@ func RunAppFromConfigPath(
 		consumerMap,
 	)
 	if err != nil {
-		return errors.New("Error setting up and running app:\n" + err.Error())
+		return err
 	}
 	return nil
 }
