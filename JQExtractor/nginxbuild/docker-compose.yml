@@ -5,6 +5,7 @@
 services:
   # Define the jqextractor service
   jqextractor:
+    restart: always
     # Use the jqextractor image
     image: ${JQEXTRACTOR_IMAGE}
     # Build the image from the Dockerfile

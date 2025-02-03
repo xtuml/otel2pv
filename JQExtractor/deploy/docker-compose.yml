@@ -1,5 +1,6 @@
 services:
   jqextractor:
+    restart: always
     image: jqextractor:latest
     build:
       context: ../../.

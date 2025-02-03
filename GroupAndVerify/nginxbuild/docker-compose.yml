@@ -5,6 +5,7 @@
 services:
   # Define the group-and-verify service
   group-and-verify:
+    restart: always
     # Use the Group and Verify image
     image: ${GROUPANDVERIFY_IMAGE}
     # Build the image from the Dockerfile

@@ -5,6 +5,7 @@
 services:
   # Define the sequencer service
   sequencer:
+    restart: always
     # Use the sequencer image
     image: ${SEQUENCER_IMAGE}
     # Build the image from the Dockerfile

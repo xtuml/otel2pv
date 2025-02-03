@@ -1,5 +1,6 @@
 services:
-  jqextractor:
+  group-and-verify:
+    restart: always
     image: group-and-verify:latest
     build:
       context: ../../.
