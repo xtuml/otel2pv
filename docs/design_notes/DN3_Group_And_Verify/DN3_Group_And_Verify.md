@@ -65,7 +65,7 @@ The incoming data will be required have the following format:
 ```
 The appJSON is arbitrary JSON object that holds the data that the user wants to be passed through the system (this can be updated by the system).
 
-The `timestamp` field is not used but is passed onto the net stage. 
+The `timestamp` field is not used but is passed onto the next stage. 
 
 The `nodeType` field is used to determine if the node has a forward link to it. If the node type is in the list of node types that do not have a forward link to them then within the code this node will be assumed to have a forward link to it.
 

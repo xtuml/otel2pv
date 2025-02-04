@@ -13,32 +13,27 @@ interface Server.Pushable {
 }
 
 namespace GroupAndVerify {
-    struct GroupApply {
-        +string FieldToShare
-        +string IdentifyingField
-        +string ValueOfIdentifyingField
-    } 
 
     struct GroupAndVerifyConfig {
-        -bool orderChildrenByTimestamp
-        -map[string]GroupApply groupApplies
-        -map[string]bool parentVerifySet
+        -map[string]bool ParentVerifySet
+        -int Timeout
+        -int MaxTrees
         +error IngestConfig(map[string]any)
     }
     struct GroupAndVerify {
         -GroupAndVerifyConfig config
         -Server.Pushable pushable
-        -chan *Task taskChan
+        -chan *task taskChan
         +error AddPushable(Server.Pushable)
         +error SendTo(*Server.AppData)
         +error Serve()
         +error Setup(Server.Config)
     }
-    struct Task {
-        +IncomingData Node
+    struct task {
+        +*incomingData Node
         +chan error ErrorChan
     }
-    struct IncomingData {
+    struct incomingData {
         +string TreeId
         +string NodeId
         +string ParentId
@@ -47,18 +42,12 @@ namespace GroupAndVerify {
         +int Timestamp
         +map[string]any AppJSON
     }
-    struct OutgoingData {
-        +string NodeId
-        +[]string OrderedChildIds
-        +map[string]any AppJSON
-    }
 }
 
 Server.PipeServer <|-- GroupAndVerify.GroupAndVerify
 Server.Pushable *-- GroupAndVerify.GroupAndVerify
 Server.Config <|-- GroupAndVerify.GroupAndVerifyConfig
-GroupAndVerify.GroupApply *-- GroupAndVerify.GroupAndVerifyConfig
 GroupAndVerify.GroupAndVerifyConfig *-- GroupAndVerify.GroupAndVerify
-GroupAndVerify.Task *-- GroupAndVerify.IncomingData
-GroupAndVerify.GroupAndVerify *-- GroupAndVerify.Task
+GroupAndVerify.incomingData *-- GroupAndVerify.task
+GroupAndVerify.task *-- GroupAndVerify.GroupAndVerify 
 @enduml
