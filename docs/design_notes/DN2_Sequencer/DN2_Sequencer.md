@@ -79,6 +79,13 @@ The outgoing data will be an array of JSON objects that follow the Protocol Veri
     ...
 ]
 ```
+### Application Of Data: One-to-Many Mapping
+Data may need to be shared from one member of the sequence to all other members of the sequence. This will be achieved in the configuration by:
+- Specifying a a field in the outgoing data that will be used to identify the member of the sequence that will have data shared
+- Specifying the value of that field that will be used to identify the member of the sequence that will have data shared
+- Specifying the field whose value will be shared to all other members of the sequence
+### Seuquencing By Timestamp Using Child To Node Backwards Links
+The sequencing by timestamp using child to node backwards links will be achieved by speciying a list of "node types" who, when identified will have their children found by the "parentNodeId" field and then sequenced by their timestamp field. The configuration will allow for the specification of the "node types" field and an option to do this for all data coming through.
 
 ### Architecture Overview
 

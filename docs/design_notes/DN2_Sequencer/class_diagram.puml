@@ -13,14 +13,25 @@ interface Server.Pushable {
 }
 
 namespace Sequencer {
-    enum OutputAppFieldSequenceType {
+    enum outputAppFieldSequenceType {
         Array
         String
     }
+    struct groupApply {
+        +string FieldToShare
+        +string IdentifyingField
+        +string ValueOfIdentifyingField
+    }
+    struct childrenByBackwardsLink {
+        +bool All
+        +map[string]bool NodeTypes
+    }
     struct SequencerConfig {
-        -string outputAppSequenceField
-        -string outputAppFieldSequenceIdMap
-        -OutputAppFieldSequenceType outputAppFieldSequenceType
+        +string OutputAppSequenceField
+        +string OutputAppFieldSequenceIdMap
+        +outputAppFieldSequenceType OutputAppFieldSequenceType
+        +map[string]groupApply GroupApplies
+        +childrenByBackwardsLink ChildrenByBackwardsLink
         +error IngestConfig(map[string]any)
     }
     struct Sequencer {
@@ -31,14 +42,22 @@ namespace Sequencer {
         +error Serve()
         +error Setup(Server.Config)
     }
-    struct IncomingData {
-        -string NodeId
-        -[]string OrderedChildIds
-        -map[string]any AppJSON
+    struct incomingData {
+        +string NodeId
+        +string ParentId
+        +[]string ChildIds
+        +string NodeType
+        +int Timestamp
+        +map[string]any AppJSON
     }
-    struct StackIncomingData {
-        -*IncomingData data
+    struct incomingDataWithDuplicates {
+        +*IncomingData IncomingData
+        +[]*IncomingData Duplicates
+    }
+    struct stackIncomingData {
+        +*incomingDataWithDuplicates incomingDataWithDuplicates
         -int currentChildIndex
+        +bool IsDummy
         +(string, error) NextChildId()
     }
 }
@@ -47,6 +66,10 @@ Server.PipeServer <|-- Sequencer.Sequencer
 Server.Pushable *-- Sequencer.Sequencer
 Server.Config <|-- Sequencer.SequencerConfig
 Sequencer.SequencerConfig *-- Sequencer.Sequencer
-Sequencer.OutputAppFieldSequenceType *-- Sequencer.SequencerConfig
-Sequencer.IncomingData *-- Sequencer.StackIncomingData
+Sequencer.incomingData *-- Sequencer.incomingDataWithDuplicates
+Sequencer.incomingDataWithDuplicates *-- Sequencer.stackIncomingData
+Sequencer.groupApply *-- Sequencer.SequencerConfig
+Sequencer.childrenByBackwardsLink *-- Sequencer.SequencerConfig
+Sequencer.outputAppFieldSequenceType *-- Sequencer.SequencerConfig
+
 @enduml
