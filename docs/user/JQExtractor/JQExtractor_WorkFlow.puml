@@ -1,0 +1,22 @@
+@startuml
+title JQExtractor Workflow with Multiple JQ Queries
+
+actor User
+participant "JQExtractor" as JQExtractor
+participant "JQ Query: ID1" as JQQuery1
+participant "JQ Query: ID2" as JQQuery2
+participant "Destination: ID1" as Destination1
+participant "Destination: ID2" as Destination2
+
+User <- JQExtractor: Consume JSON Packet
+JQExtractor -> JQQuery1: Apply JQ Query
+JQQuery1 -> JQExtractor: Extracted JSON Packets
+JQExtractor -> Destination1: Send Extracted JSON Packets
+Destination1 -> JQExtractor: Notify Receipt of Packets
+JQExtractor -> JQQuery2: Apply JQ Query
+JQQuery2 -> JQExtractor: Extracted JSON Packets
+JQExtractor -> Destination2: Send Extracted JSON Packets
+Destination2 -> JQExtractor: Notify Receipt of Packets
+JQExtractor -> User: Notify Success Of Process
+
+@enduml
