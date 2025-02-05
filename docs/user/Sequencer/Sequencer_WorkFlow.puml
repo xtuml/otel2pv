@@ -1,0 +1,14 @@
+@startuml
+title Sequencer Workflow
+
+actor User
+participant "Sequencer" as Sequencer
+participant "Destination" as Destination
+
+User -> Sequencer: Send JSON Array
+Sequencer -> Sequencer: Sequence JSON Array
+Sequencer -> Destination: Send Sequenced Array
+Destination -> Sequencer: Notify Success of Receipt
+Sequencer -> User: Notify Success of Process
+
+@enduml

@@ -2,7 +2,7 @@
 ## Introduction
 JQExtractor is a tool that extracts JSON objects from streamed JSON objects based on multiple JQ queries. The query is written in the JQ language (https://jqlang.org/manual/). JQ is a lightweight and flexible command-line JSON processor. JQExtractor uses a Go JQ library (https://github.com/itchyny/gojq) as the basis of the extraction of the JSON objects from a JSON file. The output of each query is sent to a configured location (e.g. an AMQP1.0 queue). The tool is designed to be run as a standalone application or as a part of a pipeline.
 
-An example of a workflow for two queries (the basic premise can be extended to more than two queries) is shown in the sequence diagram below:
+The workflow for two queries (the basic premise can be extended to more than two queries) is shown in the sequence diagram below:
 ![JQExtractor Sequence Diagram](/docs/user/JQExtractor/JQExtractor_WorkFlow.svg)
 
 The JQExtractor will process all queries and send all extracted packets on to the configured destinations and then send confirmation to the source that the sent JSON packet has been processed.
@@ -102,6 +102,8 @@ The objects in the `ConsumerConfigs` array have the following structure:
 }
 ```
 The `Type` field and corresponding `ConsumerConfig` object are dependent on the type of consumer. These can be found in the [Consumer Documentation](/docs/user/Consumers_User_Manual.md).
+
+### Example Configuration
 
 An example configuration file is as follows:
 ```json
