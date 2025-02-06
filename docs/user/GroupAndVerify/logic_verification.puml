@@ -1,0 +1,25 @@
+@startuml
+title Group And Verify Activity Diagram with Timeout
+
+start
+
+:Receive first node in tree from queue;
+:start Timer;
+
+repeat
+if (Node of tree waiting to be received from queue?) then (yes)
+    :Receive node of tree;
+    :Group node by "tree_id";
+    :Attempt to verify tree;
+    if (All Bi-directional Links Exist?) then (yes)
+        :Output grouped tree;
+        :Notify tree verified;
+        stop
+    endif
+endif
+repeat while (Timer Not Expired)
+:Output grouped tree as it currently stands;
+:Notify timeout and tree unverified;
+stop
+
+@enduml

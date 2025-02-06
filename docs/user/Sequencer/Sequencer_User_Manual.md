@@ -28,25 +28,17 @@ However, the sequencer can be used to sequence data for any purpose as long as t
 The workflow of the Sequencer is shown in the following diagram:
 ![](./Sequencer_workflow.svg)
 
-## Sequencer Logic
-The sequencer basic logic can be found in the [Otel2PUML: Synchronous Sequencing](https://github.com/xtuml/otel2puml/blob/main/docs/user/sequencer_HOWTO.md#synchronous-sequencing).
-
-## Group Apply Feature
-The Sequencer has another feature that, if configured, to:
-1. grab the value of a specified field from one of the `appJSON`'s using the value of another field in the `appJSON` as the method to identify the correct `appJSON`.
-2. apply the found value to the specified field in all the other `appJSON`'s.
-
 ## Input Data Format
 The incoming data will be required to be an array of grouped tree data (e.g. OTel Traces) with the following format:
 ```json
 [
     {
-        "treeId": "<string>", // optional
-        "nodeId": "<string>",
-        "parentNodeId": "<string>", // optional, only required if the data is to be sequenced by parentNodeId and then ordered by timestamp
-        "childIds": ["<string>"], // optional, only required if the data is to be sequenced by childIds
-        "nodeType": "<string>", // optional, only required if the particular nodetypes children are found by parentNodeId and then ordered by timestamp
-        "timestamp": "<int>", // optional, only required if the data is to be sequenced by timestamp
+        "treeId": <string>, // optional
+        "nodeId": <string>,
+        "parentNodeId": <string>, // optional, only required if the data is to be sequenced by parentNodeId and then ordered by timestamp, used in conjunction with timestamp
+        "childIds": [<string>, ...], // optional, only required if the data is to be sequenced by childIds
+        "nodeType": <string>, // optional, only required if the particular nodetypes children are found by parentNodeId and then ordered by timestamp
+        "timestamp": "<int>", // optional, only required if the data is to be sequenced by timestamp, used in conjunction with parentNodeId
         "appJSON": {
             <arbitrary fields>
         } 
@@ -101,6 +93,13 @@ In the example of Protocol Verifier audit event sequences the `appJSON` object w
     ...
 ]
 ```
+## Sequencer Logic
+The sequencer basic logic can be found in the [Otel2PUML: Synchronous Sequencing](https://github.com/xtuml/otel2puml/blob/main/docs/user/sequencer_HOWTO.md#synchronous-sequencing).
+
+## Group Apply Feature
+The Sequencer has another feature that, if configured, to:
+1. grab the value of a specified field from one of the `appJSON`'s using the value of another field in the `appJSON` as the method to identify the correct `appJSON`.
+2. apply the found value to the specified field in all the other `appJSON`'s.
 
 ## Installation
 ### Building from Source

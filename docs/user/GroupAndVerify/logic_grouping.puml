@@ -1,0 +1,26 @@
+@startuml
+title Group And Send Nodes to Unique Queues by tree_id
+
+actor User
+boundary "Node Receiver" as NodeReceiver
+control "Queue Manager" as QueueManager
+Queue "tree_id_1" as Queue1
+Queue "tree_id_2" as Queue2
+Queue "tree_id_n" as QueueN
+Queue "New tree_id" as Queue
+
+User -> NodeReceiver: Send Node
+NodeReceiver -> QueueManager: Send Node to\nQueue Manager
+QueueManager -> QueueManager: Identify tree_id
+alt tree_id == "tree_id_1"
+    QueueManager -> Queue1: Add Node to Queue
+else tree_id == "tree_id_2"
+    QueueManager -> Queue2: Add Node to Queue
+else tree_id == "tree_id_n"
+    QueueManager -> QueueN: Add Node to Queue
+else (new tree_id)
+    QueueManager -> Queue: Create New Queue\nfor tree_id
+    QueueManager -> Queue: Add Node to New Queue
+end
+
+@enduml
