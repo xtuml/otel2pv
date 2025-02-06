@@ -602,7 +602,7 @@ func TestIncomingDataEquality(t *testing.T) {
 				ChildIds:  []string{"3"},
 				NodeType:  "type",
 				Timestamp: 1,
-				AppJSON:   map[string]any{
+				AppJSON: map[string]any{
 					"key": []any{},
 				},
 			},
@@ -612,7 +612,7 @@ func TestIncomingDataEquality(t *testing.T) {
 				ChildIds:  []string{"3"},
 				NodeType:  "type",
 				Timestamp: 1,
-				AppJSON:   map[string]any{
+				AppJSON: map[string]any{
 					"key": []any{},
 				},
 			},
@@ -785,8 +785,8 @@ func TestSequencer(t *testing.T) {
 			if err == nil {
 				t.Fatalf("Expected error from SendTo, got nil")
 			}
-			if err.Error() != "no root nodes" {
-				t.Errorf("Expected error message 'no root nodes', got %v", err.Error())
+			if err.Error() != "no data present in incoming data array" {
+				t.Errorf("Expected error message 'no data present in incoming data array', got %v", err.Error())
 			}
 			// check error case where getPrevIdData returns an error
 			sequencer.config = &SequencerConfig{}
@@ -817,24 +817,29 @@ func TestSequencer(t *testing.T) {
 			// check valid case with one root node
 			t.Run("oneRootNode", func(t *testing.T) {
 				tt := []struct {
-					name       string
-					input []byte
-					expected   []byte
+					name     string
+					input    []byte
+					expected []byte
 				}{
 					{
-						name: "NoDuplicates",
-						input: []byte(`[{"nodeId":"1","childIds":["2"],"appJSON":{}},{"nodeId":"2","childIds":[],"appJSON":{}}]`),
+						name:     "NoDuplicates",
+						input:    []byte(`[{"nodeId":"1","childIds":["2"],"appJSON":{}},{"nodeId":"2","childIds":[],"appJSON":{}}]`),
 						expected: []byte(`[{},{"SeqField":"2"}]`),
 					},
 					{
-						name: "EqualDuplicates",
-						input: []byte(`[{"nodeId":"1","childIds":["2"],"appJSON":{}},{"nodeId":"2","childIds":[],"appJSON":{}},{"nodeId":"1","childIds":["2"],"appJSON":{}}]`),
+						name:     "EqualDuplicates",
+						input:    []byte(`[{"nodeId":"1","childIds":["2"],"appJSON":{}},{"nodeId":"2","childIds":[],"appJSON":{}},{"nodeId":"1","childIds":["2"],"appJSON":{}}]`),
 						expected: []byte(`[{},{"SeqField":"2"},{"SeqField":"2"}]`),
 					},
 					{
-						name: "UnequalDuplicates",
-						input: []byte(`[{"nodeId":"1","childIds":["2"],"appJSON":{}},{"nodeId":"2","childIds":[],"appJSON":{}},{"nodeId":"1","childIds":["3"],"appJSON":{}}]`),
+						name:     "UnequalDuplicates",
+						input:    []byte(`[{"nodeId":"1","childIds":["2"],"appJSON":{}},{"nodeId":"2","childIds":[],"appJSON":{}},{"nodeId":"1","childIds":["3"],"appJSON":{}}]`),
 						expected: []byte(`[{},{},{}]`),
+					},
+					{
+						name:     "selfReference",
+						input:    []byte(`[{"nodeId":"1","childIds":["1", "2"],"appJSON":{}},{"nodeId":"2","childIds":[],"appJSON":{}}]`),
+						expected: []byte(`[{},{}]`),
 					},
 				}
 				for _, tc := range tt {
@@ -873,7 +878,7 @@ func TestSequencer(t *testing.T) {
 			})
 
 			t.Run("multipleRootNodes", func(t *testing.T) {
-			// check valid case with multiple root nodes
+				// check valid case with multiple root nodes
 				pushableChan := make(chan (*Server.AppData), 1)
 				sequencer := &Sequencer{
 					config: &SequencerConfig{
@@ -1186,8 +1191,8 @@ func TestSequenceWithStack(t *testing.T) {
 			},
 			"3": {
 				IncomingData: &IncomingData{
-				NodeId:   "3",
-				ChildIds: []string{"6", "7"},
+					NodeId:   "3",
+					ChildIds: []string{"6", "7"},
 				},
 			},
 			"4": {IncomingData: &IncomingData{NodeId: "4"}},
@@ -1229,24 +1234,32 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 	})
 	t.Run("valid", func(t *testing.T) {
 		tt := []struct {
-			name string
-			unEqualDuplicates bool
+			name             string
+			isUnSequenceable bool
 		}{
 			{
-				name: "noDuplicates",
-				unEqualDuplicates: false,
+				name:             "noDuplicates",
+				isUnSequenceable: false,
 			},
 			{
-				name: "equalDuplicates",
-				unEqualDuplicates: false,
+				name:             "equalDuplicates",
+				isUnSequenceable: false,
 			},
 			{
-				name: "unequalDuplicates",
-				unEqualDuplicates: true,
+				name:             "unequalDuplicates",
+				isUnSequenceable: true,
+			},
+			{
+				name:             "selfReferenceParentId",
+				isUnSequenceable: true,
+			},
+			{
+				name:             "selfReferenceChildId",
+				isUnSequenceable: true,
 			},
 		}
 		for _, test := range tt {
-		// check valid case
+			// check valid case
 			nodes := []any{
 				map[string]any{
 					"nodeId":   "1",
@@ -1277,6 +1290,10 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 					"childIds": []any{"2", "3", "4"},
 					"appJSON":  map[string]any{},
 				})
+			case "selfReferenceParentId":
+				nodes[0].(map[string]any)["parentId"] = "1"
+			case "selfReferenceChildId":
+				nodes[0].(map[string]any)["childIds"] = []any{"1", "2", "3"}
 			}
 			jsonBytes, err := json.Marshal(nodes)
 			if err != nil {
@@ -1287,18 +1304,24 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Expected no error from Unmarshal, got %v", err)
 			}
-			incomingDataMap, rootNodes, hasUnequalDuplicates, err := convertToIncomingDataMapAndRootNodes(rawDataArray, &childrenByBackwardsLink{})
+			incomingDataMap, rootNodes, isUnSequenceable, err := convertToIncomingDataMapAndRootNodes(rawDataArray, &childrenByBackwardsLink{})
 			if err != nil {
 				t.Errorf("Expected no error from convertAppDataToIncomingDataMapAndRootNodes, got %v", err)
 			}
 			if len(incomingDataMap) != 3 {
 				t.Errorf("Expected incomingDataMap to have 3 elements, got %v", len(incomingDataMap))
 			}
-			if len(rootNodes) != 1 {
-				t.Errorf("Expected rootNodes to have 1 element, got %v", len(rootNodes))
+			if test.name == "selfReferenceChildId" {
+				if len(rootNodes) != 0 {
+					t.Errorf("Expected rootNodes to have 0 elements, got %v", len(rootNodes))
+				}
+			} else {
+				if len(rootNodes) != 1 {
+					t.Errorf("Expected rootNodes to have 1 element, got %v", len(rootNodes))
+				}
 			}
-			if hasUnequalDuplicates != test.unEqualDuplicates {
-				t.Errorf("Expected hasUnequalDuplicates to be %v, got %v", test.unEqualDuplicates, hasUnequalDuplicates)
+			if isUnSequenceable != test.isUnSequenceable {
+				t.Errorf("Expected isUnSequenceable to be %v, got %v", test.isUnSequenceable, isUnSequenceable)
 			}
 			for i, inputMapAny := range nodes {
 				if i == 3 && test.name == "unequalDuplicates" {
@@ -1323,12 +1346,14 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 					t.Errorf("Expected appJSON to be %v, got %v", inputMap["appJSON"], incomingData.AppJSON)
 				}
 			}
-			rootNode, ok := rootNodes["1"]
-			if !ok {
-				t.Errorf("Expected rootNodes to have key '1'")
-			}
-			if rootNode != incomingDataMap["1"] {
-				t.Errorf("Expected rootNode to be %v, got %v", incomingDataMap["1"], rootNode)
+			if test.name != "selfReferenceChildId" {
+				rootNode, ok := rootNodes["1"]
+				if !ok {
+					t.Errorf("Expected rootNodes to have key '1'")
+				}
+				if rootNode != incomingDataMap["1"] {
+					t.Errorf("Expected rootNode to be %v, got %v", incomingDataMap["1"], rootNode)
+				}
 			}
 		}
 	})
@@ -1418,7 +1443,7 @@ func TestConvertToIncomingDataMapAndRootNodes(t *testing.T) {
 					}
 					expectedRootNode := &incomingDataWithDuplicates{
 						IncomingData: expectedRootNodeIncomingData,
-						Duplicates:  []*IncomingData{},
+						Duplicates:   []*IncomingData{},
 					}
 					if !reflect.DeepEqual(rootNodes["1"], expectedRootNode) {
 						t.Errorf("Expected root node to be %v, got %v", expectedRootNode, rootNodes["1"])

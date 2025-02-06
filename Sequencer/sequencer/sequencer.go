@@ -397,7 +397,6 @@ func incomingDataEquality(id1 *IncomingData, id2 *IncomingData) bool {
 	return true
 }
 
-
 type XIncomingData IncomingData
 
 type XIncomingDataExceptions struct {
@@ -444,7 +443,7 @@ func (id *IncomingData) UnmarshalJSON(data []byte) error {
 // 2. duplicates: []*IncomingData. The duplicates found in the incoming data.
 type incomingDataWithDuplicates struct {
 	*IncomingData
-	Duplicates   []*IncomingData
+	Duplicates []*IncomingData
 }
 
 // stackIncomingData is a single incomingData when it is used for sequencing
@@ -502,8 +501,8 @@ func sequenceWithStack(rootNode *incomingDataWithDuplicates, nodeIdToIncomingDat
 	}
 	stack := []*stackIncomingData{
 		{
-			incomingDataWithDuplicates:        rootNode,
-			currentChildIdIndex: 0,
+			incomingDataWithDuplicates: rootNode,
+			currentChildIdIndex:        0,
 		},
 	}
 	return func(yield func(*stackIncomingData, error) bool) {
@@ -531,8 +530,8 @@ func sequenceWithStack(rootNode *incomingDataWithDuplicates, nodeIdToIncomingDat
 				continue
 			}
 			stack = append(stack, &stackIncomingData{
-				incomingDataWithDuplicates:        childNode,
-				currentChildIdIndex: 0,
+				incomingDataWithDuplicates: childNode,
+				currentChildIdIndex:        0,
 			})
 		}
 	}
@@ -553,23 +552,31 @@ func sequenceWithStack(rootNode *incomingDataWithDuplicates, nodeIdToIncomingDat
 //
 // 2. map[string]*IncomingData. The converted data mapping node id to incoming data with no forward references i.e. root nodes
 //
-// 3. error. The error if the conversion fails
+// 3. bool. Boolean indicating if the incoming data is unsequenceable
+//
+// 4. error. The error if the conversion fails
 func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage, childrenBybackwardsLink *childrenByBackwardsLink) (map[string]*incomingDataWithDuplicates, map[string]*incomingDataWithDuplicates, bool, error) {
 	nodeIdToIncomingDataMap := make(map[string]*incomingDataWithDuplicates)
 	nodeIdToNoForwardRefMap := make(map[string]*incomingDataWithDuplicates)
 	nodeIdToForwardRefMap := make(map[string]bool)
 	backwardsLinks := make(map[string][]string)
 	nodeTypeToNodeMap := make(map[string][]*incomingDataWithDuplicates)
-	hasUnequalDuplicates := false
+	isUnSequenceable := false
 	for _, rawData := range rawDataArray {
 		incomingData := &IncomingData{}
 		err := json.Unmarshal(rawData, incomingData)
 		if err != nil {
-			return nil, nil, hasUnequalDuplicates, Server.NewInvalidErrorFromError(err)
+			return nil, nil, isUnSequenceable, Server.NewInvalidErrorFromError(err)
 		}
+
 		if firstNode, ok := nodeIdToIncomingDataMap[incomingData.NodeId]; ok {
 			if !incomingDataEquality(firstNode.IncomingData, incomingData) {
-				hasUnequalDuplicates = true
+				sequencerLogger.Warn(
+					"duplicate node not equal to original node",
+					slog.Group("details", slog.String("duplicate-nodeId", incomingData.NodeId),
+						slog.String("original-nodeId", firstNode.NodeId)),
+				)
+				isUnSequenceable = true
 			}
 			firstNode.Duplicates = append(firstNode.Duplicates, incomingData)
 			continue
@@ -579,6 +586,10 @@ func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage, childr
 			Duplicates:   []*IncomingData{},
 		}
 		if incomingData.ParentId != "" {
+			if incomingData.NodeId == incomingData.ParentId {
+				isUnSequenceable = true
+				sequencerLogger.Warn("nodeId is equal to its parentId. Tree unsequenceable.", slog.Group("details", slog.String("nodeId", incomingData.NodeId)))
+			}
 			_, ok := backwardsLinks[incomingData.ParentId]
 			if !ok {
 				backwardsLinks[incomingData.ParentId] = []string{}
@@ -597,6 +608,10 @@ func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage, childr
 			nodeIdToNoForwardRefMap[incomingData.NodeId] = incomingDataDuplicate
 		}
 		for _, childId := range incomingData.ChildIds {
+			if childId == incomingData.NodeId {
+				isUnSequenceable = true
+				sequencerLogger.Warn("nodeId is equal to one of its childId's. Tree unsequenceable.", slog.Group("details", slog.String("nodeId", incomingData.NodeId)))
+			}
 			nodeIdToForwardRefMap[childId] = true
 			_, ok := nodeIdToNoForwardRefMap[childId]
 			if ok {
@@ -621,7 +636,7 @@ func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage, childr
 			}
 			err := orderChildrenByTimestamp(parentNode, nodeIdToIncomingDataMap)
 			if err != nil {
-				return nil, nil, hasUnequalDuplicates, Server.NewInvalidErrorFromError(err)
+				return nil, nil, isUnSequenceable, Server.NewInvalidErrorFromError(err)
 			}
 		}
 	} else if len(childrenBybackwardsLink.NodeTypes) != 0 {
@@ -640,12 +655,16 @@ func convertToIncomingDataMapAndRootNodes(rawDataArray []json.RawMessage, childr
 				}
 				err := orderChildrenByTimestamp(node, nodeIdToIncomingDataMap)
 				if err != nil {
-					return nil, nil, hasUnequalDuplicates, Server.NewInvalidErrorFromError(err)
+					return nil, nil, isUnSequenceable, Server.NewInvalidErrorFromError(err)
 				}
 			}
 		}
 	}
-	return nodeIdToIncomingDataMap, nodeIdToNoForwardRefMap, hasUnequalDuplicates, nil
+	if len(nodeIdToNoForwardRefMap) == 0 {
+		isUnSequenceable = true
+		sequencerLogger.Warn("no root nodes found")
+	}
+	return nodeIdToIncomingDataMap, nodeIdToNoForwardRefMap, isUnSequenceable, nil
 }
 
 // getPrevIdFromPrevIncomingData
@@ -711,6 +730,74 @@ func getPrevIdData(prevIncomingData *IncomingData, config *SequencerConfig) (any
 	}
 }
 
+// currentAndPrevStackIncomingData is a struct that holds the current stack incoming data and the previous stack incoming data
+// for sequencing data
+type currentAndPrevStackIncomingData struct {
+	currentStackIncomingData *stackIncomingData
+	prevStackIncomingData    *stackIncomingData
+}
+
+// sequenceableSequencerFromRootNodes is a function that will provide an iterator of stackIncomingData, previous incoming data and error
+// for sequenceable incoming data
+//
+// Args:
+//
+// 1. rootNodes: map[string]*incomingDataWithDuplicates. The map of node id to incoming data with no forward references i.e. root nodes
+//
+// 2. nodeIdToIncomingDataMap: map[string]*incomingDataWithDuplicates. The map of node id to incoming data
+//
+// Returns:
+//
+// 1. iter.Seq2[*currentAndPrevStackIncomingData ,error]. The iterator of stackIncomingData, previous stackIncomingData and error
+func sequenceableSequencerFromRootNodes(rootNodes map[string]*incomingDataWithDuplicates, nodeIdToIncomingDataMap map[string]*incomingDataWithDuplicates) iter.Seq2[*currentAndPrevStackIncomingData, error] {
+	return func(yield func(*currentAndPrevStackIncomingData, error) bool) {
+		for _, rootNode := range rootNodes {
+			var prevStackIncomingData *stackIncomingData
+			for stackIncomingData, err := range sequenceWithStack(rootNode, nodeIdToIncomingDataMap) {
+				if err != nil {
+					yield(nil, err)
+					return
+				}
+				if stackIncomingData.IsDummy {
+					prevStackIncomingData = nil
+					continue
+				}
+				yield(&currentAndPrevStackIncomingData{
+					currentStackIncomingData: stackIncomingData,
+					prevStackIncomingData:    prevStackIncomingData,
+				}, nil)
+				prevStackIncomingData = stackIncomingData
+			}
+		}
+	}
+}
+
+// unsequenceableSequencerFromRootNodes is a function that will provide an iterator of stackIncomingData, previous stackIncomingData and error
+// for unsequenceable incoming data
+//
+// Args:
+//
+// 1. rootNodes: map[string]*incomingDataWithDuplicates. The map of node id to incoming data with no forward references i.e. root nodes
+//
+// 2. nodeIdToIncomingDataMap: map[string]*incomingDataWithDuplicates. The map of node id to incoming data
+//
+// Returns:
+//
+// 1. iter.Seq2[*currentAndPrevStackIncomingData ,error]. The iterator of stackIncomingData, previous stackIncomingData and error
+
+func unsequenceableSequencerFromRootNodes(rootNodes map[string]*incomingDataWithDuplicates, nodeIdToIncomingDataMap map[string]*incomingDataWithDuplicates) iter.Seq2[*currentAndPrevStackIncomingData, error] {
+	return func(yield func(*currentAndPrevStackIncomingData, error) bool) {
+		for _, node := range nodeIdToIncomingDataMap {
+			yield(&currentAndPrevStackIncomingData{
+				currentStackIncomingData: &stackIncomingData{
+					incomingDataWithDuplicates: node,
+					currentChildIdIndex:        0,
+				},
+			}, nil)
+		}
+	}
+}
+
 // SendTo is a method that will handle incoming data
 // It will sequence the data and send it to the next stage
 // Returns an error if the passing of data fails
@@ -741,58 +828,55 @@ func (s *Sequencer) SendTo(data *Server.AppData) error {
 	if err != nil {
 		return Server.NewInvalidError("incoming data is not an array")
 	}
-	nodeIdToIncomingDataMap, rootNodes, hasUnequalDuplicates, err := convertToIncomingDataMapAndRootNodes(rawDataArray, &s.config.ChildrenByBackwardsLink)
+	if len(rawDataArray) == 0 {
+		return Server.NewInvalidError("no data present in incoming data array")
+	}
+	nodeIdToIncomingDataMap, rootNodes, isUnSequenceable, err := convertToIncomingDataMapAndRootNodes(rawDataArray, &s.config.ChildrenByBackwardsLink)
 	if err != nil {
 		return err
 	}
-	if len(rootNodes) == 0 {
-		return Server.NewInvalidError("no root nodes")
-	}
 	appJSONArray := []map[string]any{}
 	groupAppliesMap := make(map[string]string)
-	for _, rootIncomingData := range rootNodes {
-		var prevIncomingData *IncomingData
-		for stackIncomingData, err := range sequenceWithStack(rootIncomingData, nodeIdToIncomingDataMap) {
-			if stackIncomingData.IsDummy {
-				prevIncomingData = nil
-				continue
-			}
+	var sequenceFromRootNodes iter.Seq2[*currentAndPrevStackIncomingData, error]
+	if isUnSequenceable {
+		sequenceFromRootNodes = unsequenceableSequencerFromRootNodes(rootNodes, nodeIdToIncomingDataMap)
+	} else {
+		sequenceFromRootNodes = sequenceableSequencerFromRootNodes(rootNodes, nodeIdToIncomingDataMap)
+	}
+
+	for currentAndPrevStackIncomingDataInstance, err := range sequenceFromRootNodes {
+		if err != nil {
+			return err
+		}
+		stackIncomingData := currentAndPrevStackIncomingDataInstance.currentStackIncomingData
+		prevStackIncomingData := currentAndPrevStackIncomingDataInstance.prevStackIncomingData
+		appJSON := stackIncomingData.AppJSON
+		var prevID any
+		if prevStackIncomingData != nil && !isUnSequenceable {
+			prevID, err = getPrevIdData(prevStackIncomingData.IncomingData, s.config)
 			if err != nil {
 				return err
 			}
-			appJSON := stackIncomingData.AppJSON
-			var prevID any
-			if prevIncomingData != nil && !hasUnequalDuplicates {
-				prevID, err = getPrevIdData(prevIncomingData, s.config)
+			appJSON[s.config.outputAppSequenceField] = prevID
+		}
+		// GroupApplies get data
+		for fieldToShare, groupApply := range s.config.groupApplies {
+			if _, ok := groupAppliesMap[fieldToShare]; !ok {
+				fieldValue, err := getGroupApplyValueFromAppJSON(appJSON, groupApply)
 				if err != nil {
-					return err
+					continue
 				}
+				groupAppliesMap[fieldToShare] = fieldValue
+			}
+		}
+		appJSONArray = append(appJSONArray, appJSON)
+		// update duplicate nodes
+		for _, duplicate := range stackIncomingData.Duplicates {
+			appJSON := duplicate.AppJSON
+			if prevStackIncomingData != nil && !isUnSequenceable {
 				appJSON[s.config.outputAppSequenceField] = prevID
 			}
-			// GroupApplies get data
-			for fieldToShare, groupApply := range s.config.groupApplies {
-				if _, ok := groupAppliesMap[fieldToShare]; !ok {
-					fieldValue, err := getGroupApplyValueFromAppJSON(appJSON, groupApply)
-					if err != nil {
-						continue
-					}
-					groupAppliesMap[fieldToShare] = fieldValue
-				}
-			}
 			appJSONArray = append(appJSONArray, appJSON)
-			// update duplicate nodes
-			for _, duplicate := range stackIncomingData.Duplicates {
-				appJSON := duplicate.AppJSON
-				if !incomingDataEquality(duplicate, stackIncomingData.IncomingData) {
-					sequencerLogger.Warn("duplicate node not equal to original node", slog.Group("details", slog.String("nodeId", duplicate.NodeId)))
-				}
-				if prevIncomingData != nil && !hasUnequalDuplicates {
-					appJSON[s.config.outputAppSequenceField] = prevID
-				}
-				appJSONArray = append(appJSONArray, appJSON)
-			}
-
-			prevIncomingData = stackIncomingData.IncomingData
 		}
 	}
 	// GroupApplies set data
