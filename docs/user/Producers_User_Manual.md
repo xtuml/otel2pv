@@ -79,10 +79,13 @@ The `HTTPProducer` is a producer that uses the standard golang http library to s
         "URL": <string - the URL to send the data to>,
         "numRetries": <int, optional - the number of times to retry sending the data, default is 3>,
         "timeout": <int, optional - the timeout in seconds for the request, default is 10>,
+        "initialRetryInterval": <float, optional - the initial retry interval in seconds (for exponential back-off), default is 1>,
+	    "retryIntervalmultiplier" <float, optional - the multiplier for the retry interval (for exponential back-off), default is 1>
     },
     "Map": <string, optional - the key/identifier to map to this producer>
 }
 ```
+The HTTPProducer can perform configured expontential back-off retries if the request fails. The `initialRetryInterval` and `retryIntervalmultiplier` fields are used to configure the back-off. The back-off is calculated as `initialRetryInterval * [0.5,1.5]retryIntervalmultiplier^retryNumber`. The intial retry interval is multiplied by a randomisation factor between 0.5 and 1.5 to prevent all clients from retrying at the same time. The retry interval is then multiplied by the retryIntervalmultiplier to the power of the retry number to increase the interval between retries.
 
 ### Example Configuration
 

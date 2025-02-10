@@ -13,6 +13,8 @@ import (
 	rabbitmq "github.com/rabbitmq/amqp091-go"
 
 	amqp "github.com/Azure/go-amqp"
+
+	backoff "github.com/cenkalti/backoff/v4"
 )
 
 // HTTPProducerConfig is a struct that represents the configuration
@@ -25,10 +27,18 @@ import (
 // This defaults to 3
 //
 // 3. timeout: int. The timeout for sending the data. This defaults to 10
+//
+// 4. initialRetryInterval: time.Duration. The initial retry interval for sending the data.
+// This defaults to 1 second.
+//
+// 5. retryIntervalmultiplier: float64. The multiplier for the retry interval.
+// This defaults to 1.0.
 type HTTPProducerConfig struct {
 	URL        string
 	numRetries int
 	timeout    int
+	initialRetryInterval time.Duration
+	retryIntervalmultiplier float64
 }
 
 // IngestConfig is a method that will ingest the configuration
@@ -51,21 +61,50 @@ func (h *HTTPProducerConfig) IngestConfig(config map[string]any) error {
 	if !ok {
 		h.numRetries = 3
 	} else {
-		numRetries, ok := numRetries.(int)
-		if !ok {
-			return errors.New("invalid numRetries - must be an integer")
-		}
-		h.numRetries = numRetries
+        if numRetriesInt, ok := numRetries.(int); ok {
+            h.numRetries = numRetriesInt
+        } else {
+            numRetriesFloat, ok := numRetries.(float64)
+            if !ok {
+                return errors.New("invalid numRetries - must be an integer")
+            }
+            numRetries := int(numRetriesFloat)
+            h.numRetries = numRetries
+        }
 	}
 	timeout, ok := config["timeout"]
 	if !ok {
 		h.timeout = 10
 	} else {
-		timeout, ok := timeout.(int)
+		if timeoutInt, ok := timeout.(int); ok {
+            h.timeout = timeoutInt
+        } else {
+            timeoutFloat, ok := timeout.(float64)
+            if !ok {
+                return errors.New("invalid timeout - must be an integer")
+            }
+            h.timeout = int(timeoutFloat)
+        }
+	}
+	initialRetryInterval, ok := config["initialRetryInterval"]
+	if !ok {
+		h.initialRetryInterval = 1 * time.Second
+	} else {
+		initialRetryInterval, ok := initialRetryInterval.(float64)
 		if !ok {
-			return errors.New("invalid timeout - must be an integer")
+			return errors.New("invalid initialRetryInterval - must be an integer")
 		}
-		h.timeout = timeout
+		h.initialRetryInterval = time.Duration(initialRetryInterval) * time.Second
+	}
+	retryIntervalmultiplier, ok := config["retryIntervalmultiplier"]
+	if !ok {
+		h.retryIntervalmultiplier = 1.0
+	} else {
+		retryIntervalmultiplier, ok := retryIntervalmultiplier.(float64)
+		if !ok {
+			return errors.New("invalid retryIntervalmultiplier - must be an integer")
+		}
+		h.retryIntervalmultiplier = retryIntervalmultiplier
 	}
 	return nil
 }
@@ -126,6 +165,7 @@ func (h *HTTPProducer) SendTo(data *AppData) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	var resp *http.Response
+	var backoffClient backoff.ExponentialBackOff
 	for i := 0; i < h.config.numRetries; i++ {
 		// try to send the data
 		resp, err = h.client.Do(req)
@@ -139,7 +179,15 @@ func (h *HTTPProducer) SendTo(data *AppData) error {
 			))
 			return nil
 		}
-		time.Sleep(1 * time.Second)
+		// backoff
+		if i == 0 {
+			backoffClient = backoff.ExponentialBackOff{
+				InitialInterval: h.config.initialRetryInterval,
+				Multiplier: 	h.config.retryIntervalmultiplier,
+			}
+		}
+		backOff := backoffClient.NextBackOff()
+		time.Sleep(backOff)
 	}
 	if resp == nil {
 		return NewSendError(fmt.Sprintf("Failed to send data via http to %s, with no response", h.config.URL))
