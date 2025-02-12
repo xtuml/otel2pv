@@ -3,6 +3,7 @@ package Server
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -558,6 +559,7 @@ func (r *RabbitMQProducer) SendTo(data *AppData) error {
 type AMQPOneProducerConfig struct {
 	Connection string
 	Queue      string
+	TLSConfig  *tls.Config
 }
 
 // IngestConfig is a method that will ingest the configuration for the
@@ -581,6 +583,11 @@ func (a *AMQPOneProducerConfig) IngestConfig(config map[string]any) error {
 		return errors.New("invalid Queue - must be a string and must be set")
 	}
 	a.Queue = queue
+	tlsConfig, err := ingestTLSConfig(config)
+	if err != nil {
+		return err
+	}
+	a.TLSConfig = tlsConfig
 	return nil
 }
 
@@ -712,7 +719,9 @@ func (a *AMQPOneProducer) Serve() error {
 	if a.cancel == nil {
 		return errors.New("context cancel not set")
 	}
-	conn, err := a.dial(a.ctx, a.config.Connection, nil)
+	conn, err := a.dial(a.ctx, a.config.Connection, &amqp.ConnOptions{
+		TLSConfig: a.config.TLSConfig,
+	})
 	if err != nil {
 		return err
 	}

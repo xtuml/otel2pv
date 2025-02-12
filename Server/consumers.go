@@ -2,6 +2,7 @@ package Server
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"log/slog"
 	"sync"
@@ -385,6 +386,7 @@ type AMQPOneConsumerConfig struct {
 	Queue                 string
 	OnValue               bool
 	MaxConcurrentMessages int
+	TLSConfig             *tls.Config
 }
 
 // IngestConfig is a method that will ingest the configuration
@@ -430,6 +432,11 @@ func (a *AMQPOneConsumerConfig) IngestConfig(config map[string]any) error {
 	} else {
 		a.MaxConcurrentMessages = 1
 	}
+	tlsConfig, err := ingestTLSConfig(config)
+	if err != nil {
+		return err
+	}
+	a.TLSConfig = tlsConfig
 	return nil
 }
 
@@ -583,7 +590,9 @@ func (a *AMQPOneConsumer) Serve() error {
 		a.finishCtx = context.Background()
 	}
 	ctx := context.Background()
-	conn, err := a.dial(ctx, a.config.Connection, nil)
+	conn, err := a.dial(ctx, a.config.Connection, &amqp.ConnOptions{
+		TLSConfig: a.config.TLSConfig,
+	})
 	if err != nil {
 		return err
 	}
