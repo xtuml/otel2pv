@@ -34,12 +34,15 @@ import (
 //
 // 5. retryIntervalmultiplier: float64. The multiplier for the retry interval.
 // This defaults to 1.0.
+//
+// 6. TLSConfig: *tls.Config. The TLS configuration for the producer.
 type HTTPProducerConfig struct {
-	URL        string
-	numRetries int
-	timeout    int
-	initialRetryInterval time.Duration
+	URL                     string
+	numRetries              int
+	timeout                 int
+	initialRetryInterval    time.Duration
 	retryIntervalmultiplier float64
+	TLSConfig               *tls.Config
 }
 
 // IngestConfig is a method that will ingest the configuration
@@ -62,30 +65,30 @@ func (h *HTTPProducerConfig) IngestConfig(config map[string]any) error {
 	if !ok {
 		h.numRetries = 3
 	} else {
-        if numRetriesInt, ok := numRetries.(int); ok {
-            h.numRetries = numRetriesInt
-        } else {
-            numRetriesFloat, ok := numRetries.(float64)
-            if !ok {
-                return errors.New("invalid numRetries - must be an integer")
-            }
-            numRetries := int(numRetriesFloat)
-            h.numRetries = numRetries
-        }
+		if numRetriesInt, ok := numRetries.(int); ok {
+			h.numRetries = numRetriesInt
+		} else {
+			numRetriesFloat, ok := numRetries.(float64)
+			if !ok {
+				return errors.New("invalid numRetries - must be an integer")
+			}
+			numRetries := int(numRetriesFloat)
+			h.numRetries = numRetries
+		}
 	}
 	timeout, ok := config["timeout"]
 	if !ok {
 		h.timeout = 10
 	} else {
 		if timeoutInt, ok := timeout.(int); ok {
-            h.timeout = timeoutInt
-        } else {
-            timeoutFloat, ok := timeout.(float64)
-            if !ok {
-                return errors.New("invalid timeout - must be an integer")
-            }
-            h.timeout = int(timeoutFloat)
-        }
+			h.timeout = timeoutInt
+		} else {
+			timeoutFloat, ok := timeout.(float64)
+			if !ok {
+				return errors.New("invalid timeout - must be an integer")
+			}
+			h.timeout = int(timeoutFloat)
+		}
 	}
 	initialRetryInterval, ok := config["initialRetryInterval"]
 	if !ok {
@@ -107,6 +110,11 @@ func (h *HTTPProducerConfig) IngestConfig(config map[string]any) error {
 		}
 		h.retryIntervalmultiplier = retryIntervalmultiplier
 	}
+	tlsConfig, err := ingestTLSConfig(config)
+	if err != nil {
+		return err
+	}
+	h.TLSConfig = tlsConfig
 	return nil
 }
 
@@ -136,8 +144,15 @@ func (h *HTTPProducer) Setup(config Config) error {
 		return errors.New("invalid config")
 	}
 	h.config = c
+	var transport *http.Transport
+	if c.TLSConfig != nil {
+		transport = &http.Transport{
+			TLSClientConfig: c.TLSConfig,
+		}
+	}
 	h.client = &http.Client{
 		Timeout: time.Duration(h.config.timeout) * time.Second,
+		Transport: transport,
 	}
 	return nil
 }
@@ -184,7 +199,7 @@ func (h *HTTPProducer) SendTo(data *AppData) error {
 		if i == 0 {
 			backoffClient = backoff.ExponentialBackOff{
 				InitialInterval: h.config.initialRetryInterval,
-				Multiplier: 	h.config.retryIntervalmultiplier,
+				Multiplier:      h.config.retryIntervalmultiplier,
 			}
 		}
 		backOff := backoffClient.NextBackOff()
@@ -556,6 +571,8 @@ func (r *RabbitMQProducer) SendTo(data *AppData) error {
 // 1. Connection: string. The connection string for the AMQP server.
 //
 // 2. Queue: string. The name of the queue to send the data to.
+//
+// 3. TLSConfig: *tls.Config. The TLS configuration for the producer.
 type AMQPOneProducerConfig struct {
 	Connection string
 	Queue      string
@@ -792,7 +809,7 @@ func (a *AMQPOneProducer) SendTo(data *AppData) error {
 		return err
 	}
 	Logger.Info("Successfully sent message", slog.Group(
-		"details", slog.String("producer", "AMQP1.0"), slog.String("connection", a.config.Connection),  slog.String("queue", a.config.Queue),
+		"details", slog.String("producer", "AMQP1.0"), slog.String("connection", a.config.Connection), slog.String("queue", a.config.Queue),
 	))
 	return nil
 }

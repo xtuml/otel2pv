@@ -381,6 +381,8 @@ func (r *RabbitMQConsumer) Serve() error {
 // 3. OnValue: bool. Whether to use the Value field of the AMQP message. Defaults to false.
 //
 // 4. MaxConcurrentMessages: int. The maximum number of concurrent messages to process. Defaults to 1.
+//
+// 5. TLSConfig: *tls.Config. The TLS configuration for the AMQP connection.
 type AMQPOneConsumerConfig struct {
 	Connection            string
 	Queue                 string
