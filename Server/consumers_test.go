@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Azure/go-amqp"
+	amqp "github.com/Azure/go-amqp"
 	rabbitmq "github.com/rabbitmq/amqp091-go"
 )
 

@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/itchyny/gojq"
-	"github.com/santhosh-tekuri/jsonschema/v5"
+	jsonschema "github.com/santhosh-tekuri/jsonschema/v5"
 
 
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
@@ -234,6 +234,7 @@ func (jqt *JQTransformer) SendTo(data *Server.AppData) error {
 	}
 	wg := &sync.WaitGroup{}
 	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
 	for key, value := range outData {
 		for _, val := range value {
 			wg.Add(1)

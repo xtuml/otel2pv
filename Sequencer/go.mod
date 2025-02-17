@@ -1,6 +1,6 @@
 module Sequencer
 
-go 1.23.2
+go 1.23.6
 
 replace github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server => ../Server
 

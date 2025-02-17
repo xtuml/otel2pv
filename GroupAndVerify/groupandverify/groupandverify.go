@@ -104,14 +104,14 @@ type Task struct {
 // GroupAndVerifyConfig is a struct that is used to hold the configuration for the GroupAndVerify
 // component. It has the following fields:
 //
-// 1. parentVerifySet: map[string]bool. It is a map that holds the identifiers of the nodes (NodeTypes)
-// that do not require bidirectional confirmation.
+// 1. parentVerifySet: map[string]*int. It is a map that holds the identifiers of the nodes (NodeTypes)
+// that do not require bidirectional confirmation and their expected number of children.
 //
 // 2. Timeout: int. It is the time out for the processing of the tree.
 //
 // 3. MaxTrees: int. It is the maximum number of trees that can be processed at a time. If 0, then there is no limit.
 type GroupAndVerifyConfig struct {
-	parentVerifySet map[string]bool
+	parentVerifySet map[string]*int
 	Timeout         int
 	MaxTrees        int
 }
@@ -133,17 +133,32 @@ func (gavc *GroupAndVerifyConfig) updateParentVerifySet(config map[string]any) e
 		if !ok {
 			return errors.New("parentVerifySet is not an array of strings")
 		}
-		parentVerifySet := make(map[string]bool)
+		parentVerifySet := make(map[string]*int)
 		for i, value := range parentVerifySetAny {
-			valueString, ok := value.(string)
+			valueString, ok := value.(map[string]any)
 			if !ok {
-				return fmt.Errorf("parentVerifySet[%d] is not a string", i)
+				return fmt.Errorf("parentVerifySet[%d] is not an object", i)
 			}
-			parentVerifySet[valueString] = true
+			nodeType, ok := valueString["nodeType"].(string)
+			if !ok {
+				return fmt.Errorf("nodeType in parentVerifySet[%d] is not present or is not a string", i)
+			}
+			expectedChildrenRaw, ok := valueString["expectedChildren"].(float64)
+			if !ok {
+				return fmt.Errorf("expectedChildren in parentVerifySet[%d] is not present or is not a number", i)
+			}
+			expectedChildren := int(expectedChildrenRaw)
+			if expectedChildren <= 0 {
+				return fmt.Errorf("expectedChildren in parentVerifySet[%d] must be a positive integer greater than zero", i)
+			}
+			if _, ok := parentVerifySet[nodeType]; ok {
+				return fmt.Errorf("nodeType in parentVerifySet[%d] is a duplicate", i)
+			}
+			parentVerifySet[nodeType] = &expectedChildren
 		}
 		gavc.parentVerifySet = parentVerifySet
 	} else {
-		gavc.parentVerifySet = make(map[string]bool)
+		gavc.parentVerifySet = make(map[string]*int)
 	}
 	return nil
 }
@@ -466,11 +481,11 @@ func (cb *childBalance) IsVerified() bool {
 // has been verified and can be removed from the map i.e. the value for a child is zero as it has been
 // seen twice.
 //
-// 2. singleChildNoRef: bool. It is a boolean that is used to determine if the parent node has a single child
-// and does not require bidirectional confirmation.
+// 2. expectedChildren: *int. It is a pointer to the expected number of children for the parent node.
+// This is used for the nodes that do not require bidirectional confirmation.
 type parentStatus struct {
 	childRefBalance  map[string]*childBalance
-	singleChildNoRef bool
+	expectedChildren *int	
 }
 
 // newParentStatus is a function that is used to create a new parentStatus struct.
@@ -494,7 +509,7 @@ func (ps *parentStatus) UpdateFromChild(childId string) {
 		ps.childRefBalance[childId] = &childBalance{}
 	}
 	ps.childRefBalance[childId].ChildRef()
-	if ps.singleChildNoRef {
+	if ps.expectedChildren != nil {
 		ps.childRefBalance[childId].ParentRef()
 	}
 }
@@ -505,18 +520,17 @@ func (ps *parentStatus) UpdateFromChild(childId string) {
 //
 // 1. childId: string. The identifier of the child node.
 //
-// 2. isSingleChildNoRef: bool. It is a boolean that is used to determine if the parent node has a single child
-// and does not require bidirectional confirmation.
+// 2. expectedChildren: *int. A pointer to the expected number of children for the parent node.
 //
 // Returns:
 //
 // 1. error. It returns an error if there is a problem with the data.
-func (ps *parentStatus) UpdateFromParent(childIds []string, isSingleChildNoRef bool) error {
-	if isSingleChildNoRef {
+func (ps *parentStatus) UpdateFromParent(childIds []string, expectedChildren *int) error {
+	if expectedChildren != nil {
 		if len(childIds) != 0 {
 			return errors.New("node should have no referenced children as it is in the list of node types where children cannot be referenced")
 		}
-		ps.singleChildNoRef = true
+		ps.expectedChildren = expectedChildren
 		for childId := range ps.childRefBalance {
 			ps.childRefBalance[childId].ParentRef()
 		}
@@ -537,8 +551,12 @@ func (ps *parentStatus) UpdateFromParent(childIds []string, isSingleChildNoRef b
 //
 // 1. bool. It returns true if the parent node has been verified.
 func (ps *parentStatus) CheckVerified() bool {
-	if len(ps.childRefBalance) == 0 && ps.singleChildNoRef {
-		return false
+	if ps.expectedChildren != nil {
+		if len(ps.childRefBalance) != *ps.expectedChildren {
+			return false
+		} else {
+			return true
+		}
 	}
 	for _, child := range ps.childRefBalance {
 		if !child.IsVerified() {
@@ -555,13 +573,13 @@ func (ps *parentStatus) CheckVerified() bool {
 // 1. parentStatusHolder: map[string]*parentStatus. It is the map that holds the verification status of the parent nodes.
 //
 // 2. parentVerifySet: map[string]bool. It is the map that holds the identifiers of the nodes (NodeTypes)
-// that do not require bidirectional confirmation.
+// that do not require bidirectional confirmation and their expected number of children.
 //
 // 3. verifiedNodes: map[string]bool. It is the map that holds the identifiers of the nodes that have already been verified.
 // This is used to prevent the same node from being verified multiple times if duplicates appear in the data.
 type verificationStatusHolder struct {
 	parentStatusHolder map[string]*parentStatus
-	parentVerifySet    map[string]bool
+	parentVerifySet    map[string]*int
 	verifiedNodes      map[string]bool
 }
 
@@ -569,11 +587,12 @@ type verificationStatusHolder struct {
 //
 // Args:
 //
-// 1. parentVerifySet: map[string]bool. It is the map that holds the identifiers of the nodes (NodeTypes)
+// 1. parentVerifySet: map[string]*int. It is the map that holds the identifiers of the nodes (NodeTypes)
+// that do not require bidirectional confirmation and their expected number of children.
 // Returns:
 //
 // 1. *verificationStatusHolder. It returns a new verificationStatusHolder struct.
-func newVerificationStatusHolder(parentVerifySet map[string]bool) *verificationStatusHolder {
+func newVerificationStatusHolder(parentVerifySet map[string]*int) *verificationStatusHolder {
 	return &verificationStatusHolder{
 		parentStatusHolder: make(map[string]*parentStatus),
 		parentVerifySet:    parentVerifySet,
@@ -621,8 +640,8 @@ func (vsh *verificationStatusHolder) updateForwardLinks(nodeId string, childIds 
 		vsh.parentStatusHolder[nodeId] = newParentStatus()
 	}
 	nodeStatus := vsh.parentStatusHolder[nodeId]
-	_, ok := vsh.parentVerifySet[nodeType]
-	err := nodeStatus.UpdateFromParent(childIds, ok)
+	expectedChildren := vsh.parentVerifySet[nodeType]
+	err := nodeStatus.UpdateFromParent(childIds, expectedChildren)
 	if err != nil {
 		return err
 	}
@@ -748,7 +767,7 @@ func updateIncomingDataHolderMap(incomingDataHolderMap map[string]*incomingDataH
 //
 // 1. error. It returns an error if the processing of the tree fails.
 func processTasks(
-	taskChan chan *Task, timeOut int, parentVerifySet map[string]bool,
+	taskChan chan *Task, timeOut int, parentVerifySet map[string]*int,
 ) (map[string]*incomingDataHolder, []*Task, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeOut)*time.Second)
 	verificationStatusHolder := newVerificationStatusHolder(parentVerifySet)

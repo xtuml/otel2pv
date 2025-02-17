@@ -130,7 +130,7 @@ The `AppConfig` section of the configuration file is used to configure the Group
 {
     "Timeout": <int, optional - the time in seconds to wait for a tree to be verifier, default is 2>,
     "MaxTrees": <int, optional - the maximum number of trees to be stored in memory and must be 0 or greater. If 0 then there is no maximum amount of trees, default is 0 i.e. no maximum>,
-    "parentVerifySet": <array of strings, optional - the node types that are expected to have a parent link and the parent link is not expected to have a forward link to the child node (currently it the case is for having just one child, if there are more unexpected behaviour will occur), default is []>,
+    "parentVerifySet": <array of objects, optional - the node types that are expected to have a parent links and the parent links are not expected to have a forward link to the child node. Specifies the expected number of children, default is []>,
 }
 ```
 
@@ -138,7 +138,14 @@ The `Timeout` field is used to set the time in seconds to wait for a tree to be 
 
 The `MaxTrees` field is used to set the maximum number of trees that the application will process at one time, if this limit is reached the application that sent the data will be notified.
 
-The `parentVerifySet` field is used to set the node types that are expected to have a parent link and the parent link is not expected to have a forward link to the child node. This currently can only be used if the node in question only has one child. If there are more children unexpected behaviour will occur.
+The `parentVerifySet` field is used to set the node types that are expected to have a parent links and the parent links are not expected to have a forward links to the child nodes. Specifies the expected number of children mapped to nodeType. The structure of the object in the array is
+
+```json
+{
+    "nodeType": <string>,
+    "expecteddChildren": <int>
+}
+```
 
 An example configuration for AppConfig is as follows:
 ```json
@@ -147,8 +154,13 @@ An example configuration for AppConfig is as follows:
         "Timeout": 2,
         "MaxTrees": 0,
         "parentVerifySet": [
-            "nodeType1",
-            "nodeType2"
+            {
+                "nodeType": "nodeType1", "expecteddChildren": 1
+            },
+            {
+                "nodeType":"nodeType2",
+                "expecteddChildren": 2
+            }
         ]
     },
 }

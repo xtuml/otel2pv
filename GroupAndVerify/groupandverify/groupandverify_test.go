@@ -47,12 +47,87 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}
-			if err.Error() != "parentVerifySet[0] is not a string" {
-				t.Errorf("expected parentVerifySet[0] is not a string, got %v", err)
+			if err.Error() != "parentVerifySet[0] is not an object" {
+				t.Errorf("expected parentVerifySet[0] is not an object, got %v", err)
+			}
+			// test error case when nodeType is not present
+			config = map[string]any{
+				"parentVerifySet": []any{map[string]any{"expectedChildren": 1.0}},
+			}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.updateParentVerifySet(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "nodeType in parentVerifySet[0] is not present or is not a string" {
+				t.Errorf("expected nodeType in parentVerifySet[0] is not present or is not a string, got %v", err)
+			}
+			// test error case when nodeType is not a string
+			config = map[string]any{
+				"parentVerifySet": []any{map[string]any{"nodeType": 1, "expectedChildren": 1.0}},
+			}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.updateParentVerifySet(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "nodeType in parentVerifySet[0] is not present or is not a string" {
+				t.Errorf("expected nodeType in parentVerifySet[0] is not present or is not a string, got %v", err)
+			}
+			// test error case when expectedChildren is not present
+			config = map[string]any{
+				"parentVerifySet": []any{map[string]any{"nodeType": "string"}},
+			}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.updateParentVerifySet(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "expectedChildren in parentVerifySet[0] is not present or is not a number" {
+				t.Errorf("expected expectedChildren in parentVerifySet[0] is not present or is not a number, got %v", err)
+			}
+			// test error case when expectedChildren is not a number
+			config = map[string]any{
+				"parentVerifySet": []any{map[string]any{"nodeType": "string", "expectedChildren": "not a number"}},
+			}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.updateParentVerifySet(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "expectedChildren in parentVerifySet[0] is not present or is not a number" {
+				t.Errorf("expected expectedChildren in parentVerifySet[0] is not present or is not a number, got %v", err)
+			}
+			// test case when expectedChildren is a number less than or equal to 0
+			config = map[string]any{
+				"parentVerifySet": []any{map[string]any{"nodeType": "string", "expectedChildren": 0.0}},
+			}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.updateParentVerifySet(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "expectedChildren in parentVerifySet[0] must be a positive integer greater than zero" {
+				t.Errorf("expected expectedChildren in parentVerifySet[0] must be a positive integer greater than zero, got %v", err)
+			}
+			// test case when there is a duplicate nodeType in parentVerifySet
+			config = map[string]any{
+				"parentVerifySet": []any{
+					map[string]any{"nodeType": "string", "expectedChildren": 1.0},
+					map[string]any{"nodeType": "string", "expectedChildren": 1.0},
+				},
+			}
+			gavc = GroupAndVerifyConfig{}
+			err = gavc.updateParentVerifySet(config)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if err.Error() != "nodeType in parentVerifySet[1] is a duplicate" {
+				t.Errorf("expected nodeType in parentVerifySet[1] is a duplicate, got %v", err)
 			}
 			// test case when parentVerifySet input is valid
 			config = map[string]any{
-				"parentVerifySet": []any{"string"},
+				"parentVerifySet": []any{map[string]any{"nodeType": "string", "expectedChildren": 1.0}},
 			}
 			gavc = GroupAndVerifyConfig{}
 			err = gavc.updateParentVerifySet(config)
@@ -62,8 +137,12 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 			if len(gavc.parentVerifySet) != 1 {
 				t.Fatalf("expected 1, got %d", len(gavc.parentVerifySet))
 			}
-			if _, ok := gavc.parentVerifySet["string"]; !ok {
+			if value, ok := gavc.parentVerifySet["string"]; !ok {
 				t.Errorf("expected string to be map key, got %v", gavc.parentVerifySet)
+			} else {
+				if *value != 1 {
+					t.Errorf("expected 1, got %d", *value)
+				}
 			}
 			// test default case when parentVerifySet is not present
 			config = map[string]any{}
@@ -202,7 +281,7 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 			}
 			// test case when all update functions return no error
 			config = map[string]any{
-				"parentVerifySet": []any{"string"},
+				"parentVerifySet": []any{map[string]any{"nodeType": "string", "expectedChildren": 1.0}},
 				"Timeout":         1,
 			}
 			gavc = GroupAndVerifyConfig{}
@@ -213,8 +292,12 @@ func TestGroupAndVerifyConfig(t *testing.T) {
 			if len(gavc.parentVerifySet) != 1 {
 				t.Fatalf("expected 1, got %d", len(gavc.parentVerifySet))
 			}
-			if _, ok := gavc.parentVerifySet["string"]; !ok {
+			if value, ok := gavc.parentVerifySet["string"]; !ok {
 				t.Errorf("expected string to be map key, got %v", gavc.parentVerifySet)
+			} else {
+				if *value != 1 {
+					t.Errorf("expected 1, got %d", *value)
+				}
 			}
 			if gavc.Timeout != 1 {
 				t.Errorf("expected 1, got %d", gavc.Timeout)
@@ -352,7 +435,7 @@ func TestGroupAndVerify(t *testing.T) {
 			t.Errorf("expected parentVerifySet not set, got %v", err)
 		}
 		// Test case: all required fields are set
-		gav = GroupAndVerify{config: &GroupAndVerifyConfig{parentVerifySet: map[string]bool{}}, pushable: &MockPushable{}, taskChan: make(chan *Task, 1)}
+		gav = GroupAndVerify{config: &GroupAndVerifyConfig{parentVerifySet: map[string]*int{}}, pushable: &MockPushable{}, taskChan: make(chan *Task, 1)}
 		close(gav.taskChan)
 		err = gav.Serve()
 		if err != nil {
@@ -475,7 +558,8 @@ func TestParentStatus(t *testing.T) {
 		}
 		// Test case: childId is not in parentStatus.childRefBalance and the singleChildNoRef is set to true
 		ps = newParentStatus()
-		ps.singleChildNoRef = true
+		expectedChildren := 1
+		ps.expectedChildren = &expectedChildren
 		ps.UpdateFromChild(childId)
 		if len(ps.childRefBalance) != 1 {
 			t.Errorf("expected 1, got %d", len(ps.childRefBalance))
@@ -501,24 +585,24 @@ func TestParentStatus(t *testing.T) {
 		}
 	})
 	t.Run("UpdateFromParent", func(t *testing.T) {
-		t.Run("isSingleChildNoRef is false", func(t *testing.T) {
+		t.Run("expectedChildren is nil", func(t *testing.T) {
 			// Test case: childIds is empty
 			ps := newParentStatus()
 			childIds := []string{}
-			err := ps.UpdateFromParent(childIds, false)
+			err := ps.UpdateFromParent(childIds, nil)
 			if err != nil {
 				t.Errorf("expected nil, got %v", err)
 			}
 			if len(ps.childRefBalance) != 0 {
 				t.Errorf("expected 0, got %d", len(ps.childRefBalance))
 			}
-			if ps.singleChildNoRef {
-				t.Errorf("expected false, got true")
+			if ps.expectedChildren != nil {
+				t.Errorf("expected nil, got %v", ps.expectedChildren)
 			}
 			// Test case: childIds has values and childRefBalance is empty
 			ps = newParentStatus()
 			childIds = []string{"child"}
-			err = ps.UpdateFromParent(childIds, false)
+			err = ps.UpdateFromParent(childIds, nil)
 			if err != nil {
 				t.Errorf("expected nil, got %v", err)
 			}
@@ -531,13 +615,13 @@ func TestParentStatus(t *testing.T) {
 			if ps.childRefBalance["child"].IsVerified() {
 				t.Errorf("expected false, got true")
 			}
-			if ps.singleChildNoRef {
-				t.Errorf("expected false, got true")
+			if ps.expectedChildren != nil {
+				t.Errorf("expected nil, got %v", ps.expectedChildren)
 			}
 			// Test case: childIds has values and childRefBalance is populated with the same id but from a parent reference
 			ps = newParentStatus()
 			ps.childRefBalance["child"] = &childBalance{parentRef: true}
-			err = ps.UpdateFromParent(childIds, false)
+			err = ps.UpdateFromParent(childIds, nil)
 			if err != nil {
 				t.Errorf("expected nil, got %v", err)
 			}
@@ -550,13 +634,13 @@ func TestParentStatus(t *testing.T) {
 			if ps.childRefBalance["child"].IsVerified() {
 				t.Errorf("expected false, got true")
 			}
-			if ps.singleChildNoRef {
-				t.Errorf("expected false, got true")
+			if ps.expectedChildren != nil {
+				t.Errorf("expected nil, got %v", ps.expectedChildren)
 			}
 			// Test case: childIds has values and childRefBalance is populated with the same id but from a child reference
 			ps = newParentStatus()
 			ps.childRefBalance["child"] = &childBalance{childRef: true}
-			err = ps.UpdateFromParent(childIds, false)
+			err = ps.UpdateFromParent(childIds, nil)
 			if err != nil {
 				t.Errorf("expected nil, got %v", err)
 			}
@@ -569,35 +653,36 @@ func TestParentStatus(t *testing.T) {
 			if !ps.childRefBalance["child"].IsVerified() {
 				t.Errorf("expected true, got false")
 			}
-			if ps.singleChildNoRef {
-				t.Errorf("expected false, got true")
+			if ps.expectedChildren != nil {
+				t.Errorf("expected nil, got %v", ps.expectedChildren)
 			}
 		})
-		t.Run("isSingleChildNoRef is true", func(t *testing.T) {
+		t.Run("expectedChildren is not nil", func(t *testing.T) {
+			expectedChildren := 1
 			// Test case: childIds has values and childRefBalance is empty
 			ps := newParentStatus()
 			childIds := []string{"child"}
-			err := ps.UpdateFromParent(childIds, true)
+			err := ps.UpdateFromParent(childIds, &expectedChildren)
 			if err == nil {
 				t.Errorf("expected error, got nil")
 			}
 			// Test case: childIds is empty and childRefBalance is empty
 			ps = newParentStatus()
 			childIds = []string{}
-			err = ps.UpdateFromParent(childIds, true)
+			err = ps.UpdateFromParent(childIds, &expectedChildren)
 			if err != nil {
 				t.Errorf("expected nil, got %v", err)
 			}
 			if len(ps.childRefBalance) != 0 {
 				t.Errorf("expected 0, got %d", len(ps.childRefBalance))
 			}
-			if !ps.singleChildNoRef {
-				t.Errorf("expected true, got false")
+			if ps.expectedChildren != &expectedChildren {
+				t.Errorf("expected 1, got %v", ps.expectedChildren)
 			}
 			// Test case: childIds is empty and childRefBalance is populated with references from parent
 			ps = newParentStatus()
 			ps.childRefBalance["child"] = &childBalance{parentRef: true}
-			err = ps.UpdateFromParent(childIds, true)
+			err = ps.UpdateFromParent(childIds, &expectedChildren)
 			if err != nil {
 				t.Errorf("expected nil, got %v", err)
 			}
@@ -610,13 +695,14 @@ func TestParentStatus(t *testing.T) {
 			if ps.childRefBalance["child"].IsVerified() {
 				t.Errorf("expected false, got true")
 			}
-			if !ps.singleChildNoRef {
-				t.Errorf("expected true, got false")
+			if ps.expectedChildren != &expectedChildren {
+				t.Errorf("expected 1, got %v", ps.expectedChildren)
 			}
 			// Test case: childIds is empty and childRefBalance is populated with references from child
+			// for the case of a single child
 			ps = newParentStatus()
 			ps.childRefBalance["child"] = &childBalance{childRef: true}
-			err = ps.UpdateFromParent(childIds, true)
+			err = ps.UpdateFromParent(childIds, &expectedChildren)
 			if err != nil {
 				t.Errorf("expected nil, got %v", err)
 			}
@@ -629,18 +715,63 @@ func TestParentStatus(t *testing.T) {
 			if !ps.childRefBalance["child"].IsVerified() {
 				t.Errorf("expected true, got false")
 			}
-			if !ps.singleChildNoRef {
+			if ps.expectedChildren != &expectedChildren {
+				t.Errorf("expected 1, got %v", ps.expectedChildren)
+			}
+			// Test case: childIds is empty and childRefBalance is populated with references from children
+			// for the case of a two children
+			ps = newParentStatus()
+			ps.childRefBalance["child"] = &childBalance{childRef: true}
+			ps.childRefBalance["child2"] = &childBalance{childRef: true}
+			expectedChildren = 2
+			err = ps.UpdateFromParent(childIds, &expectedChildren)
+			if err != nil {
+				t.Errorf("expected nil, got %v", err)
+			}
+			if len(ps.childRefBalance) != 2 {
+				t.Errorf("expected 0, got %d", len(ps.childRefBalance))
+			}
+			if _, ok := ps.childRefBalance["child"]; !ok {
+				t.Errorf("expected child, got %v", ps.childRefBalance)
+			}
+			if !ps.childRefBalance["child"].IsVerified() {
 				t.Errorf("expected true, got false")
+			}
+			if _, ok := ps.childRefBalance["child2"]; !ok {
+				t.Errorf("expected child2, got %v", ps.childRefBalance)
+			}
+			if !ps.childRefBalance["child2"].IsVerified() {
+				t.Errorf("expected true, got false")
+			}
+			if ps.expectedChildren != &expectedChildren {
+				t.Errorf("expected 2, got %v", ps.expectedChildren)
 			}
 		})
 		t.Run("CheckVerified", func(t *testing.T) {
-			// Test case: parent has no children but is singleChildNoRef true
+			expectedChildren := 1
+			// Test case: parent has no children but expectedChildren is not nil
 			ps := newParentStatus()
-			ps.singleChildNoRef = true
+			ps.expectedChildren = &expectedChildren
 			if ps.CheckVerified() {
 				t.Errorf("expected false, got true")
 			}
-			// Test case: parent has no children and is singleChildNoRef false
+			// Test case: parent has 1 verified child and expectedChildren is 2
+			expectedChildren = 2
+			ps = newParentStatus()
+			ps.childRefBalance["child"] = &childBalance{parentRef: true, childRef: true}
+			ps.expectedChildren = &expectedChildren
+			if ps.CheckVerified() {
+				t.Errorf("expected false, got true")
+			}
+			// Tests case: parent has 2 verified child and expectedChildren is 2
+			ps = newParentStatus()
+			ps.childRefBalance["child"] = &childBalance{parentRef: true, childRef: true}
+			ps.childRefBalance["child2"] = &childBalance{parentRef: true, childRef: true}
+			ps.expectedChildren = &expectedChildren
+			if !ps.CheckVerified() {
+				t.Errorf("expected true, got false")
+			}
+			// Test case: parent has no children and expectedChildren is nil
 			ps = newParentStatus()
 			if !ps.CheckVerified() {
 				t.Errorf("expected true, got false")
@@ -674,7 +805,7 @@ func TestVerificationStatusHolder(t *testing.T) {
 	t.Run("UpdateVerificationStatus", func(t *testing.T) {
 		t.Run("updateBackwardsLink", func(t *testing.T) {
 			// Test case: parentId is not in parentStatusHolder
-			vsh := newVerificationStatusHolder(map[string]bool{})
+			vsh := newVerificationStatusHolder(map[string]*int{})
 			childId := "child"
 			parentId := "parent"
 			vsh.updateBackwardsLink(parentId, childId)
@@ -688,7 +819,7 @@ func TestVerificationStatusHolder(t *testing.T) {
 				t.Errorf("expected 0, got %d", len(vsh.verifiedNodes))
 			}
 			// Test case: parentId is in parentStatusHolder but updating with child does not change the parentStatus to verified
-			vsh = newVerificationStatusHolder(map[string]bool{})
+			vsh = newVerificationStatusHolder(map[string]*int{})
 			vsh.parentStatusHolder[parentId] = newParentStatus()
 			vsh.updateBackwardsLink(parentId, childId)
 			if len(vsh.parentStatusHolder) != 1 {
@@ -701,7 +832,7 @@ func TestVerificationStatusHolder(t *testing.T) {
 				t.Errorf("expected 0, got %d", len(vsh.verifiedNodes))
 			}
 			// Test case: parentId is in parentStatusHolder and updating with child changes the parentStatus to verified
-			vsh = newVerificationStatusHolder(map[string]bool{})
+			vsh = newVerificationStatusHolder(map[string]*int{})
 			vsh.parentStatusHolder[parentId] = newParentStatus()
 			vsh.parentStatusHolder[parentId].childRefBalance[childId] = &childBalance{parentRef: true}
 			vsh.updateBackwardsLink(parentId, childId)
@@ -717,7 +848,7 @@ func TestVerificationStatusHolder(t *testing.T) {
 		})
 		t.Run("updateForwardsLinks", func(t *testing.T) {
 			// Test case: parentId is not in parentStatusHolder, childIds is empty and nodeType is not in parentVerifySet
-			vsh := newVerificationStatusHolder(map[string]bool{})
+			vsh := newVerificationStatusHolder(map[string]*int{})
 			parentId := "parent"
 			childIds := []string{}
 			nodeType := "type"
@@ -735,7 +866,8 @@ func TestVerificationStatusHolder(t *testing.T) {
 				t.Errorf("expected parent, got %v", vsh.verifiedNodes)
 			}
 			// Test case: parentId is not in parentStatusHolder, childIds is empty and nodeType is in parentVerifySet
-			vsh = newVerificationStatusHolder(map[string]bool{"type": true})
+			expectedChildren := 1
+			vsh = newVerificationStatusHolder(map[string]*int{"type": &expectedChildren})
 			err = vsh.updateForwardLinks(parentId, childIds, nodeType)
 			if err != nil {
 				t.Errorf("expected nil, got %v", err)
@@ -750,7 +882,7 @@ func TestVerificationStatusHolder(t *testing.T) {
 				t.Errorf("expected 0, got %d", len(vsh.verifiedNodes))
 			}
 			// Test case: parentId is in parentStatusHolder with no children, childIds is empty and nodeType is not in parentVerifySet
-			vsh = newVerificationStatusHolder(map[string]bool{})
+			vsh = newVerificationStatusHolder(map[string]*int{})
 			vsh.parentStatusHolder[parentId] = newParentStatus()
 			err = vsh.updateForwardLinks(parentId, childIds, nodeType)
 			if err != nil {
@@ -766,7 +898,7 @@ func TestVerificationStatusHolder(t *testing.T) {
 				t.Errorf("expected parent, got %v", vsh.verifiedNodes)
 			}
 			// Test case: parentId is in parentStatusHolder with no children, childIds is empty and nodeType is in parentVerifySet
-			vsh = newVerificationStatusHolder(map[string]bool{"type": true})
+			vsh = newVerificationStatusHolder(map[string]*int{"type": &expectedChildren})
 			vsh.parentStatusHolder[parentId] = newParentStatus()
 			err = vsh.updateForwardLinks(parentId, childIds, nodeType)
 			if err != nil {
@@ -782,13 +914,13 @@ func TestVerificationStatusHolder(t *testing.T) {
 				t.Errorf("expected 0, got %d", len(vsh.verifiedNodes))
 			}
 			// Test case updateFromParent produces an error
-			vsh = newVerificationStatusHolder(map[string]bool{"type": true})
+			vsh = newVerificationStatusHolder(map[string]*int{"type": &expectedChildren})
 			err = vsh.updateForwardLinks("parent", []string{"child"}, "type")
 			if err == nil {
 				t.Errorf("expected error, got nil")
 			}
 			// Tests case when updating with children verifies the parent
-			vsh = newVerificationStatusHolder(map[string]bool{})
+			vsh = newVerificationStatusHolder(map[string]*int{})
 			vsh.parentStatusHolder["parent"] = newParentStatus()
 			vsh.parentStatusHolder["parent"].childRefBalance["child"] = &childBalance{childRef: true}
 			err = vsh.updateForwardLinks("parent", []string{"child"}, "type")
@@ -806,14 +938,15 @@ func TestVerificationStatusHolder(t *testing.T) {
 			}
 		})
 		t.Run("UpdateVerificationStatus", func(t *testing.T) {
+			expectedChildren := 1
 			// Test case: where incoming data is nil
-			vsh := newVerificationStatusHolder(map[string]bool{})
+			vsh := newVerificationStatusHolder(map[string]*int{})
 			err := vsh.UpdateVerificationStatus(nil)
 			if err == nil {
 				t.Errorf("expected error, got nil")
 			}
 			// Test case: where updateForwardLinks throws an error
-			vsh = newVerificationStatusHolder(map[string]bool{"type": true})
+			vsh = newVerificationStatusHolder(map[string]*int{"type": &expectedChildren})
 			incomingData := &IncomingData{
 				NodeType: "type",
 				ChildIds: []string{"child"},
@@ -823,7 +956,7 @@ func TestVerificationStatusHolder(t *testing.T) {
 				t.Errorf("expected error, got nil")
 			}
 			// Test case: where parentId is "" and there are no child ids
-			vsh = newVerificationStatusHolder(map[string]bool{})
+			vsh = newVerificationStatusHolder(map[string]*int{})
 			incomingData = &IncomingData{NodeId: "node"}
 			err = vsh.UpdateVerificationStatus(incomingData)
 			if err != nil {
@@ -837,7 +970,7 @@ func TestVerificationStatusHolder(t *testing.T) {
 			}
 			// Test case: backwards link updated with ParentId and NodeId and parentId is not in verified nodes
 			// and node will not be verified
-			vsh = newVerificationStatusHolder(map[string]bool{"type": true})
+			vsh = newVerificationStatusHolder(map[string]*int{"type": &expectedChildren})
 			incomingData = &IncomingData{NodeId: "node", ParentId: "parent", NodeType: "type"}
 			err = vsh.UpdateVerificationStatus(incomingData)
 			if err != nil {
@@ -860,7 +993,7 @@ func TestVerificationStatusHolder(t *testing.T) {
 				t.Errorf("expected node, got %v", parentStatus.childRefBalance)
 			}
 			// Test case: where parent is already verified
-			vsh = newVerificationStatusHolder(map[string]bool{"type": true})
+			vsh = newVerificationStatusHolder(map[string]*int{"type": &expectedChildren})
 			vsh.verifiedNodes["parent"] = true
 			incomingData = &IncomingData{NodeId: "node", ParentId: "parent", NodeType: "type"}
 			err = vsh.UpdateVerificationStatus(incomingData)
@@ -877,7 +1010,7 @@ func TestVerificationStatusHolder(t *testing.T) {
 				t.Errorf("expected 1, got %d", len(vsh.verifiedNodes))
 			}
 			// Test case: where parent is not verified but node is
-			vsh = newVerificationStatusHolder(map[string]bool{})
+			vsh = newVerificationStatusHolder(map[string]*int{})
 			vsh.verifiedNodes["node"] = true
 			incomingData = &IncomingData{NodeId: "node", ParentId: "parent"}
 			err = vsh.UpdateVerificationStatus(incomingData)
@@ -898,7 +1031,7 @@ func TestVerificationStatusHolder(t *testing.T) {
 				t.Errorf("expected node, got %v", parentStatus.childRefBalance)
 			}
 			// Test case: where parent verified and node is verified
-			vsh = newVerificationStatusHolder(map[string]bool{})
+			vsh = newVerificationStatusHolder(map[string]*int{})
 			vsh.verifiedNodes["node"] = true
 			vsh.verifiedNodes["parent"] = true
 			incomingData = &IncomingData{NodeId: "node", ParentId: "parent"}
@@ -1017,12 +1150,13 @@ func TestUpdateIncomingDataHolderMap(t *testing.T) {
 
 // Test processTasks
 func TestProcessTasks(t *testing.T) {
+	expectedChildren := 1
 	// Test case: error from updateVerificationStatus
 	task := &Task{IncomingData: &IncomingData{NodeId: "node", NodeType: "type", ChildIds: []string{"child"}}}
 	taskChan := make(chan *Task, 1)
 	taskChan <- task
 	close(taskChan)
-	_, _, verified, err := processTasks(taskChan, 60, map[string]bool{"type": true})
+	_, _, verified, err := processTasks(taskChan, 60, map[string]*int{"type": &expectedChildren})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -1039,7 +1173,7 @@ func TestProcessTasks(t *testing.T) {
 	taskChan <- task1
 	taskChan <- task2
 	close(taskChan)
-	nodes, tasks, verified, err := processTasks(taskChan, 60, map[string]bool{"type": true})
+	nodes, tasks, verified, err := processTasks(taskChan, 60, map[string]*int{"type": &expectedChildren})
 	if err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
@@ -1079,7 +1213,7 @@ func TestProcessTasks(t *testing.T) {
 	taskChan <- task2
 	taskChan <- task3
 	close(taskChan)
-	nodes, tasks, verified, err = processTasks(taskChan, 60, map[string]bool{})
+	nodes, tasks, verified, err = processTasks(taskChan, 60, map[string]*int{})
 	if err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
@@ -1128,7 +1262,7 @@ func TestProcessTasks(t *testing.T) {
 	taskChan <- task2
 	taskChan <- task3
 	close(taskChan)
-	nodes, tasks, verified, err = processTasks(taskChan, 2, map[string]bool{})
+	nodes, tasks, verified, err = processTasks(taskChan, 2, map[string]*int{})
 	if err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
@@ -1175,7 +1309,7 @@ func TestProcessTasks(t *testing.T) {
 	taskChan = make(chan *Task, 1)
 	taskChan <- task
 	close(taskChan)
-	nodes, tasks, verified, err = processTasks(taskChan, 60, map[string]bool{})
+	nodes, tasks, verified, err = processTasks(taskChan, 60, map[string]*int{})
 	if err != nil {
 		t.Fatalf("expected nil, got %v", err)
 	}
@@ -1201,7 +1335,7 @@ func TestProcessTasks(t *testing.T) {
 	task = &Task{IncomingData: &IncomingData{NodeId: "node", NodeType: "type"}}
 	taskChan = make(chan *Task, 1)
 	taskChan <- task
-	nodes, tasks, verified, err = processTasks(taskChan, 1, map[string]bool{"type": true})
+	nodes, tasks, verified, err = processTasks(taskChan, 1, map[string]*int{"type": &expectedChildren})
 	close(taskChan)
 	if err != nil {
 		t.Fatalf("expected nil, got %v", err)
@@ -1219,7 +1353,7 @@ func TestProcessTasks(t *testing.T) {
 	task = &Task{IncomingData: &IncomingData{NodeId: "node", NodeType: "type", ParentId: "parent"}}
 	taskChan = make(chan *Task, 1)
 	taskChan <- task
-	nodes, tasks, verified, err = processTasks(taskChan, 1, map[string]bool{})
+	nodes, tasks, verified, err = processTasks(taskChan, 1, map[string]*int{})
 	close(taskChan)
 	if err != nil {
 		t.Fatalf("expected nil, got %v", err)
@@ -1244,11 +1378,12 @@ func TestProcessTasks(t *testing.T) {
 
 // Test treeHandler
 func TestTreeHandler(t *testing.T) {
+	expectedChildren := 1
 	// Test case where processTasks returns an error
 	taskChan := make(chan *Task, 1)
 	taskChan <- &Task{IncomingData: &IncomingData{NodeId: "node", NodeType: "type", ChildIds: []string{"child"}}}
 	close(taskChan)
-	config := &GroupAndVerifyConfig{parentVerifySet: map[string]bool{"type": true}, Timeout: 10}
+	config := &GroupAndVerifyConfig{parentVerifySet: map[string]*int{"type": &expectedChildren}, Timeout: 10}
 	_, err := treeHandler(taskChan, config, &MockPushable{})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -1260,7 +1395,7 @@ func TestTreeHandler(t *testing.T) {
 	taskChan = make(chan *Task, 1)
 	taskChan <- &Task{IncomingData: &IncomingData{NodeId: "node"}}
 	close(taskChan)
-	config = &GroupAndVerifyConfig{parentVerifySet: map[string]bool{}, Timeout: 10}
+	config = &GroupAndVerifyConfig{parentVerifySet: map[string]*int{}, Timeout: 10}
 	_, err = treeHandler(taskChan, config, &MockPushable{isSendToError: true})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -1320,7 +1455,7 @@ func TestTreeHandler(t *testing.T) {
 	taskChan <- task2
 	taskChan <- task3
 	close(taskChan)
-	config = &GroupAndVerifyConfig{parentVerifySet: map[string]bool{}, Timeout: 10}
+	config = &GroupAndVerifyConfig{parentVerifySet: map[string]*int{}, Timeout: 10}
 	pushable = &MockPushable{}
 	tasks, err = treeHandler(taskChan, config, pushable)
 	if err != nil {
@@ -1395,7 +1530,7 @@ func TestTasksHandler(t *testing.T) {
 	taskChan <- task2
 	close(taskChan)
 	pushable := &MockChanPushable{appDataChan: make(chan *Server.AppData, 2)}
-	config := &GroupAndVerifyConfig{parentVerifySet: map[string]bool{}, Timeout: 10}
+	config := &GroupAndVerifyConfig{parentVerifySet: map[string]*int{}, Timeout: 10}
 	tasksHandler(taskChan, config, pushable)
 	close(pushable.appDataChan)
 	seenNodes := map[string]bool{}
@@ -1478,7 +1613,7 @@ func TestTasksHandler(t *testing.T) {
 		taskChan <- task2
 		close(taskChan)
 		pushable = &MockChanPushable{appDataChan: make(chan *Server.AppData, 2)}
-		config = &GroupAndVerifyConfig{parentVerifySet: map[string]bool{}, Timeout: 2, MaxTrees: 1}
+		config = &GroupAndVerifyConfig{parentVerifySet: map[string]*int{}, Timeout: 2, MaxTrees: 1}
 		tasksHandler(taskChan, config, pushable)
 		close(pushable.appDataChan)
 		seenNodes = map[string]bool{}
@@ -1644,7 +1779,7 @@ func TestGroupAndVerifyRunApp(t *testing.T) {
 		taskChan: make(chan *Task, 10),
 	}
 	gavConfig := &GroupAndVerifyConfig{
-		parentVerifySet: map[string]bool{},
+		parentVerifySet: map[string]*int{},
 	}
 	mockSourceServer := &MockSourceServer{
 		dataToSend: dataToSend,
@@ -1811,7 +1946,7 @@ func BenchmarkGroupAndVerifyRunApp(b *testing.B) {
 	}
 	defer os.Remove(tmpFile.Name())
 	data := []byte(
-		`{"AppConfig":{"Timeout":10},"ProducersSetup":{"ProducerConfigs":[{"Type":"MockSink","ProducerConfig":{}}]},"ConsumersSetup":{"ConsumerConfigs":[{"Type":"MockSource","ConsumerConfig":{}}]}}`,
+		`{"AppConfig":{"Timeout":10,"parentVerifySet":[{"nodeType":"unknownType", "expectedChildren":1}]},"ProducersSetup":{"ProducerConfigs":[{"Type":"MockSink","ProducerConfig":{}}]},"ConsumersSetup":{"ConsumerConfigs":[{"Type":"MockSource","ConsumerConfig":{}}]}}`,
 	)
 	err = os.WriteFile(tmpFile.Name(), data, 0644)
 	if err != nil {
@@ -1827,7 +1962,7 @@ func BenchmarkGroupAndVerifyRunApp(b *testing.B) {
 			taskChan: make(chan *Task, numTrees*numNodes),
 		}
 		gavConfig := &GroupAndVerifyConfig{
-			parentVerifySet: map[string]bool{},
+			parentVerifySet: map[string]*int{},
 		}
 		mockSourceServer := &MockSourceServer{
 			dataToSend: dataToSend,

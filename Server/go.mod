@@ -1,6 +1,6 @@
 module github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server
 
-go 1.23.2
+go 1.23.6
 
 require (
 	github.com/Azure/go-amqp v1.3.0
