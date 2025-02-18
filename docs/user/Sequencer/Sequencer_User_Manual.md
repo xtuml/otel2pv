@@ -96,6 +96,21 @@ In the example of Protocol Verifier audit event sequences the `appJSON` object w
 ## Sequencer Logic
 The sequencer basic logic can be found in the [Otel2PUML: Synchronous Sequencing](https://github.com/xtuml/otel2puml/blob/main/docs/user/sequencer_HOWTO.md#synchronous-sequencing).
 
+There are two possibilities for how this data can be sequenced:
+- (Default) Each parent node will have an ordered list of child nodes (`childIds`) that are assumed to occur in their position in the list. Parent nodes occur after all their children have occurred. This provides a simple way to sequence the data.
+- (Optional) Each node will have a timestamp of when the node completed its processing and a link to the parent node (`parentNodeId`) that called it. The children of a node can be ordered by their `timestamp` field. This provides a fallback way to sequence the data if required.
+
+The sequencer will only sequence the data in a straight line sequence i.e. a node will only have a single parent (except the start node) and a single child (except the end node).
+
+An example is show below of how a simple tree would be sequenced with the following diagrams:
+
+![](./otel_tree.svg)
+
+is sequenced to
+
+![Sequenced Tree](./pv_sequence_from_otel.svg)
+
+Notice how the output is a sequence of the data with the `previousEventIds` field added to the `appJSON` object (Protocol Verifier audit event sequences).
 ## Group Apply Feature
 The Sequencer has another feature that, if configured, to:
 1. grab the value of a specified field from one of the `appJSON`'s using the value of another field in the `appJSON` as the method to identify the correct `appJSON`.

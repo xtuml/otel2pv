@@ -1,0 +1,36 @@
+@startuml
+digraph G {
+'   rankdir=LR;
+  node [style=rounded];
+  root [
+    shape=record,
+    label="{nodeId=root | timestamp=100 | parentNodeId=None, | childIds=[\nchild1,\nchild2\n] | appJSON=\{\"eventId\": \"root\"\}}"
+  ];
+  child1 [
+    shape=record,
+    label="{nodeId=child1 | timestamp=20 | parentNodeId=root, | childIds=[\ngrandchild1,\ngrandchild2\n] | appJSON=\{\"eventId\": \"child1\"\}}"
+  ];
+  child2 [
+    shape=record,
+    label="{nodeId=child2 | timestamp=40 | parentNodeId=root, | childIds=[\ngrandchild3\n] | appJSON=\{\"eventId\": \"child2\"\}}"
+  ];
+    grandchild1 [
+        shape=record,
+        label="{nodeId=grandchild1 | timestamp=15 | parentNodeId=child1, | childIds=[] | appJSON=\{\"eventId\": \"grandchild1\"\}}"
+    ];
+    grandchild2 [
+        shape=record,
+        label="{nodeId=grandchild2 | timestamp=19 | parentNodeId=child1, | childIds=[] | appJSON=\{\"eventId\": \"grandchild2\"\}}"
+    ];
+    grandchild3 [
+        shape=record,
+        label="{nodeId=grandchild3 | timestamp=39 | parentNodeId=child2, | childIds=[] | appJSON=\{\"eventId\": \"grandchild3\"\}}"
+    ];
+
+    root -> child1;
+    root -> child2;
+    child1 -> grandchild1;
+    child1 -> grandchild2;
+    child2 -> grandchild3;
+}
+@enduml
