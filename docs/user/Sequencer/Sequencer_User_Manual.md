@@ -696,3 +696,19 @@ cd Sequencer/deploy
 docker compose up -d
 ```
 
+## Return To Sender Cases
+The following outlines the cases in which incoming data will be returned to the sender:
+
+1. The incoming data is not in the correct format i.e. not in the format given in [Input Data Format](#input-data-format) - in this case an [InvalidError](/docs/user/ErrorTypes.md#InvalidError) will be raised internally (see consumer specific documentation in [Consumers Manual](/docs/user/Consumers_User_Manual.md) for how this error is handled)
+2. There is no data present in the sent array - in this case an [InvalidError](/docs/user/ErrorTypes.md#InvalidError) will be raised internally (see consumer specific documentation in [Consumers Manual](/docs/user/Consumers_User_Manual.md) for how this error is handled)
+3. The `childrenByBackwardsLink` setting has identified children that must be sequenced by timestamp but the timestamp field is missing from the data - in this case an [InvalidError](/docs/user/ErrorTypes.md#InvalidError) will be raised internally (see consumer specific documentation in [Consumers Manual](/docs/user/Consumers_User_Manual.md) for how this error is handled)
+4. The chosen producer failed to send the message on to the next destination - in this case a [SendError](/docs/user/ErrorTypes.md#SendError) will be raised internally (see producer specific documentation in [Consumers Manual](/docs/user/Consumers_User_Manual.md) for how this error is handled)
+
+## Log Warnings
+There are a number of warnings that will be issued in the logs if at runtime one of the following conditions is met:
+
+1. A child node is found that has a parent node that is not in the data - this will be logged as a warning and the child node will be ignored. The output sequence is not guaranteed to be correct
+2. A duplicate node is found and is not equal to the first instance of the node - this will be logged as a warning and the output will not be sequenced
+3. A node that has a parent node id that is its own node id - this will be logged as a warning and the output will not be sequenced
+4. A node that has a child node id that is its own node id - this will be logged as a warning and the output will not be sequenced
+5. No root nodes are found in the input data - this will be logged as a warning and the output will not be sequenced

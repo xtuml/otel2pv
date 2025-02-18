@@ -50,10 +50,21 @@ The `AMQPOneProducer` is a producer that uses the AMQP1.0 protocol to send messa
     "ProducerConfig": {
         "Connection": <string - the connection string to the AMQP broker>,
         "Queue": <string - the name of the queue to send to>,
+        "MessageHeaders": <object, optional - the headers to add to the message>
     },
     "Map": <string, optional - the key/identifier to map to this producer>
 }
 ```
+
+The `MessageHeaders` object is used to add headers to the message. The object should have the following structure:
+```json
+{
+    "Durable": <bool, optional - if true the message will be saved to disk by the broker, default is true>,
+    "Priority": <int, optional - the AMQP1.0 protocol priority of the message, default is 4>,
+    "TTL": <int, optional - the time in milliseconds that the message will be stored by the broker, default is unlimited>,
+    "FirstAcquirer": <bool, optional - if true the message has not been acquired by any other consumer, default is false>,
+}
+
 
 ### RabbitMQProducer
 

@@ -248,3 +248,16 @@ The Group And Verify application can be run using the docker compose file found 
 cd GroupAndVerify/deploy
 docker compose up -d
 ```
+
+## Return To Sender Cases
+The following outlines the cases in which incoming data will be returned to the sender:
+
+1. The incoming data is not in the correct format i.e. not in the format given in [Input Data Format](#input-data-format) - in this case an [InvalidError](/docs/user/ErrorTypes.md#InvalidError) will be raised internally (see consumer specific documentation in [Consumers Manual](/docs/user/Consumers_User_Manual.md) for how this error is handled)
+2. The application has reached the maximum number of trees that it is configured to handle - in this case a [FullError](/docs/user/ErrorTypes.md#FullError) will be raised internally (see consumer specific documentation in [Consumers Manual](/docs/user/Consumers_User_Manual.md) for how this error is handled)
+3. The chosen producer failed to send the message on to the next destination - in this case a [SendError](/docs/user/ErrorTypes.md#SendError) will be raised internally (see producer specific documentation in [Consumers Manual](/docs/user/Consumers_User_Manual.md) for how this error is handled)
+
+## Log Warnings
+There are a number of warnings that will be issued in the logs if at runtime one of the following conditions is met:
+
+1. A duplicate node is found and is not equal to the first instance of the node - this will be logged as a warning and the tree cannot be verified
+2. The tree is not verified within the timeout period - this will be logged as a warning and the tree cannot be verified

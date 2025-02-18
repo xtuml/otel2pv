@@ -49,6 +49,12 @@ The `AMQPOneConsumer` is a consumer that uses the AMQP1.0 protocol to receive me
     }
 }
 ```
+#### Failure Handling
+The `AMQPOneConsumer` will handle the following error types:
+
+- `InvalidError` - The error is due to an invalid input of some kind. The AMQPOneConsumer will "Reject" the message and it will be sent to the dead letter queue.
+- `SendError` - The error is due to an error that occurred while sending the output onwards. The AMQPOneConsumer will "Release" the message and it will be sent back to the queue with the delivery count incremented.
+- `FullError` - The application has declared that it is in a "full" state and cannot accept any more input. The AMQPOneConsumer will "Modify" the message and it will be sent back to the queue with the delivery count incremented.
 
 ### RabbitMQConsumer
 The `RabbitMQConsumer` is a consumer that uses the AMQP0.9.1 protocol to receive messages from a queue. The configuration has the following structure:

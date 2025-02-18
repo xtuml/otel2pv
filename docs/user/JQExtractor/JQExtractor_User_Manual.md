@@ -155,4 +155,12 @@ cd JQExtractor/deploy
 docker compose up -d
 ```
 
+## Return To Sender Cases
+The following outlines the cases in which incoming data will be returned to the sender:
+
+1. The incoming data is not in the correct format i.e. the data is not valid JSON - in this case an [InvalidError](/docs/user/ErrorTypes.md#InvalidError) will be raised internally (see consumer specific documentation in [Consumers Manual](/docs/user/Consumers_User_Manual.md) for how this error is handled)
+2. One of the jq strings definied in the config produces an error - in this case a [InvalidError](/docs/user/ErrorTypes.md#InvalidError) will be raised internally (see consumer specific documentation in [Consumers Manual](/docs/user/Consumers_User_Manual.md) for how this error is handled)
+3. One of the jq strings definied in the config produces an output that does not match the input schema - in this case an [InvalidError](/docs/user/ErrorTypes.md#InvalidError) will be raised internally (see consumer specific documentation in [Consumers Manual](/docs/user/Consumers_User_Manual.md) for how this error is handled)
+4. The chosen producer failed to send the message on to the next destination - in this case a [SendError](/docs/user/ErrorTypes.md#SendError) will be raised internally (see producer specific documentation in [Consumers Manual](/docs/user/Consumers_User_Manual.md) for how this error is handled)
+
 

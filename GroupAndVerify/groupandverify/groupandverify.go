@@ -423,9 +423,15 @@ LOOPBREAK:
 //
 // 2. error. It returns an error if the processing of the tree fails.
 func treeHandler(taskChan chan *Task, config *GroupAndVerifyConfig, pushable Server.Pushable) ([]*Task, error) {
-	verifiedNodes, tasks, _, err := processTasks(taskChan, config.Timeout, config.parentVerifySet)
+	verifiedNodes, tasks, verified, err := processTasks(taskChan, config.Timeout, config.parentVerifySet)
 	if err != nil {
 		return tasks, err
+	}
+	if len(tasks) == 0 {
+		return tasks, fmt.Errorf("attempted to handle tree with no tasks received. Consider increasing the timeout in config")
+	}
+	if !verified {
+		groupAndVerifyLogger.Warn("tree not verified", slog.Group("details", slog.String("treeId", tasks[0].IncomingData.TreeId)))
 	}
 	var outgoingData []*IncomingData
 	for _, node := range verifiedNodes {
