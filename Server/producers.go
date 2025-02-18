@@ -564,6 +564,68 @@ func (r *RabbitMQProducer) SendTo(data *AppData) error {
 	return nil
 }
 
+// ingestAMQPOneMessageHeader is a function that will ingest the message headers to add to the sent AMQP messages.
+//
+// Its args are:
+//
+// 1. config: map[string]any. The raw configuration for the producer.
+//
+// It returns:
+//
+// 1. *amqp.MessageHeader. The message header for the producer.
+//
+// 2. error. An error if the process fails.
+func ingestAMQPOneMessageHeader(config map[string]any) (*amqp.MessageHeader, error) {
+    messageHeader := &amqp.MessageHeader{}
+    if config == nil {
+        return messageHeader, nil
+    }
+    messageHeader.Priority = 4
+    messageHeader.Durable = true
+    messageHeaders, ok := config["MessageHeaders"]
+    if ok {
+        messageHeadersMap, ok := messageHeaders.(map[string]any)
+        if !ok {
+            return nil, errors.New("invalid MessageHeaders - must be a map")
+        }
+        priority, ok := messageHeadersMap["Priority"]
+        if ok {
+            priorityFloat, ok := priority.(float64)
+            if !ok {
+                return nil, errors.New("invalid Priority - must be an integer")
+            }
+            messageHeader.Priority = uint8(priorityFloat)
+        }
+        durable, ok := messageHeadersMap["Durable"]
+        if ok {
+            durableBool, ok := durable.(bool)
+            if !ok {
+                return nil, errors.New("invalid Durable - must be a boolean")
+            }
+            messageHeader.Durable = durableBool
+        }
+        ttl, ok := messageHeadersMap["TTL"]
+        if ok {
+            ttlFloat, ok := ttl.(float64)
+            if !ok {
+                return nil, errors.New("invalid TTL - must be an integer")
+            }
+            messageHeader.TTL = time.Duration(ttlFloat) * time.Second
+        }
+        firstAcquirer, ok := messageHeadersMap["FirstAcquirer"]
+        if ok {
+            firstAcquirerBool, ok := firstAcquirer.(bool)
+            if !ok {
+                return nil, errors.New("invalid FirstAcquirer - must be a boolean")
+            }
+            messageHeader.FirstAcquirer = firstAcquirerBool
+        }
+    }
+    return messageHeader, nil
+}
+
+
+
 // AMQPOneProducerConfig is a struct that represents the configuration
 // for an AMQPOneProducer.
 // It has the following fields:
@@ -573,10 +635,13 @@ func (r *RabbitMQProducer) SendTo(data *AppData) error {
 // 2. Queue: string. The name of the queue to send the data to.
 //
 // 3. TLSConfig: *tls.Config. The TLS configuration for the producer.
+//
+// 4. MessageHeader: *amqp.MessageHeader. The message header for the producer.
 type AMQPOneProducerConfig struct {
 	Connection string
 	Queue      string
 	TLSConfig  *tls.Config
+    MessageHeader *amqp.MessageHeader
 }
 
 // IngestConfig is a method that will ingest the configuration for the
@@ -605,6 +670,11 @@ func (a *AMQPOneProducerConfig) IngestConfig(config map[string]any) error {
 		return err
 	}
 	a.TLSConfig = tlsConfig
+    messageHeader, err := ingestAMQPOneMessageHeader(config)
+    if err != nil {
+        return err
+    }
+    a.MessageHeader = messageHeader
 	return nil
 }
 
@@ -802,6 +872,7 @@ func (a *AMQPOneProducer) SendTo(data *AppData) error {
 	msg.Properties = &amqp.MessageProperties{
 		ContentType: &contentType,
 	}
+    msg.Header = a.config.MessageHeader
 	err = a.sender.Send(a.ctx, msg, nil)
 	if err != nil {
 		err = NewSendErrorFromError(err)

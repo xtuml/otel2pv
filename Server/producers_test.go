@@ -886,6 +886,119 @@ func TestAMQPOneProducerConfig(t *testing.T) {
 		if config.Queue != "test" {
 			t.Errorf("Expected Queue to be 'test', got '%v'", config.Queue)
 		}
+		if config.MessageHeader == nil {
+			t.Errorf("Expected MessageHeader to be populated, got nil")
+		}
+	})
+	t.Run("ingestAMQPOneMessageHeader", func(t *testing.T) {
+		// Test when nothing is set i.e. defaults
+		messageHeader, err := ingestAMQPOneMessageHeader(map[string]any{})
+		if err != nil {
+			t.Errorf("Expected no error from ingestAMQPOneMessageHeader, got %v", err)
+		}
+		if messageHeader == nil {
+			t.Fatalf("Expected messageHeader to be an empty map, got nil")
+		}
+		if !messageHeader.Durable {
+			t.Errorf("Expected messageHeader.Durable to be true, got false")
+		}
+		if messageHeader.Priority != 4 {
+			t.Errorf("Expected messageHeader.Priority to be 4, got %v", messageHeader.Priority)
+		}
+		if messageHeader.DeliveryCount != 0 {
+			t.Errorf("Expected messageHeader.DeliveryCount to be 0, got %v", messageHeader.DeliveryCount)
+		}
+		if messageHeader.TTL != 0 {
+			t.Errorf("Expected messageHeader.TTL to be 0, got %v", messageHeader.TTL)
+		}
+		if messageHeader.FirstAcquirer {
+			t.Errorf("Expected messageHeader.FirstAcquirer to be false, got true")
+		}
+		// Test when MessageHeader is not a map[string]any
+		_, err = ingestAMQPOneMessageHeader(map[string]any{
+			"MessageHeaders": "test",
+		})
+		if err == nil {
+			t.Errorf("Expected error from ingestAMQPOneMessageHeader, got nil")
+		}
+		if err.Error() != "invalid MessageHeaders - must be a map" {
+			t.Errorf("Expected specified error from ingestAMQPOneMessageHeader, got '%v'", err)
+		}
+		// Test when Priority is not a float64
+		_, err = ingestAMQPOneMessageHeader(map[string]any{
+			"MessageHeaders": map[string]any{
+				"Priority": "test",
+			},
+		})
+		if err == nil {
+			t.Errorf("Expected error from ingestAMQPOneMessageHeader, got nil")
+		}
+		if err.Error() != "invalid Priority - must be an integer" {
+			t.Errorf("Expected specified error from ingestAMQPOneMessageHeader, got '%v'", err)
+		}
+		// Test when Durable is not a bool
+		_, err = ingestAMQPOneMessageHeader(map[string]any{
+			"MessageHeaders": map[string]any{
+				"Durable": "test",
+			},
+		})
+		if err == nil {
+			t.Errorf("Expected error from ingestAMQPOneMessageHeader, got nil")
+		}
+		if err.Error() != "invalid Durable - must be a boolean" {
+			t.Errorf("Expected specified error from ingestAMQPOneMessageHeader, got '%v'", err)
+		}
+		// Tests when TTL is not a float64
+		_, err = ingestAMQPOneMessageHeader(map[string]any{
+			"MessageHeaders": map[string]any{
+				"TTL": "test",
+			},
+		})
+		if err == nil {
+			t.Errorf("Expected error from ingestAMQPOneMessageHeader, got nil")
+		}
+		if err.Error() != "invalid TTL - must be an integer" {
+			t.Errorf("Expected specified error from ingestAMQPOneMessageHeader, got '%v'", err)
+		}
+		// Tests when FirstAcquirer is not a bool
+		_, err = ingestAMQPOneMessageHeader(map[string]any{
+			"MessageHeaders": map[string]any{
+				"FirstAcquirer": "test",
+			},
+		})
+		if err == nil {
+			t.Errorf("Expected error from ingestAMQPOneMessageHeader, got nil")
+		}
+		if err.Error() != "invalid FirstAcquirer - must be a boolean" {
+			t.Errorf("Expected specified error from ingestAMQPOneMessageHeader, got '%v'", err)
+		}
+		// Test when all fields are set correctly
+		messageHeader, err = ingestAMQPOneMessageHeader(map[string]any{
+			"MessageHeaders": map[string]any{
+				"Priority":      5.0,
+				"Durable":       false,
+				"TTL":           1000.0,
+				"FirstAcquirer": true,
+			},
+		})
+		if err != nil {
+			t.Errorf("Expected no error from ingestAMQPOneMessageHeader, got %v", err)
+		}
+		if messageHeader == nil {
+			t.Fatalf("Expected messageHeader to be an empty map, got nil")
+		}
+		if messageHeader.Priority != 5 {
+			t.Errorf("Expected messageHeader.Priority to be 5, got %v", messageHeader.Priority)
+		}
+		if messageHeader.Durable {
+			t.Errorf("Expected messageHeader.Durable to be false, got true")
+		}
+		if messageHeader.TTL != time.Duration(1000)*time.Second {
+			t.Errorf("Expected messageHeader.TTL to be 1000, got %v", messageHeader.TTL)
+		}
+		if !messageHeader.FirstAcquirer {
+			t.Errorf("Expected messageHeader.FirstAcquirer to be true, got false")
+		}
 	})
 }
 
@@ -1186,6 +1299,10 @@ func TestAMQPOneProducer(t *testing.T) {
 			config: &AMQPOneProducerConfig{
 				Connection: "test",
 				Queue:      "test",
+				MessageHeader: &amqp.MessageHeader{
+					Durable:  true,
+					Priority: 4,
+				},
 			},
 			ctx:    ctx,
 			cancel: cancel,
@@ -1199,6 +1316,16 @@ func TestAMQPOneProducer(t *testing.T) {
 			t.Fatalf("Expected no error from SendTo, got %v", err)
 		}
 		producerSender := producer.sender.(*MockAMQPOneProducerSender)
+		if producerSender.incomingData == nil {
+			t.Fatalf("Expected incomingData to be set, got nil")
+		}
+		expectedMessageHeader := amqp.MessageHeader{
+			Durable:       true,
+			Priority:      4,
+		}
+		if *(producerSender.incomingData.Header) != expectedMessageHeader {
+			t.Fatalf("Expected incomingData.Header to be set, got nil")
+		}
 		gotData := producerSender.incomingData.GetData()
 		if !reflect.DeepEqual(gotData, appData.data) {
 			t.Fatalf("Expected incomingData to be '%v', got '%v'", appData.data, gotData)
