@@ -9,3 +9,6 @@ services:
     volumes:
       - ./config:/config
     entrypoint: ["/sequencer", "--config", "/config/config.json"]
+    environment:
+      - LOG_LEVEL=DEBUG
+      # - LOG_FILE=/config/sequencer.log

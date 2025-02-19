@@ -11,6 +11,8 @@ var lvl *slog.LevelVar
 var handlerOptions *slog.HandlerOptions
 var Logger *slog.Logger
 var handler slog.Handler
+var serverLogger slog.Logger
+
 func init() {
 	envLogLevel, ok := os.LookupEnv("LOG_LEVEL")
 	if !ok {
@@ -36,7 +38,14 @@ func init() {
 		handler = slog.NewJSONHandler(os.Stderr, handlerOptions)
 	}
 	Logger = slog.New(handler)
+	serverLogger = *Logger.With(
+		slog.Group(
+			"logger_info",
+			slog.String("logger_name", "Server"),
+		),
+	)
 }
+
 
 
 
@@ -49,7 +58,7 @@ func init() {
 //
 // Returns:
 //
-// 1. Logger.Level. The log level.
+// 1. slog.Level. The log level.
 //
 // 2. error. An error if the log level string is invalid.
 func getLogLevel(logLevelStr string) (slog.Level, error) {

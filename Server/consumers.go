@@ -780,36 +780,36 @@ func handleMessageDownStreamError(ctx context.Context, inErr error, message *amq
 	errorType, _ := GetErrorType(inErr)
 	switch errorType {
 	case InvalidErrorType:
-		Logger.Warn("Invalid message - rejecting", slog.String("details", inErr.Error()))
+		serverLogger.Warn("Invalid message - rejecting", slog.String("details", inErr.Error()))
 		err := receiver.RejectMessage(ctx, message, &amqp.Error{
 			Condition:   "invalid",
 			Description: inErr.Error(),
 		})
 		if err != nil {
-			Logger.Error("Error rejecting message - fatal", slog.String("err", err.Error()))
+			serverLogger.Error("Error rejecting message - fatal", slog.String("err", err.Error()))
 		}
 		return err
 	case FullErrorType:
-		Logger.Warn("Server full - sending back to queue", slog.String("details", inErr.Error()))
+		serverLogger.Warn("Server full - sending back to queue", slog.String("details", inErr.Error()))
 		err := receiver.ReleaseMessage(ctx, message)
 		if err != nil {
-			Logger.Error("Error releasing message - fatal", slog.String("err", err.Error()))
+			serverLogger.Error("Error releasing message - fatal", slog.String("err", err.Error()))
 		}
 		return err
 	case SendErrorType:
-		Logger.Error("Error sending message - fatal", slog.String("err", inErr.Error()))
+		serverLogger.Error("Error sending message - fatal", slog.String("err", inErr.Error()))
 		err := receiver.ModifyMessage(ctx, message, &amqp.ModifyMessageOptions{
 			DeliveryFailed: true,
 		})
 		if err != nil {
-			Logger.Error("Error modifying message - fatal", slog.String("err", err.Error()))
+			serverLogger.Error("Error modifying message - fatal", slog.String("err", err.Error()))
 			return err
 		}
 	case ProcessErrorType:
-		Logger.Warn("Error processing message - notifying", slog.String("details", inErr.Error()))
+		serverLogger.Warn("Error processing message - notifying", slog.String("details", inErr.Error()))
 		err := receiver.AcceptMessage(ctx, message)
 		if err != nil {
-			Logger.Error("Error in message acceptance", slog.String("err", err.Error()))
+			serverLogger.Error("Error in message acceptance", slog.String("err", err.Error()))
 		}
 		return err
 	default:
@@ -817,9 +817,9 @@ func handleMessageDownStreamError(ctx context.Context, inErr error, message *amq
 			DeliveryFailed:    true,
 			UndeliverableHere: true,
 		})
-		Logger.Error("Unknown error occured - fatal", slog.String("err", inErr.Error()))
+		serverLogger.Error("Unknown error occured - fatal", slog.String("err", inErr.Error()))
 		if err != nil {
-			Logger.Error("Error modifying message - fatal", slog.String("err", err.Error()))
+			serverLogger.Error("Error modifying message - fatal", slog.String("err", err.Error()))
 			return err
 		}
 	}

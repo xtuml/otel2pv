@@ -9,3 +9,6 @@ services:
     volumes:
       - ./config:/config
     entrypoint: ["/group-and-verify", "--config", "/config/config.json"]
+    environment:
+      - LOG_LEVEL=DEBUG
+      # - LOG_FILE=/config/group_and_verify.log

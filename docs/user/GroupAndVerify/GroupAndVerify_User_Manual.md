@@ -261,3 +261,6 @@ There are a number of warnings that will be issued in the logs if at runtime one
 
 1. A duplicate node is found and is not equal to the first instance of the node - this will be logged as a warning and the tree cannot be verified
 2. The tree is not verified within the timeout period - this will be logged as a warning and the tree cannot be verified
+
+## Logging
+Logging can be configured as per the [Logging Documentation](/docs/user/Logging.md).

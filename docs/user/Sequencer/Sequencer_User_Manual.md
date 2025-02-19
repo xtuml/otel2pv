@@ -727,3 +727,6 @@ There are a number of warnings that will be issued in the logs if at runtime one
 3. A node that has a parent node id that is its own node id - this will be logged as a warning and the output will not be sequenced
 4. A node that has a child node id that is its own node id - this will be logged as a warning and the output will not be sequenced
 5. No root nodes are found in the input data - this will be logged as a warning and the output will not be sequenced
+
+## Logging
+Logging can be configured as per the [Logging Documentation](/docs/user/Logging.md).
