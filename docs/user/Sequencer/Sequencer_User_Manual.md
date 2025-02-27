@@ -302,6 +302,11 @@ The output would then be given the configuration:
 ```
 As can be seen the job name of the first node has been applied to the second node, replacing its value.
 
+**Note:** If the `groupApplies` feature is used it is important to ensure the following:
+
+1. That each `groupApplies` does not conflict with another `groupApplies` i.e. if the `FieldToShare` is the same in two `groupApplies` then your data is split in such a way that this will not cause a conflict due to the fact that the first instance will be applied and the second instance will not be used, for each unique `FieldToShare`.
+2. That the `IdentifyingField` and `ValueOfIdentifyingField` are unique to the `appJSON` object that you want to share the `FieldToShare` with or the duplication is intended.
+
 ### childrenByBackwardsLink
 
 The `childrenByBackwardsLink` section of the configuration file is used to configure the sequencing of the data by the parentNodeId field and timestamp field. It is an object that details how this will be configured. The structure of this object is:
