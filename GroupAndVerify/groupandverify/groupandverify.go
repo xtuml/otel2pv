@@ -370,7 +370,18 @@ WORK:
 					for _, task := range tasks {
 						task.errChan <- err
 					}
-					treeCompletionChannel <- treeId
+					COMPLETETREE:
+					for {
+						select {
+						case task, ok := <-treeChan:
+							if !ok {
+								continue
+							}
+							taskChan <- task
+						case treeCompletionChannel <- treeId:
+							break COMPLETETREE
+						}
+					}
 					for task := range treeChan {
 						taskChan <- task
 					}
