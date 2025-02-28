@@ -363,6 +363,7 @@ WORK:
 				// handle the tree in a separate goroutine and send the errors to all tasks gathered
 				wg.Add(1)
 				go func(treeChan chan *Task, treeId string) {
+					groupAndVerifyLogger.Debug("tree started", slog.Group("details", slog.String("treeId", treeId)))
 					defer wg.Done()
 					tasks, err := treeHandler(treeChan, config, pushable)
 					// defer to send errors to all tasks and remove the tree from the map
@@ -373,6 +374,7 @@ WORK:
 					for task := range treeChan {
 						taskChan <- task
 					}
+					groupAndVerifyLogger.Debug("tree completed", slog.Group("details", slog.String("treeId", treeId)))
 				}(treeToTaskChannelMap[treeId], treeId)
 			}
 			treeChannel := treeToTaskChannelMap[treeId]
@@ -840,6 +842,7 @@ func (gav *GroupAndVerify) SendTo(data *Server.AppData) (err error) {
 	if err != nil {
 		return Server.NewInvalidErrorFromError(err)
 	}
+	groupAndVerifyLogger.Debug("message received", slog.Group("details", slog.String("nodeId", incomingData.NodeId), slog.String("treeId", incomingData.TreeId)))
 	task := &Task{
 		IncomingData: incomingData,
 		errChan:      make(chan error),
@@ -851,6 +854,8 @@ func (gav *GroupAndVerify) SendTo(data *Server.AppData) (err error) {
 		}
 	}()
 	gav.taskChan <- task
+	groupAndVerifyLogger.Debug("task sent for processing", slog.Group("details", slog.String("nodeId", incomingData.NodeId), slog.String("treeId", incomingData.TreeId)))
 	err = <-task.errChan
+	groupAndVerifyLogger.Debug("task processed", slog.Group("details", slog.String("nodeId", incomingData.NodeId), slog.String("treeId", incomingData.TreeId)))
 	return err
 }
