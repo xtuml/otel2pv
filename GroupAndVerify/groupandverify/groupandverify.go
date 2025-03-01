@@ -370,19 +370,23 @@ WORK:
 					for _, task := range tasks {
 						task.errChan <- err
 					}
+					moppedTasks := []*Task{}
 					COMPLETETREE:
 					for {
 						select {
 						case task, ok := <-treeChan:
+							if task != nil {
+								moppedTasks = append(moppedTasks, task)
+							}
 							if !ok {
 								continue
 							}
-							taskChan <- task
 						case treeCompletionChannel <- treeId:
 							break COMPLETETREE
 						}
 					}
-					for task := range treeChan {
+					// mop up any tasks that were not processed
+					for _, task := range moppedTasks {
 						taskChan <- task
 					}
 					groupAndVerifyLogger.Debug("tree completed", slog.Group("details", slog.String("treeId", treeId)))
@@ -803,6 +807,7 @@ OUTER:
 			}
 			tasks = append(tasks, task)
 			incomingData := task.IncomingData
+			groupAndVerifyLogger.Debug("adding task to verification status", slog.Group("details", slog.String("nodeId", incomingData.NodeId), slog.String("treeId", incomingData.TreeId)))
 			err := updateIncomingDataHolderMap(nodes, incomingData)
 			if err != nil {
 				return nil, nil, false, err
@@ -812,10 +817,14 @@ OUTER:
 				return nil, nil, false, err
 			}
 			treeVerified = verificationStatusHolder.CheckVerificationStatus()
+			groupAndVerifyLogger.Debug("task added to verification status", slog.Group("details", slog.String("nodeId", incomingData.NodeId), slog.String("treeId", incomingData.TreeId)))
 			if treeVerified {
 				break OUTER
 			}
 		case <-ctx.Done():
+			if len(tasks) != 0 {
+				groupAndVerifyLogger.Debug("tree verification timed out", slog.Group("details", slog.String("treeId", tasks[0].IncomingData.TreeId)))
+			}
 			break OUTER
 		}
 	}
