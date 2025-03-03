@@ -265,7 +265,27 @@ func TestSequencerConfig(t *testing.T) {
 			sequencer = SequencerConfig{}
 			err = sequencer.updateGroupApplies(config)
 			if err != nil {
-				t.Fatalf("expected error, got nil")
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if len(sequencer.groupApplies) != 1 {
+				t.Fatalf("expected 2, got %d", len(sequencer.groupApplies))
+			}
+			if _, ok := sequencer.groupApplies["field"]; !ok {
+				t.Errorf("expected field, got %v", sequencer.groupApplies)
+			}
+			expected := GroupApply{
+				FieldToShare:            "field",
+				IdentifyingField:        "field",
+				ValueOfIdentifyingField: "field",
+			}
+			if len(sequencer.groupApplies["field"]) != 2 {
+				t.Fatalf("expected 2, got %d", len(sequencer.groupApplies["field"]))
+			}
+			if sequencer.groupApplies["field"][0] != expected {
+				t.Errorf("expected %v, got %v", expected, sequencer.groupApplies["field"])
+			}
+			if sequencer.groupApplies["field"][1] != expected {
+				t.Errorf("expected %v, got %v", expected, sequencer.groupApplies["field"])
 			}
 			// test case when groupApplies input is valid
 			config = map[string]any{
@@ -288,7 +308,7 @@ func TestSequencerConfig(t *testing.T) {
 			if _, ok := sequencer.groupApplies["field"]; !ok {
 				t.Errorf("expected field, got %v", sequencer.groupApplies)
 			}
-			expected := GroupApply{
+			expected = GroupApply{
 				FieldToShare:            "field",
 				IdentifyingField:        "field",
 				ValueOfIdentifyingField: "field",
@@ -1876,6 +1896,30 @@ func TestGetGroupAppliesValueOfListFromAppJSON(t *testing.T) {
 	}
 	if value != "otherFieldValue" {
 		t.Errorf("Expected value to be 'otherFieldValue', got %v", value)
+	}
+	// Test case: groupApplies is not empty and the field to share is the same for multiple groupApplies
+	groupApplies = []GroupApply{
+		{
+			FieldToShare: "field",
+			IdentifyingField: "key",
+			ValueOfIdentifyingField: "value",
+		},
+		{
+			FieldToShare: "field",
+			IdentifyingField: "key2",
+			ValueOfIdentifyingField: "value2",
+		},
+	}
+	appJSON = map[string]any{
+		"key":   "value",
+		"field": "fieldValue",
+	}
+	value, err = getGroupAppliesValueOfListFromAppJSON(appJSON, groupApplies)
+	if err != nil {
+		t.Fatalf("Expected no error from getGroupAppliesValueOfListFromAppJSON, got %v", err)
+	}
+	if value != "fieldValue" {
+		t.Errorf("Expected value to be 'fieldValue', got %v", value)
 	}
 }
 

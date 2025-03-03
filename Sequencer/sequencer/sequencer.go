@@ -157,10 +157,6 @@ func (s *SequencerConfig) updateGroupApplies(config map[string]any) error {
 		if valueOfIdentifyingField == "" {
 			return fmt.Errorf("ValueOfIdentifyingField is empty for groupApplies[%d]", i)
 		}
-		if _, ok := s.groupApplies[fieldToShare]; ok {
-            s.groupApplies[fieldToShare] = []GroupApply{}
-			
-		}
 		s.groupApplies[fieldToShare] = append(
             s.groupApplies[fieldToShare],
             GroupApply{
