@@ -209,7 +209,11 @@ func (gavc *GroupAndVerifyConfig) updateMaxTrees(config map[string]any) error {
 	if ok {
 		maxTrees, ok := maxTreesRaw.(int)
 		if !ok {
-			return errors.New("maxTrees must be a positive integer")
+			if maxTreesFloat, ok := maxTreesRaw.(float64); !ok {
+				return errors.New("maxTrees must be a positive integer")
+			} else {
+				maxTrees = int(maxTreesFloat)
+			}
 		}
 		if maxTrees < 0 {
 			return errors.New("maxTrees must be a positive integer")
