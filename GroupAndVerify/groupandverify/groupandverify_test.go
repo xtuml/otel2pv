@@ -1910,6 +1910,345 @@ func TestGroupAndVerifyRunApp(t *testing.T) {
 	}
 }
 
+func TestGroupAndVerifyRunAppPersistenceMode(t *testing.T) {
+	dataToSend := []any{}
+	for i := 0; i < 5; i++ {
+		for j := 0; j < 2; j++ {
+			mapToSend := map[string]any{
+				"treeId": fmt.Sprintf("%d", i),
+				"nodeId": fmt.Sprintf("%d", j),
+				"appJSON": map[string]interface{}{
+					"jobId": fmt.Sprintf("%d", i),
+				},
+				"nodeType":  "type",
+				"timestamp": j,
+			}
+			if j == 0 {
+				mapToSend["parentId"] = fmt.Sprintf("%d", j+1)
+				mapToSend["childIds"] = []any{}
+			}
+			if j == 1 {
+				mapToSend["parentId"] = ""
+				mapToSend["childIds"] = []any{fmt.Sprintf("%d", j-1)}
+			}
+			dataToSend = append(dataToSend, mapToSend)
+		}
+	}
+	gav := &GroupAndVerify{
+		taskChan: make(chan *Task, 10),
+	}
+	gavConfig := &GroupAndVerifyConfig{
+		parentVerifySet: map[string]*int{},
+	}
+	mockSourceServer := &MockSourceServer{
+		dataToSend: dataToSend,
+	}
+	chanForData := make(chan ([]byte), 10)
+	mockSinkServer := &MockSinkServer{
+		dataReceived:  chanForData,
+		taskChan:      gav.taskChan,
+		expectedCount: 5,
+		mu: sync.Mutex{},
+	}
+	producerConfigMap := map[string]func() Server.Config{
+		"MockSink": func() Server.Config {
+			return &MockConfig{}
+		},
+	}
+	consumerConfigMap := map[string]func() Server.Config{
+		"MockSource": func() Server.Config {
+			return &MockConfig{}
+		},
+	}
+	producerMap := map[string]func() Server.SinkServer{
+		"MockSink": func() Server.SinkServer {
+			return mockSinkServer
+		},
+	}
+	consumerMap := map[string]func() Server.SourceServer{
+		"MockSource": func() Server.SourceServer {
+			return mockSourceServer
+		},
+	}
+	// set config file
+	tmpFile, err := os.CreateTemp("", "config.json")
+	if err != nil {
+		t.Errorf("Error creating temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	// create temp directory for persistence mode
+	tmpDir, err := os.MkdirTemp("", "persistence")
+	if err != nil {
+		t.Errorf("Error creating temp directory: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+	// write config file
+	data := []byte(
+		fmt.Sprintf(`{"AppConfig":{"persistenceMode":{"on":true, "path": "%s"}, "Timeout":3},"ProducersSetup":{"ProducerConfigs":[{"Type":"MockSink","ProducerConfig":{}}]},"ConsumersSetup":{"ConsumerConfigs":[{"Type":"MockSource","ConsumerConfig":{}}]}}`, tmpDir),
+	)
+	err = os.WriteFile(tmpFile.Name(), data, 0644)
+	if err != nil {
+		t.Errorf("Error writing to temp file: %v", err)
+	}
+	err = flag.Set("config", tmpFile.Name())
+	if err != nil {
+		t.Errorf("Error setting flag: %v", err)
+	}
+	// Run the app
+	err = Server.RunApp(
+		gav, gavConfig,
+		producerConfigMap, consumerConfigMap,
+		producerMap, consumerMap,
+	)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	seenJobIds := map[string]int{}
+	close(chanForData)
+	for rawReceivedData := range chanForData {
+		jobIds := []string{}
+		nodeIds := []string{}
+		var receivedData []*IncomingData
+		err := json.Unmarshal(rawReceivedData, &receivedData)
+		if err != nil {
+			t.Fatalf("expected nil, got %v", err)
+		}
+		if len(receivedData) != 2 {
+			t.Fatalf("expected 2, got %d", len(receivedData))
+		}
+		for _, receivedOutgoingData := range receivedData {
+			nodeId := receivedOutgoingData.NodeId
+			nodeIds = append(nodeIds, nodeId)
+			orderedChildIds := receivedOutgoingData.ChildIds
+			if nodeId == "0" {
+				if len(orderedChildIds) != 0 {
+					t.Errorf("expected 0, got %d", len(orderedChildIds))
+				}
+			}
+			if nodeId == "1" {
+				if len(orderedChildIds) != 1 {
+					t.Errorf("expected 1, got %d", len(orderedChildIds))
+				}
+				if orderedChildIds[0] != "0" {
+					t.Errorf("expected 0, got %s", orderedChildIds[0])
+				}
+			}
+			appJSONRaw := receivedOutgoingData.AppJSON
+			var appJSON map[string]interface{}
+			err = json.Unmarshal(appJSONRaw, &appJSON)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if len(appJSON) != 1 {
+				t.Fatalf("expected 1, got %d", len(appJSON))
+			}
+			jobId, ok := appJSON["jobId"].(string)
+			if !ok {
+				t.Fatalf("expected string, got %v", appJSON["jobId"])
+			}
+			jobIds = append(jobIds, jobId)
+		}
+		if len(jobIds) != 2 {
+			t.Fatalf("expected 2, got %d", len(jobIds))
+		}
+		if jobIds[0] != jobIds[1] {
+			t.Errorf("expected %s, got %s", jobIds[0], jobIds[1])
+		}
+		seenJobIds[jobIds[0]]++
+		if len(nodeIds) != 2 {
+			t.Fatalf("expected 2, got %d", len(nodeIds))
+		}
+		sort.Slice(nodeIds, func(i, j int) bool {
+			return nodeIds[i] < nodeIds[j]
+		})
+		if nodeIds[0] != "0" {
+			t.Errorf("expected 0, got %s", nodeIds[0])
+		}
+		if nodeIds[1] != "1" {
+			t.Errorf("expected 1, got %s", nodeIds[1])
+		}
+	}
+	if len(seenJobIds) != 5 {
+		t.Fatalf("expected 5, got %d", len(seenJobIds))
+	}
+	if !reflect.DeepEqual(seenJobIds, map[string]int{"0": 1, "1": 1, "2": 1, "3": 1, "4": 1}) {
+		t.Fatalf("expected map[string]int{\"0\": 1, \"1\": 1, \"2\": 1, \"3\": 1, \"4\": 1}, got %v", seenJobIds)
+	}
+}
+
+func TestGroupAndVerifyRunAppPersistenceModeRestart(t *testing.T) {
+	// create temp directory for persistence mode
+	tmpDir, err := os.MkdirTemp("", "persistence")
+	if err != nil {
+		t.Errorf("Error creating temp directory: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+	dataToSend := []any{}
+	for i := 0; i < 5; i++ {
+		for j := 0; j < 2; j++ {
+			mapToSend := map[string]any{
+				"treeId": fmt.Sprintf("%d", i),
+				"nodeId": fmt.Sprintf("%d", j),
+				"appJSON": map[string]interface{}{
+					"jobId": fmt.Sprintf("%d", i),
+				},
+				"nodeType":  "type",
+				"timestamp": j,
+			}
+			if j == 0 {
+				mapToSend["parentId"] = fmt.Sprintf("%d", j+1)
+				mapToSend["childIds"] = []any{}
+			}
+			if j == 1 {
+				mapToSend["parentId"] = ""
+				mapToSend["childIds"] = []any{fmt.Sprintf("%d", j-1)}
+			}
+			jsonBytes, err := json.Marshal(mapToSend)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			err = os.WriteFile(fmt.Sprintf("%s/%d_%d.json", tmpDir, i, j), jsonBytes, 0644)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}	
+		}
+	}
+	gav := &GroupAndVerify{
+		taskChan: make(chan *Task, 10),
+	}
+	gavConfig := &GroupAndVerifyConfig{
+		parentVerifySet: map[string]*int{},
+	}
+	mockSourceServer := &MockSourceServer{
+		dataToSend: dataToSend,
+	}
+	chanForData := make(chan ([]byte), 10)
+	mockSinkServer := &MockSinkServer{
+		dataReceived:  chanForData,
+		taskChan:      gav.taskChan,
+		expectedCount: 5,
+		mu: sync.Mutex{},
+	}
+	producerConfigMap := map[string]func() Server.Config{
+		"MockSink": func() Server.Config {
+			return &MockConfig{}
+		},
+	}
+	consumerConfigMap := map[string]func() Server.Config{
+		"MockSource": func() Server.Config {
+			return &MockConfig{}
+		},
+	}
+	producerMap := map[string]func() Server.SinkServer{
+		"MockSink": func() Server.SinkServer {
+			return mockSinkServer
+		},
+	}
+	consumerMap := map[string]func() Server.SourceServer{
+		"MockSource": func() Server.SourceServer {
+			return mockSourceServer
+		},
+	}
+	// set config file
+	tmpFile, err := os.CreateTemp("", "config.json")
+	if err != nil {
+		t.Errorf("Error creating temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	// write config file
+	data := []byte(
+		fmt.Sprintf(`{"AppConfig":{"persistenceMode":{"on":true, "path": "%s"}, "Timeout":3},"ProducersSetup":{"ProducerConfigs":[{"Type":"MockSink","ProducerConfig":{}}]},"ConsumersSetup":{"ConsumerConfigs":[{"Type":"MockSource","ConsumerConfig":{}}]}}`, tmpDir),
+	)
+	err = os.WriteFile(tmpFile.Name(), data, 0644)
+	if err != nil {
+		t.Errorf("Error writing to temp file: %v", err)
+	}
+	err = flag.Set("config", tmpFile.Name())
+	if err != nil {
+		t.Errorf("Error setting flag: %v", err)
+	}
+	// Run the app
+	err = Server.RunApp(
+		gav, gavConfig,
+		producerConfigMap, consumerConfigMap,
+		producerMap, consumerMap,
+	)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	seenJobIds := map[string]int{}
+	close(chanForData)
+	for rawReceivedData := range chanForData {
+		jobIds := []string{}
+		nodeIds := []string{}
+		var receivedData []*IncomingData
+		err := json.Unmarshal(rawReceivedData, &receivedData)
+		if err != nil {
+			t.Fatalf("expected nil, got %v", err)
+		}
+		if len(receivedData) != 2 {
+			t.Fatalf("expected 2, got %d", len(receivedData))
+		}
+		for _, receivedOutgoingData := range receivedData {
+			nodeId := receivedOutgoingData.NodeId
+			nodeIds = append(nodeIds, nodeId)
+			orderedChildIds := receivedOutgoingData.ChildIds
+			if nodeId == "0" {
+				if len(orderedChildIds) != 0 {
+					t.Errorf("expected 0, got %d", len(orderedChildIds))
+				}
+			}
+			if nodeId == "1" {
+				if len(orderedChildIds) != 1 {
+					t.Errorf("expected 1, got %d", len(orderedChildIds))
+				}
+				if orderedChildIds[0] != "0" {
+					t.Errorf("expected 0, got %s", orderedChildIds[0])
+				}
+			}
+			appJSONRaw := receivedOutgoingData.AppJSON
+			var appJSON map[string]interface{}
+			err = json.Unmarshal(appJSONRaw, &appJSON)
+			if err != nil {
+				t.Fatalf("expected nil, got %v", err)
+			}
+			if len(appJSON) != 1 {
+				t.Fatalf("expected 1, got %d", len(appJSON))
+			}
+			jobId, ok := appJSON["jobId"].(string)
+			if !ok {
+				t.Fatalf("expected string, got %v", appJSON["jobId"])
+			}
+			jobIds = append(jobIds, jobId)
+		}
+		if len(jobIds) != 2 {
+			t.Fatalf("expected 2, got %d", len(jobIds))
+		}
+		if jobIds[0] != jobIds[1] {
+			t.Errorf("expected %s, got %s", jobIds[0], jobIds[1])
+		}
+		seenJobIds[jobIds[0]]++
+		if len(nodeIds) != 2 {
+			t.Fatalf("expected 2, got %d", len(nodeIds))
+		}
+		sort.Slice(nodeIds, func(i, j int) bool {
+			return nodeIds[i] < nodeIds[j]
+		})
+		if nodeIds[0] != "0" {
+			t.Errorf("expected 0, got %s", nodeIds[0])
+		}
+		if nodeIds[1] != "1" {
+			t.Errorf("expected 1, got %s", nodeIds[1])
+		}
+	}
+	if len(seenJobIds) != 5 {
+		t.Fatalf("expected 5, got %d", len(seenJobIds))
+	}
+	if !reflect.DeepEqual(seenJobIds, map[string]int{"0": 1, "1": 1, "2": 1, "3": 1, "4": 1}) {
+		t.Fatalf("expected map[string]int{\"0\": 1, \"1\": 1, \"2\": 1, \"3\": 1, \"4\": 1}, got %v", seenJobIds)
+	}
+}
+
 // Benchmark RunApp with 100 trees each with 10 nodes i.e. 1000 nodes
 func BenchmarkGroupAndVerifyRunApp(b *testing.B) {
 	dataToSend := []any{}

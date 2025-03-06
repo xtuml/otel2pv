@@ -7,9 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/SmartDCSITlimited/CDS-OTel-To-PV/Server"
 )
@@ -24,6 +28,7 @@ func init() {
 		),
 	)
 }
+
 // IncomingData is a struct that is used to hold the incoming data from the previous stage
 // in the GroupAndVerify component. It has the following fields:
 //
@@ -101,6 +106,17 @@ type Task struct {
 	errChan      chan error
 }
 
+// PersistenceMode is a struct that is used to hold the persistence mode for the GroupAndVerify component.
+// It has the following fields:
+//
+// 1. On: bool. It is a boolean that is used to determine if the persistence mode is on.
+//
+// 2. Path: string. It is the path to the directory where the data is to be stored.
+type PersistenceMode struct {
+	On   bool
+	Path string
+}
+
 // GroupAndVerifyConfig is a struct that is used to hold the configuration for the GroupAndVerify
 // component. It has the following fields:
 //
@@ -110,10 +126,13 @@ type Task struct {
 // 2. Timeout: int. It is the time out for the processing of the tree.
 //
 // 3. MaxTrees: int. It is the maximum number of trees that can be processed at a time. If 0, then there is no limit.
+//
+// 4. PersistenceMode: PersistenceMode. It is the persistence mode for the GroupAndVerify component.
 type GroupAndVerifyConfig struct {
 	parentVerifySet map[string]*int
 	Timeout         int
 	MaxTrees        int
+	PersistenceMode PersistenceMode
 }
 
 // updateParentVerifySet is a method that is used to update the parentVerifySet field of the GroupAndVerifyConfig
@@ -225,6 +244,54 @@ func (gavc *GroupAndVerifyConfig) updateMaxTrees(config map[string]any) error {
 	return nil
 }
 
+// updatePersistenceMode is a method that is used to update the PersistenceMode field of the GroupAndVerifyConfig
+// struct from config.
+//
+// Args:
+//
+// 1. config: map[string]any. It is a map that holds the raw configuration.
+//
+// Returns:
+//
+// 1. error. It returns an error if the configuration is invalid in any way.
+func (gavc *GroupAndVerifyConfig) updatePersistenceMode(config map[string]any) error {
+	persistenceModeRaw, ok := config["persistenceMode"]
+	if ok {
+		persistenceMode, ok := persistenceModeRaw.(map[string]any)
+		if !ok {
+			return errors.New("persistenceMode is not an object")
+		}
+		onRaw, ok := persistenceMode["on"]
+		if !ok {
+			return errors.New("on in persistenceMode is not present")
+		}
+		on, ok := onRaw.(bool)
+		if !ok {
+			return errors.New("on in persistenceMode is not a boolean")
+		}
+		if !on {
+			return nil
+		}
+		pathRaw, ok := persistenceMode["path"]
+		if !ok {
+			return errors.New("path in persistenceMode is not present")
+		}
+		path, ok := pathRaw.(string)
+		if !ok {
+			return errors.New("path in persistenceMode is not a string")
+		}
+		// check if the path is a directory
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return errors.New("path in persistenceMode does not exist")
+		}
+		gavc.PersistenceMode = PersistenceMode{
+			On:   on,
+			Path: path,
+		}
+	}
+	return nil
+}
+
 // IngestConfig is a method that is used to set the fields of the GroupAndVerifyConfig struct.
 //
 // Args:
@@ -248,6 +315,10 @@ func (gavc *GroupAndVerifyConfig) IngestConfig(config map[string]any) error {
 		return err
 	}
 	err = gavc.updateMaxTrees(config)
+	if err != nil {
+		return err
+	}
+	err = gavc.updatePersistenceMode(config)
 	if err != nil {
 		return err
 	}
@@ -330,6 +401,13 @@ func (gav *GroupAndVerify) Serve() error {
 	if gav.config.parentVerifySet == nil {
 		return errors.New("parentVerifySet not set")
 	}
+	if gav.config.PersistenceMode.On {
+		// make sure the directory exists
+		if _, err := os.Stat(gav.config.PersistenceMode.Path); os.IsNotExist(err) {
+			return errors.New("path in persistenceMode does not exist")
+		}
+		return tasksHandlerGrouping(gav.taskChan, gav.config, gav.pushable)
+	}
 	tasksHandler(gav.taskChan, gav.config, gav.pushable)
 	return nil
 }
@@ -346,6 +424,7 @@ func (gav *GroupAndVerify) Serve() error {
 func tasksHandler(taskChan chan *Task, config *GroupAndVerifyConfig, pushable Server.Pushable) {
 	treeToTaskChannelMap := make(map[string]chan *Task)
 	treeCompletionChannel := make(chan string)
+	defer close(treeCompletionChannel)
 	wg := sync.WaitGroup{}
 	// make sure we wait for all the goroutines to finish
 	defer wg.Wait()
@@ -375,7 +454,7 @@ WORK:
 						task.errChan <- err
 					}
 					moppedTasks := []*Task{}
-					COMPLETETREE:
+				COMPLETETREE:
 					for {
 						select {
 						case task, ok := <-treeChan:
@@ -408,7 +487,6 @@ WORK:
 	}
 	// wait for all trees to be completed and close the channels
 	if len(treeToTaskChannelMap) == 0 {
-		close(treeCompletionChannel)
 		return
 	}
 LOOPBREAK:
@@ -425,7 +503,6 @@ LOOPBREAK:
 			}
 		}
 	}
-	close(treeCompletionChannel)
 }
 
 // treeHandler is a function that is used to handle the incoming data for a tree.
@@ -512,7 +589,7 @@ func (cb *childBalance) IsVerified() bool {
 // This is used for the nodes that do not require bidirectional confirmation.
 type parentStatus struct {
 	childRefBalance  map[string]*childBalance
-	expectedChildren *int	
+	expectedChildren *int
 }
 
 // newParentStatus is a function that is used to create a new parentStatus struct.
@@ -732,8 +809,8 @@ func (vsh *verificationStatusHolder) CheckVerificationStatus() bool {
 //
 // 2. backwardsLinks: []string. It is the list of identifiers of the parent nodes.
 type incomingDataHolder struct {
-	incomingData      *IncomingData
-	Duplicates        []*IncomingData
+	incomingData *IncomingData
+	Duplicates   []*IncomingData
 }
 
 // AddDuplicate is a method that is used to add a duplicate to the incomingDataHolder.
@@ -882,4 +959,234 @@ func (gav *GroupAndVerify) SendTo(data *Server.AppData) (err error) {
 	err = <-task.errChan
 	groupAndVerifyLogger.Debug("task processed", slog.Group("details", slog.String("nodeId", incomingData.NodeId), slog.String("treeId", incomingData.TreeId)))
 	return err
+}
+
+// tasksHandlerGrouping is a method that is used to handle the incoming tasks and process them, sending the output to the pushable
+// it only groups the incoming data sending on when timeout occurs and resiliently writes data to disk which can be accessed if the
+// process is restarted.
+//
+// Args:
+//
+// 1. taskChan: chan *Task. It is the channel that holds the incoming tasks.
+//
+// 2. config: *GroupAndVerifyConfig. It is the configuration for the GroupAndVerify component.
+//
+// 3. pushable: Server.Pushable. It is the pushable that is used to send data to the next stage.
+func tasksHandlerGrouping(taskChan chan *Task, config *GroupAndVerifyConfig, pushable Server.Pushable) error {
+	// make sure the directory exists
+	if _, err := os.Stat(config.PersistenceMode.Path); os.IsNotExist(err) {
+		return errors.New("path in persistenceMode does not exist")
+	}
+	// get list of files to add to tasks if we are restarting
+	files, err := os.ReadDir(config.PersistenceMode.Path)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	for _, file := range files {
+		filePath := filepath.Join(config.PersistenceMode.Path, file.Name())
+		jsonData, err := os.ReadFile(filePath)
+		if err != nil {
+			return err
+		}
+		incomingData := &IncomingData{}
+		err = json.Unmarshal(jsonData, incomingData)
+		if err != nil {
+			return err
+		}
+		go func(incomingData *IncomingData, filePath string) {
+			task := &Task{
+				IncomingData: incomingData,
+				errChan:      make(chan error),
+			}
+			defer close(task.errChan)
+			select {
+			case <-ctx.Done():
+				return
+			case taskChan <- task:
+			}
+			err := <-task.errChan
+			if err != nil {
+				groupAndVerifyLogger.Error("error processing restarted data", slog.String("error", err.Error()), slog.Group("details", slog.String("nodeId", incomingData.NodeId), slog.String("treeId", incomingData.TreeId)))
+				cancel(err)
+			}
+			err = os.Remove(filePath)
+			if err != nil {
+				groupAndVerifyLogger.Error("error removing restart data file", slog.String("error", err.Error()), slog.Group("details", slog.String("nodeId", incomingData.NodeId), slog.String("treeId", incomingData.TreeId)))
+				cancel(err)
+			}
+		}(incomingData, filePath)
+	}
+	treeToTaskChannelMap := make(map[string]chan *Task)
+	treeCompletionChannel := make(chan string)
+	defer close(treeCompletionChannel)
+	wg := sync.WaitGroup{}
+	// make sure we wait for all the goroutines to finish
+	defer wg.Wait()
+WORK:
+	for {
+		select {
+		case task, ok := <-taskChan:
+			if !ok {
+				break WORK
+			}
+			incomingData := task.IncomingData
+			treeId := incomingData.TreeId
+			if _, ok := treeToTaskChannelMap[treeId]; !ok {
+				if config.MaxTrees != 0 && len(treeToTaskChannelMap) >= config.MaxTrees {
+					task.errChan <- Server.NewFullError(fmt.Sprintf("max trees reached. MaxTrees: %d", config.MaxTrees))
+					continue
+				}
+				treeToTaskChannelMap[treeId] = make(chan *Task)
+				// handle the tree in a separate goroutine and send the errors to all tasks gathered
+				wg.Add(1)
+				go func(treeChan chan *Task, treeId string) {
+					defer wg.Done()
+					groupAndVerifyLogger.Debug("tree started", slog.Group("details", slog.String("treeId", treeId)))
+					err := treeHandlerGrouping(treeChan, config, pushable)
+					if err != nil {
+						cancel(err)
+					}
+					moppedTasks := []*Task{}
+				COMPLETETREE:
+					for {
+						select {
+						case task, ok := <-treeChan:
+							if task != nil {
+								moppedTasks = append(moppedTasks, task)
+							}
+							if !ok {
+								continue
+							}
+						case treeCompletionChannel <- treeId:
+							break COMPLETETREE
+						}
+					}
+					if err != nil {
+						groupAndVerifyLogger.Error("error processing tree", slog.String("error", err.Error()), slog.Group("details", slog.String("treeId", treeId)))
+						return
+					}
+					// mop up any tasks that were not processed
+					for _, task := range moppedTasks {
+						taskChan <- task
+					}
+					groupAndVerifyLogger.Debug("tree completed", slog.Group("details", slog.String("treeId", treeId)))
+				}(treeToTaskChannelMap[treeId], treeId)
+			}
+			treeChannel := treeToTaskChannelMap[treeId]
+			treeChannel <- task
+		case treeId := <-treeCompletionChannel:
+			// check if there have been any tasks received in between the time the tree was completed
+			if treeChannel, ok := treeToTaskChannelMap[treeId]; ok {
+				close(treeChannel)
+				delete(treeToTaskChannelMap, treeId)
+			}
+		case <-ctx.Done():
+			break WORK
+		}
+	}
+	// wait for all trees to be completed and close the channels
+	if len(treeToTaskChannelMap) == 0 {
+		return nil
+	}
+LOOPBREAK:
+	for {
+		select {
+		case treeId := <-treeCompletionChannel:
+			if treeChannel, ok := treeToTaskChannelMap[treeId]; ok {
+				close(treeChannel)
+				delete(treeToTaskChannelMap, treeId)
+			}
+		default:
+			if len(treeToTaskChannelMap) == 0 {
+				break LOOPBREAK
+			}
+		}
+	}
+	return ctx.Err()
+}
+
+// treeHandlerGrouping is a function that is used to handle the incoming data for a tree.
+//
+// Args:
+//
+// 1. taskChan: chan *Task. It is the channel that holds the incoming tasks.
+//
+// 2. config: *GroupAndVerifyConfig. It is the configuration for the GroupAndVerify component.
+//
+// 3. pushable: Server.Pushable. It is the pushable that is used to send data to the next stage.
+//
+// Returns:
+//
+// 1. error. It returns an error if the processing of the tree fails.
+func treeHandlerGrouping(taskChan chan *Task, config *GroupAndVerifyConfig, pushable Server.Pushable) error {
+	storedFileNames := []string{}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.Timeout)*time.Second)
+	defer cancel()
+TOBREAK:
+	for {
+		select {
+		case <-ctx.Done():
+			break TOBREAK
+		case task, ok := <-taskChan:
+			if !ok {
+				break TOBREAK
+			}
+			incomingData := task.IncomingData
+			// marshal the incoming data
+			jsonData, err := json.Marshal(incomingData)
+			// if there is an error, send it to the task and continue
+			if err != nil {
+				task.errChan <- err
+				return err
+			}
+			// create a file to store the data
+			fileName := uuid.NewString()
+			filePath := filepath.Join(config.PersistenceMode.Path, fileName)
+			// write the data to the file atomically
+			err = Server.WriteToFileAtomically(filePath, jsonData)
+			// if there is an error, send it to the task and continue
+			if err != nil {
+				task.errChan <- err
+				return err
+			}
+			// add the file path to the list of stored file paths
+			storedFileNames = append(storedFileNames, fileName)
+			// send nil to the task to indicate that the data has been stored
+			task.errChan <- nil
+		}
+	}
+	// read the data into array of incoming data and send to the pushable
+	incomingDataArray := []*IncomingData{}
+	for _, fileName := range storedFileNames {
+		data, err := os.ReadFile(filepath.Join(config.PersistenceMode.Path, fileName))
+		if err != nil {
+			return err
+		}
+		incomingData := &IncomingData{}
+		err = json.Unmarshal(data, incomingData)
+		if err != nil {
+			return err
+		}
+		incomingDataArray = append(incomingDataArray, incomingData)
+	}
+	// create AppData and send to pushable
+	jsonData, err := json.Marshal(incomingDataArray)
+	if err != nil {
+		return err
+	}
+	appData := Server.NewAppData(jsonData, "")
+	err = pushable.SendTo(appData)
+	if err != nil {
+		return err
+	}
+	// remove the stored files
+	for _, fileName := range storedFileNames {
+		err = os.Remove(filepath.Join(config.PersistenceMode.Path, fileName))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
