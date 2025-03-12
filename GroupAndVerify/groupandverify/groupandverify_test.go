@@ -2107,6 +2107,10 @@ func TestGroupAndVerifyRunAppPersistenceModeRestart(t *testing.T) {
 			if err != nil {
 				t.Fatalf("expected nil, got %v", err)
 			}
+            jsonBytes, err = Server.CompressData(jsonBytes)
+            if err != nil {
+                t.Fatalf("expected nil, got %v", err)
+            }
 			err = os.WriteFile(fmt.Sprintf("%s/%d_%d.json", tmpDir, i, j), jsonBytes, 0644)
 			if err != nil {
 				t.Fatalf("expected nil, got %v", err)
