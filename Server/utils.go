@@ -97,8 +97,11 @@ func (d DummyValidator) Validate(v any) error {
 // 2. error. An error if compression fails.
 func CompressData(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
-	gzipWriter := gzip.NewWriter(&buf)
-	_, err := gzipWriter.Write(data)
+	gzipWriter, err := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+	if err != nil {
+		return nil, err
+	}
+	_, err = gzipWriter.Write(data)
 	if err != nil {
 		return nil, err
 	}
