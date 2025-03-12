@@ -990,10 +990,6 @@ func tasksHandlerGrouping(taskChan chan *Task, config *GroupAndVerifyConfig, pus
 		if err != nil {
 			return err
 		}
-        jsonData, err = Server.DecompressData(jsonData)
-        if err != nil {
-            return err
-        }
 		incomingData := &IncomingData{}
 		err = json.Unmarshal(jsonData, incomingData)
 		if err != nil {
@@ -1148,14 +1144,8 @@ TOBREAK:
 			// create a file to store the data
 			fileName := uuid.NewString()
 			filePath := filepath.Join(config.PersistenceMode.Path, fileName)
-            // zip the data
-            zipData, err := Server.CompressData(jsonData)
-            if err != nil {
-                task.errChan <- err
-                return err
-            }
 			// write the data to the file atomically
-			err = Server.WriteToFileAtomically(filePath, zipData)
+			err = Server.WriteToFileAtomically(filePath, jsonData)
 			// if there is an error, send it to the task and continue
 			if err != nil {
 				task.errChan <- err
@@ -1174,11 +1164,6 @@ TOBREAK:
 		if err != nil {
 			return err
 		}
-        // unzip the data
-        data, err = Server.DecompressData(data)
-        if err != nil {
-            return err
-        }
 		incomingData := &IncomingData{}
 		err = json.Unmarshal(data, incomingData)
 		if err != nil {

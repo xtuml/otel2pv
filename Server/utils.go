@@ -1,8 +1,6 @@
 package Server
 
 import (
-	"bytes"
-	"compress/gzip"
 	"encoding/json"
 	"os"
 	"strings"
@@ -82,54 +80,4 @@ type DummyValidator struct{}
 // Validate is a method that validates a value.
 func (d DummyValidator) Validate(v any) error {
 	return nil
-}
-
-// CompressData is a function that compresses data using gzip.
-//
-// It takes as args:
-//
-// 1. data: []byte. The data to compress.
-//
-// It returns:
-//
-// 1. []byte. The compressed data.
-//
-// 2. error. An error if compression fails.
-func CompressData(data []byte) ([]byte, error) {
-	var buf bytes.Buffer
-	gzipWriter := gzip.NewWriter(&buf)
-	_, err := gzipWriter.Write(data)
-	if err != nil {
-		return nil, err
-	}
-	err = gzipWriter.Close()
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-// DecompressData is a function that decompresses data using gzip.
-//
-// It takes as args:
-//
-// 1. data: []byte. The data to decompress.
-//
-// It returns:
-//
-// 1. []byte. The decompressed data.
-//
-// 2. error. An error if decompression fails.
-func DecompressData(data []byte) ([]byte, error) {
-	reader, err := gzip.NewReader(bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	defer reader.Close()
-	var buf bytes.Buffer
-	_, err = buf.ReadFrom(reader)
-	if err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
 }
