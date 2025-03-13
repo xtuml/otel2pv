@@ -366,6 +366,12 @@ func TestJQTransformer(t *testing.T) {
 		if !reflect.DeepEqual(gotData, []byte(`1`)) {
 			t.Errorf("Expected data to be 1, got %v", gotData)
 		}
+		// Test the case where the input appData is empty string
+		appData = Server.NewAppData([]byte("\n"), "")
+		err = jqTransformer.SendTo(appData)
+		if err == nil {
+			t.Fatalf("Expected error from SendTo, got %v", err)
+		}
 	})
 	t.Run("Serve", func(t *testing.T) {
 		jqTransformer := JQTransformer{}

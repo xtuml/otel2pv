@@ -72,6 +72,9 @@ func TestConvertBytesJSONDataToAppData(t *testing.T) {
 		if err == nil {
 			t.Errorf("Expected error from convertBytesJSONDataToAppData, got nil")
 		}
+		if _, ok := err.(*InvalidError); !ok {
+			t.Errorf("Expected error to be of type InvalidError, got %T", err)
+		}
 	})
 }
 
@@ -100,6 +103,9 @@ func TestConvertStringJSONDataToAppData(t *testing.T) {
 
 		if err == nil {
 			t.Errorf("Expected error from convertStringJSONDataToAppData, got nil")
+		}
+		if _, ok := err.(*InvalidError); !ok {
+			t.Errorf("Expected error to be of type InvalidError, got %T", err)
 		}
 	})
 }

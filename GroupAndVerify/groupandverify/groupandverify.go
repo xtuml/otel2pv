@@ -993,7 +993,19 @@ func tasksHandlerGrouping(taskChan chan *Task, config *GroupAndVerifyConfig, pus
 		incomingData := &IncomingData{}
 		err = json.Unmarshal(jsonData, incomingData)
 		if err != nil {
-			return err
+			groupAndVerifyLogger.Error(
+                "error unmarshalling restart data, either someone has" +
+                "tampered with the data or there was a crash and the " +
+                "file was not successfully written to disk. Therefore" +
+                " the application would not have told the consumer " +
+                "that the message was accepted. This file will be thrown away.",
+                slog.String("error", err.Error()),
+            )
+            err = os.Remove(filePath)
+            if err != nil {
+                return err
+            }
+            continue
 		}
 		go func(incomingData *IncomingData, filePath string) {
 			task := &Task{

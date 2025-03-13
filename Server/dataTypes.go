@@ -70,7 +70,7 @@ func NewAppData(data []byte, routingKey string) *AppData {
 // 2. error. An error if the conversion fails.
 func convertBytesJSONDataToAppData(message []byte) (*AppData, error) {
 	if !json.Valid(message) {
-		return nil, errors.New("Bytes data is not a valid JSON")
+		return nil, NewInvalidError("Bytes data is not a valid JSON")
 	}
 	return &AppData{
 		data: message,
@@ -91,7 +91,7 @@ func convertBytesJSONDataToAppData(message []byte) (*AppData, error) {
 func convertStringJSONDataToAppData(message string) (*AppData, error) {
 	messageJSON := []byte(message)
 	if !json.Valid(messageJSON) {
-		return nil, errors.New("String data is not a valid JSON")
+		return nil, NewInvalidError("String data is not a valid JSON")
 	}
 	return &AppData{
 		data: messageJSON,
