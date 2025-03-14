@@ -155,6 +155,9 @@ func getDataFromJQIterator(iter *gojq.Iter) (map[string][]any, error) {
 			break
 		}
 		if counter > 0 {
+			if err, ok := data.(error); ok {
+				return nil, err
+			}
 			return nil, errors.New("more than one data")
 		}
 		counter++
