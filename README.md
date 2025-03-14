@@ -1,4 +1,5 @@
-# CDS-OTel-To-PV
+# otel2pv
+A system for converting Open Telemetry traces and spans into sequenced data for the Protocol Verifier.
 
 ## Introduction
 The purpose of this project is to convert Open Telemetry (OTel) traces (https://opentelemetry.io/docs/concepts/signals/traces/) and their underlying spans (https://opentelemetry.io/docs/concepts/signals/traces/#spans) into sequenced data for the [Protocol Verifier](https://github.com/xtuml/munin) (PV). The system processes logged call trees presented in JSON format, making it versatile and generalizable to any similar data structure. By leveraging a series of applications, the system ensures that the data is extracted, grouped, verified (a timeout may occur), and sequenced before being sent to the Protocol Verifier.
