@@ -687,7 +687,14 @@ An example configuration file is as follows:
                 "Type": "AMQP1.0",
                 "ProducerConfig": {
                     "Address": "amqp://localhost:5672",
-                    "Queue": "output_queue"
+                    "Queue": "output_queue",
+                    "tlsConfig": {
+                        "certFile": "/config/client.crt",
+                        "keyFile": "/config/client.key",
+                        "clientCaFile": "/config/ca.crt",
+                        "rootCaFile": "/config/root.crt",
+                        "tlsVersion": "TLSv1.2"
+                    }
                 }
             }
         ]
@@ -698,7 +705,14 @@ An example configuration file is as follows:
                 "Type": "AMQP1.0",
                 "ConsumerConfig": {
                     "Address": "amqp://localhost:5672",
-                    "Queue": "input_queue"
+                    "Queue": "input_queue",
+                    "tlsConfig": {
+                        "certFile": "/config/client.crt",
+                        "keyFile": "/config/client.key",
+                        "clientCaFile": "/config/ca.crt",
+                        "rootCaFile": "/config/root.crt",
+                        "tlsVersion": "TLSv1.2"
+                    }
                 }
             }
         ]

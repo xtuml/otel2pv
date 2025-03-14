@@ -131,6 +131,7 @@ The `AppConfig` section of the configuration file is used to configure the Group
     "Timeout": <int, optional - the time in seconds to wait for a tree to be verifier, default is 2>,
     "MaxTrees": <int, optional - the maximum number of trees to be stored in memory and must be 0 or greater. If 0 then there is no maximum amount of trees, default is 0 i.e. no maximum>,
     "parentVerifySet": <array of objects, optional - the node types that are expected to have a parent links and the parent links are not expected to have a forward link to the child node. Specifies the expected number of children, default is []>,
+    "persistenceMode": <object, optional - the mode to persist the incoming data on disk, default is {"on": false, "path": ""}>,
 }
 ```
 
@@ -165,6 +166,15 @@ An example configuration for AppConfig is as follows:
     },
 }
 ```
+
+The `persistenceMode` field is used to set the mode to persist data to disk in case of crashes. It only groups incoming nodes together by "treeId" and does not perform verification. The object should have the following structure:
+```json
+{
+    "on": <bool, optional - if true the data will be persisted on disk and node grouped by treeId, default is false>,
+    "path": <string, optional - the path to the directory to persist files in, default is "" but must be supplied if "on" is true>,
+}
+```
+It should be noted that the directory specified in the `path` field must exist and be writable by the application and to be resilient to crashes the directory should be on a persistent volume.
 
 ### ProducersSetup
 The `ProducersSetup` section of the configuration file is used to configure the producer that the Group And Verify will send the output to. The configuration has the following structure:
@@ -235,6 +245,61 @@ An example configuration file is as follows:
                 "ConsumerConfig": {
                     "Address": "amqp://localhost:5672",
                     "Queue": "input_queue"
+                }
+            }
+        ]
+    }
+}
+```
+
+An example configuration with persistence mode enabled and TLs is as follows:
+```json
+{
+    "AppConfig": {
+        "Timeout": 2,
+        "MaxTrees": 0,
+        "parentVerifySet": [
+            "nodeType1",
+            "nodeType2"
+        ],
+        "persistenceMode": {
+            "on": true,
+            "path": "/path/to/persistence/directory"
+        }
+    },
+    "ProducersSetup": {
+        "IsMapping": false,
+        "ProducerConfigs": [
+            {
+                "Type": "AMQP1.0",
+                "ProducerConfig": {
+                    "Address": "amqp://localhost:5672",
+                    "Queue": "output_queue",
+                    "tlsConfig": {
+                        "certFile": "/path/to/cert.pem",
+                        "keyFile": "/path/to/key.pem",
+                        "clientCaFile": "/path/to/ca.pem",
+                        "rootCaFile": "/path/to/root_ca.pem",
+                        "tlsVersion": "TLSv1.2"
+                    }
+                }
+            }
+        ]
+    },
+    "ConsumersSetup": {
+        "ConsumerConfigs": [
+            {
+                "Type": "AMQP1.0",
+                "ConsumerConfig": {
+                    "Address": "amqp://localhost:5672",
+                    "Queue": "input_queue",
+                    "tlsConfig": {
+                        "certFile": "/path/to/cert.pem",
+                        "keyFile": "/path/to/key.pem",
+                        "clientCaFile": "/path/to/ca.pem",
+                        "rootCaFile": "/path/to/root_ca.pem",
+                        "tlsVersion": "TLSv1.2"
+                    }
                 }
             }
         ]

@@ -100,22 +100,5 @@ func ingestTLSConfig(config map[string]any) (*tls.Config, error) {
 		}
 		tlsConfigStruct.RootCAs = caCertPool
 	}
-	tlsVersion, ok := tlsConfigMap["tlsVersion"]
-	if ok {
-		tlsVersion, ok := tlsVersion.(string)
-		if !ok {
-			return nil, errors.New("tlsVersion must be a string")
-		}
-		switch tlsVersion {
-		case "1.2":
-			tlsConfigStruct.MinVersion = tls.VersionTLS12
-		case "1.3":
-			tlsConfigStruct.MinVersion = tls.VersionTLS13
-		default:
-			return nil, errors.New("invalid tlsVersion entered. Must be 1.2 or higher")
-		}
-	} else {
-		tlsConfigStruct.MinVersion = tls.VersionTLS12
-	}
 	return tlsConfigStruct, nil
 }

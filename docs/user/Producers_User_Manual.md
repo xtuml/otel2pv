@@ -50,11 +50,13 @@ The `AMQPOneProducer` is a producer that uses the AMQP1.0 protocol to send messa
     "ProducerConfig": {
         "Connection": <string - the connection string to the AMQP broker>,
         "Queue": <string - the name of the queue to send to>,
-        "MessageHeaders": <object, optional - the headers to add to the message>
+        "MessageHeaders": <object, optional - the headers to add to the message>,
+        "tlsConfig": <object, optional - the TLS configuration for the producer>,
     },
     "Map": <string, optional - the key/identifier to map to this producer>
 }
 ```
+See [TLS Configuration](./TLS_Config.md) for more information on the `tlsConfig` object.
 
 The `MessageHeaders` object is used to add headers to the message. The object should have the following structure:
 ```json
@@ -91,11 +93,14 @@ The `HTTPProducer` is a producer that uses the standard golang http library to s
         "numRetries": <int, optional - the number of times to retry sending the data, default is 3>,
         "timeout": <int, optional - the timeout in seconds for the request, default is 10>,
         "initialRetryInterval": <float, optional - the initial retry interval in seconds (for exponential back-off), default is 1>,
-	    "retryIntervalmultiplier" <float, optional - the multiplier for the retry interval (for exponential back-off), default is 1>
+	    "retryIntervalmultiplier" <float, optional - the multiplier for the retry interval (for exponential back-off), default is 1>,
+        "tlsConfig": <object, optional - the TLS configuration for the producer>,
     },
     "Map": <string, optional - the key/identifier to map to this producer>
 }
 ```
+See [TLS Configuration](./TLS_Config.md) for more information on the `tlsConfig` object.
+
 The HTTPProducer can perform configured expontential back-off retries if the request fails. The `initialRetryInterval` and `retryIntervalmultiplier` fields are used to configure the back-off. The back-off is calculated as `initialRetryInterval * [0.5,1.5]retryIntervalmultiplier^retryNumber`. The intial retry interval is multiplied by a randomisation factor between 0.5 and 1.5 to prevent all clients from retrying at the same time. The retry interval is then multiplied by the retryIntervalmultiplier to the power of the retry number to increase the interval between retries.
 
 ### Example Configuration

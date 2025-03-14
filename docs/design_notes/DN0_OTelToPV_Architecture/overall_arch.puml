@@ -7,12 +7,11 @@ rectangle "OTel To PV" as Bespoke {
 }
 interface "Endpoint\nExtra JSON" as EndpointExtraJSON
 component "Nifi Shard File Handler" as NifiShardFileHandler
-component "Nifi Send to PV" as NifiSendToPV
+component "Protocol Verifier" as NifiSendToPV
 
-NifiShardFileHandler --> JSONExtractor : Send JSON
-JSONExtractor --> TreeVerify : Send extracted JSON
+NifiShardFileHandler --> JSONExtractor : Send JSON Object
+JSONExtractor --> TreeVerify : Send extracted Span JSON input
 JSONExtractor -left-> EndpointExtraJSON : Send extracted
-TreeVerify --> Sequencer : Verify tree and release for sequencing
-TreeVerify --> TreeVerify : If failed after x seconds\ncache and wait for more events
-Sequencer --> NifiSendToPV : Send JSON array to Nifi for PV
+TreeVerify --> Sequencer : Verify trace tree\n or wait for timeout\n and release groups\n for sequencing
+Sequencer --> NifiSendToPV : Send JSON array to PV
 @enduml

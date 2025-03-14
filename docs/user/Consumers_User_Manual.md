@@ -46,9 +46,11 @@ The `AMQPOneConsumer` is a consumer that uses the AMQP1.0 protocol to receive me
         "Queue": <string - the name of the queue to consume from>,
         "MaxConcurrentMessages": <int, optional - the maximum number of messages to process concurrently, default is 1>,
         "OnValue": <boolean, optional - if true the consumer will grab data from AMQP1.0 packet "Value" field, if false the consumer will grab data from AMQP1.0 packet "Data" field, default is false>,
+        "tlsConfig": <object, optional - the TLS configuration for the consumer>,
     }
 }
 ```
+See [TLS Configuration](./TLS_Config.md) for more information on the `tlsConfig` object.
 #### Failure Handling
 The `AMQPOneConsumer` will handle the following error types:
 
