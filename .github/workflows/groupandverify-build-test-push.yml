@@ -29,7 +29,7 @@ jobs:
               id: meta
               uses: docker/metadata-action@v5
               with:
-                  images: ghcr.io/SmartDCSITlimited/CDS-OTel-To-PV/group-and-verify
+                  images: ghcr.io/xtuml/otel2pv/group-and-verify
             
             - name: Build and export to Docker
               uses: docker/build-push-action@v6

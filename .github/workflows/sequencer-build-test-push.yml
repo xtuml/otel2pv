@@ -29,7 +29,7 @@ jobs:
               id: meta
               uses: docker/metadata-action@v5
               with:
-                  images: ghcr.io/SmartDCSITlimited/CDS-OTel-To-PV/sequencer
+                  images: ghcr.io/xtuml/otel2pv/sequencer
             
             - name: Build and export to Docker
               uses: docker/build-push-action@v6
