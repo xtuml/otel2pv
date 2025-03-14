@@ -10,9 +10,9 @@ on:
 
 jobs:
   sast:
-    uses: SmartDCSITlimited/actions-store/.github/workflows/SAST.yml@main
+    uses: xtuml/janus/.github/workflows/SAST.yml@main
   secret-detection:
-    uses: SmartDCSITlimited/actions-store/.github/workflows/SecretDetection.yml@main
+    uses: xtuml/janus/.github/workflows/SecretDetection.yml@main
   setup:
     runs-on: ubuntu-latest
     outputs:
