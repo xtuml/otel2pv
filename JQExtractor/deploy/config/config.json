@@ -1,0 +1,32 @@
+{
+    "AppConfig": {
+        "JQQueryStrings": {
+            "Test": {
+                "jq": ".test"
+            }
+        }
+    },
+    "ProducersSetup": {
+        "IsMapping": false,
+        "ProducerConfigs": [
+            {
+                "Type": "AMQPOne",
+                "ProducerConfig": {
+                    "Connection": "amqp://guest:guest@host.docker.internal:5672",
+                    "Queue": "ProduceTest"
+                }
+            }
+        ]
+    },
+    "ConsumersSetup": {
+        "ConsumerConfigs": [
+            {
+                "Type": "AMQPOne",
+                "ConsumerConfig": {
+                    "Connection": "amqp://guest:guest@host.docker.internal:5672",
+                    "Queue": "ConsumeTest"
+                }
+            }
+        ]
+    }
+}

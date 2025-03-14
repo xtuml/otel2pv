@@ -1,0 +1,54 @@
+@startuml
+    partition Server {
+        split
+        -[hidden]->
+        package Server {
+            group RunServer(SourceServer, PipeServer, SinkServer) error {
+                :Add PipeServer to SourceServer as Pushable;
+                :Add SinkServer to PipeServer as Pushable;
+                :Call Serve SinkServer;
+                :Call Serve PipeServer;
+                :Call Serve SourceServer;
+                detach
+            }
+            group Serve(*MapSinkServer) error {
+                :checks if everything is correctly set and finishes;
+                :run all SinkServer serve methods in background;
+                :return error;
+                detach
+            }
+            group SendTo(*MapSinkServer, AppData) error {
+                :make sure AppData is not empty and has routingKey;
+                :check if routingKey is in sinkServerMap if not error;
+                :Send AppData to SinkServer identified by key;
+                :return error;
+                detach
+            }
+        }
+        split again
+        -[hidden]->
+        package DataTypes {
+            group Complete(*WaitGroupCompletionHandler, data, error) {
+                :add data and error to WaitGroupCompletionHandler;
+                :Call Done on WaitGroup;
+                detach
+            }
+        }
+        package Producer {
+            group getProducerMap(ProducerConfig) (map[string]Producer, error) {
+                :Create Producers map using config;
+                :Return Producers map;
+                detach
+            }
+        }
+        package Consumer {
+            group getConsumerServer(ConsumerConfig) (ConsumerServer, error) {
+                :Create Consumers and Consumers map using config;
+                :Create ConsumerServer using Consumers map;
+                :Return ConsumerServer;
+                detach
+            }
+        }
+        end split
+    }
+@enduml

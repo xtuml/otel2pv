@@ -1,0 +1,30 @@
+# docker compose file to run the sequencer service
+# and setup a rabbitmq service for testing
+
+# Define the services
+services:
+  # Define the sequencer service
+  sequencer:
+    restart: always
+    # Use the sequencer image
+    image: ${SEQUENCER_IMAGE}
+    # Build the image from the Dockerfile
+    build:
+      # Use the root directory as the context
+      context: ../../.
+      # Use the sequencer Dockerfile
+      dockerfile: Sequencer/nginxbuild/Dockerfile.Sequencer.nginx
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    # Set the container name
+    container_name: sequencer
+    # Mount the config directory to the container
+    volumes:
+      - ./config:/config
+      - ./certs/ca_certificate.pem:/certs/rootCA.crt
+      - ./certs/client_certificate.pem:/etc/ssl/certs/nginx.crt
+      - ./certs/private_key.pem:/etc/ssl/certs/nginx.key
+      - ./config/nginx.conf:/etc/nginx/nginx.conf
+    # Set the entrypoint
+    entrypoint: ["/bin/sh", "-c", "cat /certs/rootCA.crt >> /etc/ssl/certs/ca-certificates.crt && nginx && /sequencer --config /config/config.json"]

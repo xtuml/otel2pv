@@ -1,0 +1,14 @@
+@startuml
+left to right direction
+component ConsumerServer
+component Sequencer
+component ProducerServer
+interface "Consumption Location" as ConsumptionLocation
+interface "Production Location" as ProductionLocation
+
+ConsumerServer -down-> Sequencer : Send data
+Sequencer -down-> ProducerServer : Send data
+
+ConsumerServer -right- ConsumptionLocation : Consume from\nbroker 
+ProducerServer -right- ProductionLocation : Produce to\nbroker
+@enduml

@@ -1,0 +1,10 @@
+@startuml
+digraph G {
+    rankdir=LR
+    node [style=rounded];
+    JQTransformer [style=rounded, shape=box];
+    JQTransformer -> "JQTransformer.\nAddPushable";
+    JQTransformer -> "JQTransformer.\nSendTo";
+    JQTransformer -> "JQTransformer.\nServe";
+}
+@enduml

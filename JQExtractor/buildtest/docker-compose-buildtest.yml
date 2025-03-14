@@ -1,0 +1,45 @@
+# docker compose file to run the jqextractor service
+# and setup a rabbitmq service for testing
+
+# Define the services
+services:
+  # Define the jqextractor service
+  jqextractor:
+    # Use the jqextractor image
+    image: ${JQEXTRACTOR_IMAGE}
+    # Build the image from the Dockerfile
+    build:
+      # Use the root directory as the context
+      context: ../../.
+      # Use the JQExtractor Dockerfile
+      dockerfile: JQExtractor/Dockerfile.JQExtractor
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    # Set the container name
+    container_name: jqextractor
+    # Mount the config directory to the container
+    volumes:
+      - ./config:/config
+    # Set the entrypoint
+    entrypoint: ["/jq-extractor", "--config", "/config/config.json"]
+  # Define the rabbitmq service
+  rabbitmq:
+    # Use the rabbitmq:4.0-management image
+    image: rabbitmq:4.0-management
+    # Set the container name
+    container_name: rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Expose the ports
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_CONFIG_FILE: "/etc/rabbitmq/rabbitmq.conf"
+    volumes:
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      - ./definitions.json:/etc/rabbitmq/definitions.json

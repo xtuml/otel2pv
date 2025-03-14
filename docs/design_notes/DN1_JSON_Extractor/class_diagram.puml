@@ -1,0 +1,107 @@
+@startuml
+namespace Server {
+    struct AppData {
+        -any data
+        -string routingKey
+        +(any, error) GetData()
+        +(string, error) GetRoutingKey()
+    }
+    interface Server {
+        +error Serve()
+        +error Setup(Config)
+    }
+    interface Pullable {
+        +error AddPushable(Pushable)
+    }
+    interface Pushable {
+        +error SendTo(*AppData)
+    }
+    interface SourceServer {
+        +error AddPushable(Pushable)
+        +error Serve()
+        +error Setup(Config)
+    }
+    interface SinkServer {
+        +error SendTo(*AppData)
+        +error Serve()
+        +error Setup(Config)
+    }
+    interface PipeServer {
+        +error AddPushable(Pushable)
+        +error SendTo(*AppData)
+        +error Serve()
+        +error Setup(Config)
+    }
+    struct MapSinkServer {
+        -map[string]SinkServer sinkServerMap
+        +error SendTo(*AppData)
+        +error Serve()
+        +error Setup(Config)
+    }
+    interface Config {
+        +error IngestConfig(map[string]any)
+    }
+    struct SelectProducerConfig {
+        +string Map
+        +string Type
+        +Config Config
+        +error IngestConfig(
+            map[string]any,
+            map[string]func() Config
+        )
+    }
+    struct SetupProducersConfig {
+        +IsMapping bool
+        +[]SelectProducerConfig SelectProducerConfigs
+        +error IngestConfig(
+            map[string]any,
+            map[string]func() Config
+        )
+    }
+    struct SelectConsumerConfig {
+        +string Type
+        +Config Config
+        +error IngestConfig(
+            map[string]any,
+            map[string]func() Config
+        )
+    }
+    struct SetupConsumersConfig {
+        +[]SelectConsumerConfig SelectConsumerConfigs
+        +error IngestConfig(
+            map[string]any,
+            map[string]func() Config
+        )
+    }
+    struct AppConfig {
+        +SetupProducersConfig SetupProducersConfig
+        +SetupConsumersConfig SetupConsumersConfig
+        +Config PipeServerConfig
+        +error IngestConfig(
+            map[string]any,
+            map[string]func() Config,
+            map[string]func() Config
+        )
+    }
+}
+Server.AppData *-- Server.Pushable
+Server.Server <|-- Server.SourceServer
+Server.Pushable *-- Server.Pullable
+Server.Pullable <|-- Server.SourceServer
+Server.Server <|-- Server.SinkServer
+Server.Pushable <|-- Server.SinkServer
+Server.Pushable <|-- Server.PipeServer
+Server.Pullable <|-- Server.PipeServer
+Server.Server <|-- Server.PipeServer
+
+Server.SinkServer *-- Server.MapSinkServer
+Server.SinkServer <|-- Server.MapSinkServer
+
+Server.Server *-- Server.Config
+Server.Config *-- Server.SelectProducerConfig
+Server.Config *-- Server.SelectConsumerConfig
+Server.SetupProducersConfig *-- Server.AppConfig
+Server.SetupConsumersConfig *-- Server.AppConfig
+Server.SelectProducerConfig *-- Server.SetupProducersConfig
+Server.SelectConsumerConfig *-- Server.SetupConsumersConfig
+@enduml

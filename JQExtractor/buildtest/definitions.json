@@ -1,0 +1,40 @@
+{
+  "users": [
+    {
+      "name": "guest",
+      "password": "guest",
+      "tags": "administrator"
+    }
+  ],
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "guest",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "queues": [
+    {
+      "name": "ProduceTest",
+      "vhost": "/",
+      "durable": true
+    },
+    {
+      "name": "ProduceTest2",
+      "vhost": "/",
+      "durable": true
+    },
+    {
+      "name": "ConsumeTest",
+      "vhost": "/",
+      "durable": true
+    }
+  ]
+}

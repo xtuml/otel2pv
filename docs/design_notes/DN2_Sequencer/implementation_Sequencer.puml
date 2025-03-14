@@ -1,0 +1,90 @@
+@startuml
+    partition JSON Extractor {
+        split
+        -[hidden]->
+        package main {
+            group main() {
+                :Call Server.RunApp;
+                detach
+            }
+        }
+        split again
+        -[hidden]->
+        package sequencer {
+            split
+            -[hidden]->
+            group AddPushable(*Sequencer, Pushable) error {
+                :Add Pushable to Sequencer instance;
+                detach
+            }
+            group Serve(*Sequencer) error {
+                :checks if everything is correctly set and finishes;
+                detach
+            }
+            group Setup(*Sequencer, Config) error {
+                :check if config is of SeqeuncerConfig type;
+                :add config to Sequencer instance;
+                detach
+            }
+            group sequenceRecursive(rootNode IncomingData, nodeIdToNodeMap map[string]IncomingData) ([]IncomingData , error) {
+                :create empty slice of IncomingData;
+                repeat
+                    :look up child node in nodeIdToNodeMap;
+                    if (if) then (child node doesn't exist)
+                        :return empty slice and error;
+                    endif
+                    :recursive call to sequence using node;
+                    if (if) then (error)
+                        :return empty slice and error;
+                    endif
+                    :append result to slice;
+                repeat while (for each node in OrderedChildIds)
+                :add rootNode to slice;
+                :return slice;
+                detach
+            }
+            group sequenceWithStack(rootNode IncomingData, nodeIdToNodeMap map[string]IncomingData) ([]IncomingData , error) {
+                :create empty slice of IncomingData;
+                :create empty slice of StackIncomingData;
+                :create StackIncomingData with rootNode;
+                :push rootNode to stack;
+                repeat
+                    :pop node from stack of StackIncomingData;
+                    :call GetNextChildId on node;
+                    if (if no next child) then (true)
+                        :push inner node to slice of IncomingData;
+                    else (false)
+                        :push node to stack of StackIncomingData;
+                        :create StackIncomingData with next child using id;
+                        :push next child to stack of StackIncomingData;
+                    endif
+                repeat while (until stack of StackIncomingData is empty)
+                :return slice of IncomingData;
+                detach
+            }
+            split again
+            -[hidden]->
+            group SendTo(*Sequencer, AppData) error {
+                :Extract JSON array data against the IncomingData struct;
+                :Create map of node id to nodes and map of node id to forward reference;
+                :Get difference of node id to nodes and node id to forward reference as slice;
+                :Create outgoing slice of appJSON;
+                repeat
+                    :call "sequence" method and update ordered list (first to last) of IncomingData;
+                    repeat
+                        if (if) then (not first entry)
+                            :update appJSON with previous node id;
+                        endif
+                        :append appJSON to outgoing slice;
+                    repeat while (for each node in ordered list of IncomingData)
+                repeat while (for each node id in difference slice)
+                :Create AppData with outgoing slice;
+                :Send AppData to Pushable;
+                :Return error;
+                detach
+            }
+            end split
+        }
+        end split
+    }
+@enduml

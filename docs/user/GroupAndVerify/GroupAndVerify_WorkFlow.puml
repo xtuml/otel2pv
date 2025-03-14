@@ -1,0 +1,15 @@
+@startuml
+title Group And Verify Workflow
+
+actor User
+participant "Group And Verify" as GroupAndVerify
+participant "Destination" as Destination
+
+User -> GroupAndVerify: Send singular JSON Packets
+GroupAndVerify -> GroupAndVerify: Group Packets by Identifier
+GroupAndVerify -> GroupAndVerify: Check if Group is Verified and Complete\nor wait for Timeout
+GroupAndVerify -> Destination: Send Grouped JSON Array
+Destination -> GroupAndVerify: Confirm Receipt of JSON Array
+GroupAndVerify -> User: Confirm Receipt for All Group Members
+
+@enduml

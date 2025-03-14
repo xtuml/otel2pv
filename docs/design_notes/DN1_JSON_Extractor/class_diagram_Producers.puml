@@ -1,0 +1,70 @@
+@startuml
+namespace Server {
+    interface SinkServer {
+        +error SendTo(*AppData)
+        +error Serve()
+        +error Setup(Config)
+    }
+    interface Config {
+        +error IngestConfig(map[string]any)
+    }
+}
+namespace Producer {
+    struct HTTPProducer {
+        -HTTPProducerConfig config
+        -http.Client httpClient
+        +error SendTo(*AppData)
+        +error Serve()
+        +error Setup(Config)
+    }
+    struct RabbitMQProducer {
+        -RabbitMQProducerConfig config
+        -rabbitmq.Channel channel
+        -RabbitMQDial dial
+        -context.Context ctx
+        -context.CancelCauseFunc cancel
+        +error SendTo(*AppData)
+        +error Serve()
+        +error Setup(Config)
+    }
+    struct AMQPOneProducer {
+        -AMQPOneProducerConfig config
+        -AMQPOneProducerSender sender
+        -AMQPOneProdcuerDial dial
+        -context.Context ctx
+        -context.CancelCauseFunc cancel
+        +error SendTo(*AppData)
+        +error Serve()
+        +error Setup(Config)
+    }
+    struct HTTPProducerConfig {
+        +string URL
+        +int NumRetries
+        +int Timeout
+        +error IngestConfig(map[string]any)
+    }
+    struct RabbitMQProducerConfig {
+        +string Connection
+        +string Exchange
+        +string RoutingKey
+        +error IngestConfig(map[string]any)
+    }
+    struct AMQPOneProducerConfig {
+        +string Connection
+        +string Queue
+        +error IngestConfig(map[string]any)
+    }
+
+}
+
+Server.SinkServer <|-- Producer.HTTPProducer
+Server.SinkServer <|-- Producer.RabbitMQProducer
+Server.SinkServer <|-- Producer.AMQPOneProducer
+
+Server.Config <|-- Producer.HTTPProducerConfig
+Server.Config <|-- Producer.RabbitMQProducerConfig
+Server.Config <|-- Producer.AMQPOneProducerConfig
+Producer.HTTPProducerConfig *-- Producer.HTTPProducer
+Producer.RabbitMQProducerConfig *-- Producer.RabbitMQProducer
+Producer.AMQPOneProducerConfig *-- Producer.AMQPOneProducer
+@enduml

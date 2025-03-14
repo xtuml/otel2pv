@@ -1,0 +1,11 @@
+@startuml
+digraph G {
+    rankdir=LR
+    node [style=rounded];
+    RunServers -> "SourceServer.\nAddPushable";
+    RunServers -> "PipeServer.\nAddPushable";
+    RunServers -> "SinkServer.\nServe";
+    RunServers -> "PipeServer.\nServe";
+    RunServers -> "SourceServer.\nServe";
+}
+@enduml

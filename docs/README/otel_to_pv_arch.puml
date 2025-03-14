@@ -1,0 +1,16 @@
+@startuml
+title OTel To PV Architecture
+left to right direction
+rectangle "OTel To PV" as Bespoke {
+    component "JQExtractor" as JSONExtractor
+    component "Sequencer" as Sequencer
+    component "Group and\nVerify" as TreeVerify
+}
+component "OTel JSON Source" as OTelSource
+component "Protocol Verifier" as PV
+
+OTelSource -left-> JSONExtractor : Send JSON
+JSONExtractor --> TreeVerify : Send extracted\nJSON
+TreeVerify --> Sequencer : Verify tree and\nrelease for\nsequencing
+Sequencer -right-> PV : Send sequenced\nJSON array to PV
+@enduml

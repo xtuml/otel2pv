@@ -1,0 +1,11 @@
+@startuml
+left to right direction
+component SourceServer {
+}
+component PipeServer {
+}
+component SinkServer {
+}
+SourceServer -down-> PipeServer : Send data
+PipeServer -down-> SinkServer : Send data
+@enduml

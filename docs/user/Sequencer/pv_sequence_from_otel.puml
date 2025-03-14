@@ -1,0 +1,36 @@
+
+@startuml
+digraph G {
+'   rankdir=LR;
+  node [style=rounded];
+  root [
+    shape=record,
+    label="<f0>eventId=root |<f1> previousEventIds=[child2]"
+  ];
+  child1 [
+    shape=record,
+    label="<f0>eventId=child1 |<f1> previousEventIds=[grandchild2]"
+  ];
+  child2 [
+    shape=record,
+    label="<f0>eventId=child2 |<f1> previousEventIds=[grandchild3]"
+  ];
+    grandchild1 [
+        shape=record,
+        label="<f0>eventId=grandchild1 |<f1> previousEventIds=[]"
+    ];
+    grandchild2 [
+        shape=record,
+        label="<f0>eventId=grandchild2 |<f1> previousEventIds=[grandchild1]"
+    ];
+    grandchild3 [
+        shape=record,
+        label="<f0>eventId=grandchild3 |<f1> previousEventIds=[child1]"
+    ];
+    grandchild1 -> grandchild2;
+    grandchild2 -> child1;
+    child1 -> grandchild3;
+    grandchild3 -> child2;
+    child2 -> root;
+}
+@enduml

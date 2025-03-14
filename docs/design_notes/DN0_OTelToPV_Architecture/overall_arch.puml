@@ -1,0 +1,17 @@
+@startuml
+title OTel To PV Architecture
+rectangle "OTel To PV" as Bespoke {
+    component "JSON Extractor" as JSONExtractor
+    component "Sequencer" as Sequencer
+    component "Group job ids\nand Tree Verify" as TreeVerify
+}
+interface "Endpoint\nExtra JSON" as EndpointExtraJSON
+component "Nifi Shard File Handler" as NifiShardFileHandler
+component "Protocol Verifier" as NifiSendToPV
+
+NifiShardFileHandler --> JSONExtractor : Send JSON Object
+JSONExtractor --> TreeVerify : Send extracted Span JSON input
+JSONExtractor -left-> EndpointExtraJSON : Send extracted
+TreeVerify --> Sequencer : Verify trace tree\n or wait for timeout\n and release groups\n for sequencing
+Sequencer --> NifiSendToPV : Send JSON array to PV
+@enduml

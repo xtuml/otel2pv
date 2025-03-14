@@ -1,0 +1,11 @@
+@startuml
+digraph G {
+    rankdir=LR
+    node [style=rounded];
+    MapSinkServer [style=rounded, shape=box];
+    MapSinkServer -> "MapSinkServer.\nSendTo";
+    "MapSinkServer.\nSendTo" -> "SinkServer.\nSendTo";
+    MapSinkServer -> "MapSinkServer.\nServe";
+    "MapSinkServer.\nServe" -> "SinkServer.\nServe";
+}
+@enduml

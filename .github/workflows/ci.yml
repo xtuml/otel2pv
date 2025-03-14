@@ -1,0 +1,61 @@
+name: CI Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  sast:
+    uses: xtuml/janus/.github/workflows/SAST.yml@main
+  secret-detection:
+    uses: xtuml/janus/.github/workflows/SecretDetection.yml@main
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Identify Go Modules
+        id: set-matrix
+        run: |
+          modules=$(find . -type f -name 'go.mod' -exec dirname {} \;)
+          modules_array=()
+          for module in $modules; do
+            modules_array+=("\"${module#./}\"")
+          done
+          if [ ${#modules_array[@]} -eq 0 ]; then
+            echo "matrix={\"directory\":[]}" >> $GITHUB_OUTPUT
+          else
+            matrix_json=$(printf '%s\n' "${modules_array[@]}" | jq -R -s -c 'split("\n")[:-1]')
+            echo "matrix={\"directory\":$matrix_json}" >> $GITHUB_OUTPUT
+          fi
+
+  run-matrix:
+    needs: setup
+    runs-on: ubuntu-latest
+    if: ${{ needs.setup.outputs.matrix != '[]' &&  needs.setup.outputs.matrix != ''}}
+    strategy:
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Run Tests
+        run: |
+          cd ${{ matrix.directory }}
+          gofmt -s -w .
+          go vet ./...
+          go mod tidy
+          go build -o /dev/null ./...
+          go test -v ./...

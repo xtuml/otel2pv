@@ -1,0 +1,33 @@
+@startuml
+interface Server.Config {
+    +error IngestConfig(map[string]any)
+}
+interface Server.PipeServer {
+    +error AddPushable(Server.Pushable)
+    +error SendTo(*Server.AppData)
+    +error Serve()
+    +error Setup(Server.Config)
+}
+interface Server.Pushable {
+    +error SendTo(*Server.AppData)
+}
+
+namespace JSONExtractor {
+    struct JQTransformerConfig {
+        +map[string]string JQQueryStrings
+        +error IngestConfig(map[string]any)
+    }
+    struct JQTransformer {
+        -gojq.Code jqProgram
+        -Server.Pushable pushable
+        +error AddPushable(Server.Pushable)
+        +error SendTo(*Server.AppData)
+        +error Serve()
+        +error Setup(Server.Config)
+    }
+}
+
+Server.PipeServer <|-- JSONExtractor.JQTransformer
+Server.Pushable *-- JSONExtractor.JQTransformer
+Server.Config <|-- JSONExtractor.JQTransformerConfig
+@enduml

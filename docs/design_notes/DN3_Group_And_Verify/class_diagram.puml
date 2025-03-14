@@ -1,0 +1,53 @@
+@startuml
+interface Server.Config {
+    +error IngestConfig(map[string]any)
+}
+interface Server.PipeServer {
+    +error AddPushable(Server.Pushable)
+    +error SendTo(*Server.AppData)
+    +error Serve()
+    +error Setup(Server.Config)
+}
+interface Server.Pushable {
+    +error SendTo(*Server.AppData)
+}
+
+namespace GroupAndVerify {
+
+    struct GroupAndVerifyConfig {
+        -map[string]bool ParentVerifySet
+        -int Timeout
+        -int MaxTrees
+        +error IngestConfig(map[string]any)
+    }
+    struct GroupAndVerify {
+        -GroupAndVerifyConfig config
+        -Server.Pushable pushable
+        -chan *task taskChan
+        +error AddPushable(Server.Pushable)
+        +error SendTo(*Server.AppData)
+        +error Serve()
+        +error Setup(Server.Config)
+    }
+    struct task {
+        +*incomingData Node
+        +chan error ErrorChan
+    }
+    struct incomingData {
+        +string TreeId
+        +string NodeId
+        +string ParentId
+        +[]string ChildIds
+        +string NodeType
+        +int Timestamp
+        +map[string]any AppJSON
+    }
+}
+
+Server.PipeServer <|-- GroupAndVerify.GroupAndVerify
+Server.Pushable *-- GroupAndVerify.GroupAndVerify
+Server.Config <|-- GroupAndVerify.GroupAndVerifyConfig
+GroupAndVerify.GroupAndVerifyConfig *-- GroupAndVerify.GroupAndVerify
+GroupAndVerify.incomingData *-- GroupAndVerify.task
+GroupAndVerify.task *-- GroupAndVerify.GroupAndVerify 
+@enduml

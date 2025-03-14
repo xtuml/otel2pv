@@ -1,0 +1,27 @@
+{
+    "AppConfig": {},
+    "ProducersSetup": {
+        "IsMapping": false,
+        "ProducerConfigs": [
+            {
+                "Type": "AMQPOne",
+                "ProducerConfig": {
+                    "Connection": "amqp://guest:guest@rabbitmq:5672",
+                    "Queue": "ProduceTest"
+                }
+            }
+        ]
+    },
+    "ConsumersSetup": {
+        "ConsumerConfigs": [
+            {
+                "Type": "AMQPOne",
+                "ConsumerConfig": {
+                    "Connection": "amqp://guest:guest@rabbitmq:5672",
+                    "Queue": "ConsumeTest",
+                    "MaxConcurrentMessages": 1000
+                }
+            }
+        ]
+    }
+}

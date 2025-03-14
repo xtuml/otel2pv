@@ -1,0 +1,40 @@
+@startuml
+    partition JSON Extractor {
+        split
+        -[hidden]->
+        package main {
+            group main() {
+                :Call Server.RunApp;
+                detach
+            }
+        }
+        split again
+        -[hidden]->
+        package JqTransformer {
+            group Serve(JQTransformer) error {
+                :checks if everything is correctly set and finishes;
+                detach
+            }
+            group AddPushable(*JQTransformer, Pushable) error {
+                :Add Pushable to JQTransformer instance;
+                detach
+            }
+            group Setup(*JQTransformer, Config) error {
+                :Setup JQTransformer with Config;
+                detach
+            }
+            group SendTo(*JQTransformer, AppData) error {
+                :Extract JSON data from AppData using compiled jqProgram;
+                repeat
+                    repeat
+                        :Create AppData with data as the value and routingKey as the key;
+                        :Send AppData to Pushable;
+                    repeat while (for each value in nested array)
+                repeat while (for each key in JSON data)
+                :Return error;
+                detach
+            }
+        }
+        end split
+    }
+@enduml

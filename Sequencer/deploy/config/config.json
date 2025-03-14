@@ -1,0 +1,29 @@
+{
+    "AppConfig": {
+        "outputAppSequenceField":"seqField",
+        "outputAppFieldSequenceType":"string"
+    },
+    "ProducersSetup": {
+        "IsMapping": false,
+        "ProducerConfigs": [
+            {
+                "Type": "AMQPOne",
+                "ProducerConfig": {
+                    "Connection": "amqp://guest:guest@host.docker.internal:5672",
+                    "Queue": "ProduceTest"
+                }
+            }
+        ]
+    },
+    "ConsumersSetup": {
+        "ConsumerConfigs": [
+            {
+                "Type": "AMQPOne",
+                "ConsumerConfig": {
+                    "Connection": "amqp://guest:guest@host.docker.internal:5672",
+                    "Queue": "ConsumeTest"
+                }
+            }
+        ]
+    }
+}
